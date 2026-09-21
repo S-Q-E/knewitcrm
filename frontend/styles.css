@@ -444,8 +444,102 @@ html, body {
 .data-full { grid-column: 1 / -1; }
 
 /* ---------------- Responsive ---------------- */
+/* ---------------- Back button (только мобилка) ---------------- */
+.back-btn {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border-2);
+  color: var(--text);
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  padding: 0;
+}
+.back-btn:active { background: var(--panel-2); }
+
+/* ---------------- Responsive ---------------- */
 @media (max-width: 900px) {
-  #app { grid-template-columns: 1fr; grid-template-rows: 45vh 55vh; }
-  .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
-  .msg { max-width: 85%; }
+  /* одна колонка, одна строка — показываем либо список, либо диалог */
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    height: 100dvh; /* dvh — корректно работает с мобильными адресными строками */
+  }
+
+  .sidebar {
+    border-right: none;
+    border-bottom: none;
+  }
+
+  /* по умолчанию на мобиле main скрыт */
+  .main { display: none; }
+
+  /* когда лид выбран — прячем список, показываем диалог */
+  body.mobile-detail .sidebar { display: none; }
+  body.mobile-detail .main    { display: flex; }
+
+  .back-btn { display: flex; }
+
+  /* шапка компактнее, кнопка "назад" + аватар + имя + статус в одну строку */
+  .detail-header {
+    padding: 10px 14px;
+    gap: 10px;
+    flex-wrap: nowrap;
+  }
+  .detail-user { gap: 10px; min-width: 0; }
+  .avatar.big  { width: 38px; height: 38px; font-size: 14px; }
+  .detail-name { font-size: 14px; }
+  .detail-phone { font-size: 11px; }
+  .detail-badges {
+    flex-shrink: 0;
+    gap: 4px;
+  }
+  .detail-badges .badge {
+    font-size: 10px;
+    padding: 2px 7px;
+  }
+
+  /* статистика: 4 карточки в ряд, но компактнее */
+  .stats {
+    gap: 6px;
+    padding: 12px 12px;
+  }
+  .stat-card  { padding: 8px 4px; border-radius: 8px; }
+  .stat-num   { font-size: 17px; }
+  .stat-label { font-size: 9px; }
+
+  /* чипсы и поиск — с меньшими отступами */
+  .search-wrap { padding: 12px 12px 8px; }
+  #search { padding: 9px 12px; font-size: 13px; }
+  .chips { padding: 0 12px 10px; gap: 5px; }
+  .chip  { padding: 5px 10px; font-size: 11.5px; }
+
+  /* карточка лида чуть плотнее */
+  .lead { padding: 11px 12px; gap: 10px; }
+  .avatar { width: 38px; height: 38px; font-size: 13px; }
+  .lead-name { font-size: 13.5px; max-width: 55vw; }
+
+  /* сообщения — шире, компактнее */
+  .messages { padding: 14px 12px 20px; gap: 8px; }
+  .msg      { max-width: 88%; padding: 8px 12px; font-size: 13px; }
+
+  /* события и данные */
+  .events    { padding: 14px 12px; }
+  .data-grid { padding: 14px 12px; grid-template-columns: 1fr; gap: 8px; }
+
+  /* табы по центру */
+  .tabs { padding: 8px 12px 0; }
+  .tab  { padding: 8px 12px; font-size: 12.5px; }
+}
+
+/* iPhone SE и узкие экраны */
+@media (max-width: 400px) {
+  .stat-num { font-size: 15px; }
+  .stat-label { font-size: 8.5px; }
+  .detail-badges { display: none; } /* на совсем узких прячем бейджи из шапки */
 }

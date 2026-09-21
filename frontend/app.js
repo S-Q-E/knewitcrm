@@ -196,6 +196,7 @@ function renderLeads() {
       if (id === state.selectedId) return;
       state.selectedId = id;
       renderLeads();
+      document.body.classList.add('mobile-detail');
       $('#empty').classList.add('hidden');
       $('#detail').classList.remove('hidden');
       loadLeadDetail(id);
@@ -327,6 +328,9 @@ function renderData() {
   }).join('');
 }
 
+$('#back-btn').addEventListener('click', () => {
+  document.body.classList.remove('mobile-detail');
+});
 /* ------------- events wiring ------------- */
 let searchTimer = null;
 $('#search').addEventListener('input', (e) => {
@@ -377,6 +381,10 @@ function startPolling() {
 
 /* ------------- bootstrap ------------- */
 (async function init() {
+
+  if (window.matchMedia('(max-width: 900px)').matches) {
+    document.body.classList.remove('mobile-detail');
+  }
   await refreshAll();
   startPolling();
 })();
