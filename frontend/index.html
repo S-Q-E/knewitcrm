@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KnewIT CRM — WhatsApp</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="app">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <header class="sidebar-header">
+        <div class="brand">
+          <div class="brand-logo">K</div>
+          <div>
+            <div class="brand-title">KnewIT CRM</div>
+            <div class="brand-sub" id="live-status"><span class="dot"></span> обновление…</div>
+          </div>
+        </div>
+        <button class="icon-btn" id="refresh-btn" title="Обновить">⟳</button>
+      </header>
+
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-num" id="stat-total">–</div>
+          <div class="stat-label">Всего</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num accent" id="stat-active">–</div>
+          <div class="stat-label">Активных</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num success" id="stat-booked">–</div>
+          <div class="stat-label">Записаны</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num gold" id="stat-clients">–</div>
+          <div class="stat-label">Клиенты</div>
+        </div>
+      </div>
+
+      <div class="search-wrap">
+        <input id="search" type="text" placeholder="Поиск по имени или номеру…" autocomplete="off" />
+      </div>
+
+      <div class="chips" id="chips">
+        <button class="chip active" data-status="ALL">Все</button>
+        <button class="chip" data-status="ACTIVE">Активные</button>
+        <button class="chip" data-status="ЗАПИСАН">Записаны</button>
+        <button class="chip" data-status="ДУМАЕТ">Думают</button>
+        <button class="chip" data-status="МЕНЕДЖЕР">Менеджер</button>
+        <button class="chip" data-status="КЛИЕНТ">Клиенты</button>
+        <button class="chip" data-status="ОТКАЗ">Отказ</button>
+      </div>
+
+      <div class="leads" id="leads">
+        <div class="loading">Загрузка…</div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <div class="empty" id="empty">
+        <div class="empty-icon">💬</div>
+        <div class="empty-title">Выберите диалог</div>
+        <div class="empty-sub">
+          Слева список всех лидов. Нажмите на карточку, чтобы увидеть переписку
+          бота и клиента, историю событий и собранные данные.
+        </div>
+      </div>
+
+      <div class="detail hidden" id="detail">
+        <header class="detail-header">
+          <div class="detail-user">
+            <div class="avatar big" id="d-avatar">?</div>
+            <div>
+              <div class="detail-name" id="d-name">–</div>
+              <div class="detail-phone" id="d-phone">–</div>
+            </div>
+          </div>
+          <div class="detail-badges">
+            <span class="badge stage" id="d-stage">–</span>
+            <span class="badge status" id="d-status">–</span>
+          </div>
+        </header>
+
+        <div class="tabs">
+          <button class="tab active" data-tab="messages">Диалог</button>
+          <button class="tab" data-tab="events">События</button>
+          <button class="tab" data-tab="data">Данные</button>
+        </div>
+
+        <section class="tab-panel" id="tab-messages">
+          <div class="messages" id="messages"></div>
+        </section>
+
+        <section class="tab-panel hidden" id="tab-events">
+          <div class="events" id="events"></div>
+        </section>
+
+        <section class="tab-panel hidden" id="tab-data">
+          <div class="data-grid" id="data"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
