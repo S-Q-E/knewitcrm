@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     admin_email: str = Field(default="", alias="ADMIN_EMAIL")
     admin_password: str = Field(default="", alias="ADMIN_PASSWORD")
 
+    # Step 3 bot sync worker.
+    sync_enabled: bool = Field(default=True, alias="SYNC_ENABLED")
+    sync_interval_seconds: int = Field(default=5, ge=1, alias="SYNC_INTERVAL_SECONDS")
+
     # Fallbacks used when DATABASE_URL is not set (local dev).
     pghost: str = Field(default="localhost", alias="PGHOST")
     pgport: str = Field(default="5432", alias="PGPORT")

@@ -121,7 +121,22 @@ async def test_migrate_creates_only_version_table(settings):
             )
             assert "crm_alembic_version" in tables
             crm_tables = [t for t in tables if t.startswith("crm_") and t != "crm_alembic_version"]
-            assert set(crm_tables) == {"crm_users", "crm_sessions"}
+            assert set(crm_tables) == {
+                "crm_users",
+                "crm_sessions",
+                "crm_pipelines",
+                "crm_stages",
+                "crm_contacts",
+                "crm_deals",
+                "crm_deal_stage_history",
+                "crm_lost_reasons",
+                "crm_tags",
+                "crm_entity_tags",
+                "crm_custom_fields",
+                "crm_conversation_state",
+                "crm_settings",
+                "crm_activity_log",
+            }
             # Bot data untouched.
             count = await conn.execute(text("SELECT COUNT(*) FROM knewit_leads"))
             assert count.scalar() == 6

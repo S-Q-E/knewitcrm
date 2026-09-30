@@ -58,3 +58,24 @@ Why: protects against accidental data loss, keeps audit trail.
   demoting the last active admin is rejected (`LAST_ADMIN`). Deactivation revokes
   all sessions; password change revokes all other sessions.
 - Step 0 Basic Auth removed entirely (middleware, settings, `.env.example`).
+
+## D10. Step 3 domain and bot sync notes
+- Default funnel `Продажи Knewit` is seeded in migration `0003_domain` (idempotent
+  `seed_default_funnel`, matched by name). All 14 bot `current_stage` values map to
+  open stages via `bot_stage_key`; finals `Клиент`/`Отказ` carry only `bot_status_key`.
+  `ДУМАЕТ`/`МЕНЕДЖЕР` are not stages.
+- Sync mapping: bot `status` wins (`КЛИЕНТ`/`ОТКАЗ` -> won/lost + `closed_at`);
+  otherwise the stage with matching `bot_stage_key`; unknown/NULL stage falls back
+  to the first open stage. One managed deal per contact = most recently updated
+  non-deleted deal; soft-deleted contacts are skipped, never resurrected.
+- Deal `title` is set once at creation; `custom`/`trial_at` are overwritten from the
+  lead on every pass; new-deal history uses `source='system'`, bot moves `'bot'`,
+  `changed_by=NULL`. Blocked moves (stage_locked) write `bot_stage_blocked` to
+  `crm_activity_log`, not to stage history (nothing moved); manager notification
+  delivery is Step 9.
+- `bot_bridge.update_bot_stage` joins the caller's transaction (no commit inside);
+  it no-ops when the stage is unchanged and raises `BotLeadNotFoundError` otherwise.
+- Worker uses `pg_try_advisory_xact_lock` (transaction-scoped, pool-safe; auto-released
+  on commit/rollback) instead of session-level lock. Backfill pages leads by
+  `whatsapp_id` in batches of 500; progress marker `sync_worker.last_synced_at`
+  lives in `crm_settings`. Interval/flag via `SYNC_ENABLED`/`SYNC_INTERVAL_SECONDS`.

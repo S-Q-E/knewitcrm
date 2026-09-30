@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -20,6 +21,7 @@ from .middleware import RequestIdMiddleware
 from .routers import auth, health, legacy_bot, users
 from .services.bootstrap import try_bootstrap
 from .session_middleware import SessionAuthMiddleware
+from .workers.sync_worker import sync_loop
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +40,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
     await try_bootstrap(app.state.session_factory, settings.admin_email, settings.admin_password)
+    sync_task = None
+    if settings.sync_enabled:
+        sync_task = asyncio.create_task(
+            sync_loop(app.state.session_factory, settings.sync_interval_seconds)
+        )
+        app.state.sync_task = sync_task
     try:
         yield
     finally:
+        if sync_task is not None:
+            sync_task.cancel()
+            await asyncio.gather(sync_task, return_exceptions=True)
         await engine.dispose()
 
 

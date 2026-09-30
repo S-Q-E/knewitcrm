@@ -25,8 +25,13 @@
 - [x] Login rate limit 5 fails/10min per IP+email -> 429 (in-memory, see D9); failed logins logged without secrets
 - [x] `require_user` / `require_role('admin')`; all `/api/*` except health/ready/login require a session; Basic Auth removed
 - [x] 47 tests (auth, users, health, legacy) + ruff clean + manual curl scenario verified
-## Step 3 — Contacts + deals + kanban [todo]
-## Step 4 — Bot sync worker + stage locks (D3) [todo]
+## Step 3 — Contacts + deals + kanban [done]
+- [x] Migration `0003_domain`: pipelines, stages, contacts, deals, stage history, lost reasons, tags, entity tags, custom fields, conversation state, settings, activity log (+ seed `Продажи Knewit`: 16 stages, 5 lost reasons)
+- [x] `services/bot_bridge.py`: `update_bot_stage` (UPDATE lead + `manual_stage_change` event in one txn); sole writer to `knewit_*`
+- [x] `workers/sync_worker.py`: lifespan asyncio task (5s, advisory-xact-lock), backfill in batches, bot moves with history, stage_locked -> activity log only, won/lost + closed_at, `last_synced_at` in settings
+- [x] 58 tests (bridge, sync, seed idempotency, lifespan worker) + ruff clean + manual run verified
+## Step 4 — Bot sync worker + stage locks (D3) [done]
+- [x] Implemented together with Step 3 above (single scope in the step brief): backfill, bot-driven moves, stage_locked, won/lost, idempotency
 ## Step 5 — Chat: SSE realtime + outbox + n8n webhook (D4, D6) [todo]
 ## Step 6 — Tasks, notes, tags, custom fields, lost reasons [todo]
 ## Step 7 — New React frontend, remove frontend-legacy [todo]
@@ -43,3 +48,4 @@
 ## Deferred
 - Live `DATABASE_URL` dump: `docs/db_schema.md` is reconstructed from code; overwrite via `scripts/dump_schema.py` against real n8n DB when available.
 - Legacy frontend (`frontend-legacy/`) has no session login form; it stays behind the API auth wall until replaced in Step 7.
+- `bot_bridge.insert_outgoing_message` (outbox sender) belongs to Step 5; manager notifications for `МЕНЕДЖЕР`/locked stages belong to Step 9.

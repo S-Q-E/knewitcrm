@@ -27,7 +27,8 @@ from backend.app.services.ratelimit import login_limiter  # noqa: E402
 def settings() -> Settings:
     # Test traffic is plain http://test, so Secure cookies would never be sent
     # back. Production keeps COOKIE_SECURE=true (see .env.example).
-    return Settings(cookie_secure=False)
+    # The sync worker is disabled: sync tests drive run_sync_cycle directly.
+    return Settings(cookie_secure=False, sync_enabled=False)
 
 
 @pytest.fixture(scope="session")

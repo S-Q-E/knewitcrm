@@ -11,7 +11,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from backend.app.config import Settings  # noqa: E402
 from backend.app.migrations import VERSION_TABLE, include_object  # noqa: E402
-from backend.app.models import CrmSession, CrmUser  # noqa: E402,F401
+from backend.app.models import (  # noqa: E402,F401
+    CrmActivityLog,
+    CrmContact,
+    CrmConversationState,
+    CrmCustomField,
+    CrmDeal,
+    CrmDealStageHistory,
+    CrmEntityTag,
+    CrmLostReason,
+    CrmPipeline,
+    CrmSession,
+    CrmSetting,
+    CrmStage,
+    CrmTag,
+    CrmUser,
+)
 from backend.app.models.base import Base  # noqa: E402
 
 config = context.config
