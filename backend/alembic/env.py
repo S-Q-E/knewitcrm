@@ -22,6 +22,7 @@ from backend.app.models import (  # noqa: E402,F401
     CrmLostReason,
     CrmNote,
     CrmPipeline,
+    CrmSavedView,
     CrmSession,
     CrmSetting,
     CrmStage,

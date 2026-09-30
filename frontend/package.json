@@ -12,19 +12,28 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "e2e": "playwright test",
     "gen:api": "PY=../.venv/bin/python; [ -x \"$PY\" ] || PY=python3; \"$PY\" ../scripts/export_openapi.py openapi.json && openapi-typescript openapi.json -o src/api/types.ts"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@hookform/resolvers": "^5.9.1",
     "@tanstack/react-query": "5.104.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "date-fns": "^4.4.0",
     "lucide-react": "1.49.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "react-hook-form": "^7.89.0",
     "react-router-dom": "7.18.4",
-    "tailwind-merge": "3.7.0"
+    "tailwind-merge": "3.7.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
     "@testing-library/react": "16.3.3",
     "@types/react": "18.3.31",
     "@types/react-dom": "18.3.7",

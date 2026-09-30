@@ -6,12 +6,12 @@ import { LoginPage } from "@/pages/login";
 import {
   AnalyticsPage,
   ContactsPage,
-  DealsPage,
   DialogsPage,
   ForbiddenPage,
   SettingsPage,
   TasksPage,
 } from "@/pages/stubs";
+import { DealsPage } from "@/pages/deals";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const me = useMe();

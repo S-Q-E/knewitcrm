@@ -48,6 +48,12 @@
 - [ ] `docker build` not run locally (no daemon) — verify in CI; staging HTTPS login needs Railway access
 ## Step 6 — Tasks + remaining meta [todo]
 - Notes/tags/custom-fields/lost-reasons API done in Step 4b; left: `crm_tasks` table + tasks endpoints
+## Step 6b — Kanban «Сделки» [done]
+- [x] Brief arrived out of PROGRESS order; covers the /deals page
+- [x] Migration `0005_saved_views` + CRUD endpoints (own/shared, admin-only share); `contact_source` filter on deals list+board; `source` writable on contacts
+- [x] Board: columns with sums, cards (contact/amount/owner/tags/trial/activity/lock), dnd-kit drag with optimistic update + rollback, per-column cursor loading, inline quick-create modal, note modal, lost-reason modal, won confirm
+- [x] List view: sortable table, column toggle (localStorage), row select + bulk bar; filters in URL + saved views UI; loading/empty/error states; keyboard-accessible drag handles
+- [x] Playwright E2E (login → drag → reload → persisted → cleanup) green locally + CI e2e job; manual stage check confirms `manual_stage_change` in bot DB
 ## Step 7 — New React frontend, remove frontend-legacy [todo]
 ## Step 8 — Funnel analytics + reports [todo]
 ## Step 9 — Notifications + activity log [todo]

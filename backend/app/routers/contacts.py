@@ -154,6 +154,7 @@ async def create_contact(
         name=payload.name,
         phone=payload.phone,
         email=payload.email,
+        source=payload.source,
         owner_id=payload.owner_id,
         custom=payload.custom,
     )
@@ -224,7 +225,7 @@ async def update_contact(
         if await session.get(CrmUser, payload.owner_id) is None:
             raise ApiError("UNKNOWN_OWNER", "Owner not found", 422)
         contact.owner_id = payload.owner_id
-    for field in ("name", "phone", "email"):
+    for field in ("name", "phone", "email", "source"):
         value = getattr(payload, field)
         if value is not None:
             setattr(contact, field, value)

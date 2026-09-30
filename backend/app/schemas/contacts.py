@@ -31,6 +31,7 @@ class ContactCreate(BaseModel):
     name: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=64)
     email: str | None = Field(default=None, max_length=255)
+    source: str = Field(default="manual", max_length=32)
     owner_id: uuid.UUID | None = None
     custom: dict[str, Any] = Field(default_factory=dict)
 
@@ -39,6 +40,7 @@ class ContactUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=64)
     email: str | None = Field(default=None, max_length=255)
+    source: str | None = Field(default=None, max_length=32)
     owner_id: uuid.UUID | None = None
     custom: dict[str, Any] | None = None
 

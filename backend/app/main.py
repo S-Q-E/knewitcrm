@@ -29,6 +29,7 @@ from .routers import (
     pipelines,
     tags,
     users,
+    views,
 )
 from .services.bootstrap import try_bootstrap
 from .session_middleware import SessionAuthMiddleware
@@ -120,6 +121,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(tags.router)
     app.include_router(custom_fields.router)
     app.include_router(lost_reasons.router)
+    app.include_router(views.router)
     app.include_router(legacy_bot.router)
 
     @app.get("/")

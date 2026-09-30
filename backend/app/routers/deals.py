@@ -135,6 +135,7 @@ async def list_deals(
     unassigned: bool = False,
     tag: list[uuid.UUID] = Query(default=[]),
     lost_reason_id: uuid.UUID | None = None,
+    contact_source: str | None = None,
     search: str | None = Query(default=None, max_length=255),
     created_from: datetime | None = None,
     created_to: datetime | None = None,
@@ -166,6 +167,8 @@ async def list_deals(
         )
     if lost_reason_id is not None:
         stmt = stmt.where(CrmDeal.lost_reason_id == lost_reason_id)
+    if contact_source is not None:
+        stmt = stmt.where(CrmContact.source == contact_source)
     if search:
         stmt = stmt.where(CrmDeal.title.ilike(f"%{search.strip()}%"))
     if created_from is not None:
@@ -195,6 +198,13 @@ async def deal_board(
     pipeline_id: uuid.UUID,
     limit: int = Query(default=50, ge=1, le=200),
     cursors: str = Query(default="{}"),
+    owner_id: uuid.UUID | None = None,
+    unassigned: bool = False,
+    tag: list[uuid.UUID] = Query(default=[]),
+    contact_source: str | None = None,
+    search: str | None = Query(default=None, max_length=255),
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -220,9 +230,31 @@ async def deal_board(
         ]
         if scope is not None:
             filters.append(scope)
-        contact_scope = select(CrmContact.id).where(
-            CrmContact.id == CrmDeal.contact_id, CrmContact.deleted_at.is_(None)
-        )
+        if owner_id is not None:
+            filters.append(CrmDeal.owner_id == owner_id)
+        if unassigned:
+            filters.append(CrmDeal.owner_id.is_(None))
+        if tag:
+            filters.append(
+                select(CrmEntityTag.entity_id)
+                .where(CrmEntityTag.entity == ENTITY_DEAL, CrmEntityTag.tag_id.in_(tag))
+                .correlate(CrmDeal)
+                .where(CrmEntityTag.entity_id == CrmDeal.id)
+                .exists()
+            )
+        if search:
+            filters.append(CrmDeal.title.ilike(f"%{search.strip()}%"))
+        if created_from is not None:
+            filters.append(CrmDeal.created_at >= created_from)
+        if created_to is not None:
+            filters.append(CrmDeal.created_at <= created_to)
+        contact_conditions = [
+            CrmContact.id == CrmDeal.contact_id,
+            CrmContact.deleted_at.is_(None),
+        ]
+        if contact_source is not None:
+            contact_conditions.append(CrmContact.source == contact_source)
+        contact_scope = select(CrmContact.id).where(*contact_conditions)
         base = select(CrmDeal).where(*filters, contact_scope.exists())
         total = (
             await session.execute(select(func.count()).select_from(base.subquery()))

@@ -117,3 +117,19 @@ Why: protects against accidental data loss, keeps audit trail.
   Node than the local 20.19), `openapi-typescript` generates `src/api/types.ts`.
 - `docker build` could not run locally (no Docker daemon access); the multi-stage
   Dockerfile is written for CI/Railway. Staging HTTPS check needs Railway access.
+
+## D13. Step 6 kanban notes
+- Board columns come from `GET /api/deals/board` (totals/amounts cover the whole
+  column); per-column cursor pages merge client-side ("Показать ещё"). Contact
+  names/phones join client-side from one cached `/api/contacts?limit=500` call.
+- DnD (dnd-kit, pointer distance 4 + keyboard sensor): same-column drops reorder
+  only (no lock/history); cross-column drops that hit `lost` open the reason modal
+  first, `won` asks for confirmation. Optimistic cache patch with rollback on error.
+- Filters live in URL params (shareable) + `crm_saved_views` (migration `0005`,
+  own-or-shared visibility, sharing is admin-only). Board/list endpoints accept the
+  same filter set; `contact_source` filter was added to deals list+board for this.
+- Cards never show fake state: task/unread/bot-pause badges arrive with the chat
+  and tasks steps (code has no placeholders for them). Task quick-action and
+  "без задач"/"просроченные" filters are deferred to the tasks step.
+- E2E (Playwright, chromium headless shell) runs against the built SPA + real API
+  and restores the moved seed deal (move back + unlock) so reruns stay green.

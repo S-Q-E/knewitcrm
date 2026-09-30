@@ -39,6 +39,7 @@ from .pipelines import (
     CrmPipeline,
     CrmStage,
 )
+from .views import CrmSavedView
 
 __all__ = [
     "Base",
@@ -53,6 +54,7 @@ __all__ = [
     "CrmLostReason",
     "CrmNote",
     "CrmPipeline",
+    "CrmSavedView",
     "CrmSession",
     "CrmSetting",
     "CrmStage",

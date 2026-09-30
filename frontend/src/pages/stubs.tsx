@@ -17,7 +17,7 @@ export function StubPage({ title, hint }: { title: string; hint: string }) {
 }
 
 export function DealsPage() {
-  return <StubPage title="Сделки" hint="Канбан-доска появится здесь на следующем шаге." />;
+  return <StubPage title="Сделки (legacy)" hint="Старая заглушка, заменена канбаном." />;
 }
 
 export function DialogsPage() {
