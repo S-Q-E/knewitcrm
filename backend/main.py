@@ -1,16 +1,69 @@
 from __future__ import annotations
 
+import base64
+import os
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 from .db import init_pool, close_pool, get_pool
 
-FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+# Legacy frontend lives in frontend-legacy/ until step 7.
+# Fall back to frontend/ for backward compatibility.
+_BASE_DIR = Path(__file__).resolve().parent.parent
+FRONTEND_DIR = _BASE_DIR / "frontend-legacy" if (_BASE_DIR / "frontend-legacy").exists() else _BASE_DIR / "frontend"
+
+
+def _get_basic_credentials() -> tuple[str, str]:
+    user = os.getenv("CRM_BASIC_USER")
+    password = os.getenv("CRM_BASIC_PASS")
+    if not user or not password:
+        raise RuntimeError(
+            "CRM_BASIC_USER and CRM_BASIC_PASS must be set (step 0 temporary protection)"
+        )
+    return user, password
+
+
+BASIC_USER, BASIC_PASS = _get_basic_credentials()
+
+# Only health check stays public, everything else requires basic auth.
+PUBLIC_PATHS = {"/api/health"}
+
+
+class BasicAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path in PUBLIC_PATHS:
+            return await call_next(request)
+        auth = request.headers.get("authorization", "")
+        if not auth.lower().startswith("basic "):
+            return self._unauthorized()
+        try:
+            decoded = base64.b64decode(auth[6:]).decode("utf-8")
+        except Exception:
+            return self._unauthorized()
+        username, sep, password = decoded.partition(":")
+        if not sep:
+            return self._unauthorized()
+        user_ok = secrets.compare_digest(username, BASIC_USER)
+        pass_ok = secrets.compare_digest(password, BASIC_PASS)
+        if not (user_ok and pass_ok):
+            return self._unauthorized()
+        return await call_next(request)
+
+    @staticmethod
+    def _unauthorized() -> JSONResponse:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Unauthorized"},
+            headers={"WWW-Authenticate": 'Basic realm="KnewIT CRM"'},
+        )
 
 
 @asynccontextmanager
@@ -23,6 +76,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="KnewIT CRM", version="1.0.0", lifespan=lifespan)
+
+app.add_middleware(BasicAuthMiddleware)
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +282,7 @@ async def get_funnel():
 
 
 # ---------------------------------------------------------------------------
-# Static frontend (монтируется последним, чтобы /api/* имел приоритет)
+# Static frontend (mounted last so /api/* takes precedence)
 # ---------------------------------------------------------------------------
 @app.get("/")
 async def root_index():
