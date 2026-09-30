@@ -31,8 +31,8 @@ def upgrade() -> None:
             "WHERE l.whatsapp_id = c.whatsapp_id "
             "AND c.whatsapp_id IS NOT NULL AND c.last_bot_name IS NULL; "
             "UPDATE crm_deals d SET last_bot_trial_at = l.trial_datetime "
-            "FROM knewit_leads l JOIN crm_contacts c ON c.id = d.contact_id "
-            "WHERE l.whatsapp_id = c.whatsapp_id "
+            "FROM knewit_leads l, crm_contacts c "
+            "WHERE c.id = d.contact_id AND l.whatsapp_id = c.whatsapp_id "
             "AND d.last_bot_trial_at IS NULL AND l.trial_datetime IS NOT NULL; "
             "END IF; END $$"
         )
