@@ -1,15 +1,23 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import type { DialogSummary } from "@/api/timeline";
+import type { DialogSummary, OutboxItem } from "@/api/timeline";
 import {
   useDialog,
   useDialogs,
   useLeadMessages,
   useMarkRead,
+  useOutbox,
+  usePauseBot,
+  useQuickReplies,
+  useResumeBot,
+  useRetryOutbox,
+  useSendMessage,
   useUpdateDialog,
 } from "@/api/timeline";
 import { useUsersLite } from "@/api/deals";
+import { ChatComposer } from "@/components/dialogs/composer";
+import { substituteQuickReply } from "@/lib/quick_replies";
 import { useToast, toastError } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,9 +31,14 @@ export function DialogsPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(params.get("wa"));
+  const [draft, setDraft] = useState("");
   const { push } = useToast();
   const markRead = useMarkRead();
   const updateDialog = useUpdateDialog();
+  const pauseBot = usePauseBot();
+  const resumeBot = useResumeBot();
+  const sendMessage = useSendMessage();
+  const retryOutbox = useRetryOutbox();
   const users = useUsersLite();
 
   const dialogs = useDialogs({
@@ -35,6 +48,8 @@ export function DialogsPage() {
   });
   const dialog = useDialog(selected);
   const messages = useLeadMessages(selected);
+  const outbox = useOutbox(selected);
+  const quickReplies = useQuickReplies();
 
   useEffect(() => {
     if (selected) {
@@ -45,7 +60,10 @@ export function DialogsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
-  const open = (whatsappId: string) => setSelected(whatsappId);
+  const open = (whatsappId: string) => {
+    setDraft("");
+    setSelected(whatsappId);
+  };
 
   const assign = (whatsappId: string, userId: string) => {
     updateDialog.mutate(
@@ -55,15 +73,32 @@ export function DialogsPage() {
   };
 
   const togglePause = (current: DialogSummary) => {
-    updateDialog.mutate(
-      { whatsapp_id: current.whatsapp_id, patch: { bot_paused: !current.bot_paused } },
-      { onError: (error) => toastError(push, error) },
+    const mutate = current.bot_paused ? resumeBot : pauseBot;
+    mutate.mutate(current.whatsapp_id, { onError: (error) => toastError(push, error) });
+  };
+
+  const send = (body: string) => {
+    if (!selected) {
+      return;
+    }
+    sendMessage.mutate(
+      { whatsapp_id: selected, body },
+      {
+        onSuccess: () => setDraft(""),
+        onError: (error) => toastError(push, error),
+      },
     );
   };
 
-  const sendDisabled = (event: React.FormEvent) => {
-    event.preventDefault();
-    push({ title: "Отправка появится на следующем шаге", variant: "default" });
+  const applyQuickReply = (body: string, contactName: string | null) => {
+    setDraft(substituteQuickReply(body, contactName));
+  };
+
+  const retry = (item: OutboxItem) => {
+    retryOutbox.mutate(
+      { whatsapp_id: item.whatsapp_id, outbox_id: item.id },
+      { onError: (error) => toastError(push, error) },
+    );
   };
 
   return (
@@ -169,11 +204,26 @@ export function DialogsPage() {
               <Button
                 size="sm"
                 variant="secondary"
+                disabled={pauseBot.isPending || resumeBot.isPending}
                 onClick={() => dialog.data && togglePause(dialog.data)}
               >
                 {dialog.data.bot_paused ? "Включить бота" : "Пауза бота"}
               </Button>
             </header>
+
+            {dialog.data.bot_paused && (
+              <div className="flex items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+                <span>Бот на паузе. Клиент не получит автоматических ответов.</span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={resumeBot.isPending}
+                  onClick={() => dialog.data && togglePause(dialog.data)}
+                >
+                  Вернуть боту
+                </Button>
+              </div>
+            )}
 
             <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
               {messages.isPending && <p className="text-sm text-slate-500">Загрузка…</p>}
@@ -189,25 +239,67 @@ export function DialogsPage() {
                 >
                   <p className="whitespace-pre-wrap">{message.content ?? ""}</p>
                   <p className="mt-1 text-[11px] opacity-70">
+                    {message.message_type === "manager" ? "Менеджер · " : ""}
                     {message.stage_at_moment ? `${message.stage_at_moment} · ` : ""}
                     {formatDate(message.created_at)}
                   </p>
                 </div>
               ))}
+              {(outbox.data?.items ?? [])
+                .filter((item) => item.status !== "sent")
+                .map((item) => (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      "ml-auto max-w-[85%] rounded-lg px-3 py-2 text-sm",
+                      item.status === "failed"
+                        ? "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-100"
+                        : "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
+                    )}
+                  >
+                    <p className="whitespace-pre-wrap">{item.body}</p>
+                    <p className="mt-1 flex items-center gap-2 text-[11px] opacity-80">
+                      {item.status === "failed" ? "Ошибка отправки" : "В очереди…"}
+                      {formatDate(item.created_at)}
+                      {item.status === "failed" && (
+                        <button
+                          type="button"
+                          onClick={() => retry(item)}
+                          disabled={retryOutbox.isPending}
+                          className="font-medium underline underline-offset-2"
+                        >
+                          Повторить
+                        </button>
+                      )}
+                    </p>
+                  </div>
+                ))}
             </div>
 
-            <form
-              onSubmit={sendDisabled}
-              className="border-t border-slate-200 p-3 dark:border-slate-800"
-            >
-              <div className="rounded-md border border-dashed border-slate-300 p-2 text-xs text-slate-500 dark:border-slate-700">
-                Быстрые ответы появятся здесь (шаблоны пока не настроены).
-              </div>
-              <div className="mt-2 flex gap-2">
-                <Input placeholder="Сообщение клиенту…" aria-label="Сообщение клиенту" />
-                <Button type="submit">Отправить</Button>
-              </div>
-            </form>
+            <div className="border-t border-slate-200 p-3 dark:border-slate-800">
+              {quickReplies.data && quickReplies.data.items.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1">
+                  {quickReplies.data.items.map((reply) => (
+                    <button
+                      key={reply.id}
+                      type="button"
+                      title={reply.body}
+                      onClick={() => applyQuickReply(reply.body, dialog.data.contact_name)}
+                      className="rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                      {reply.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <ChatComposer
+                botPaused={dialog.data.bot_paused}
+                sending={sendMessage.isPending}
+                draft={draft}
+                onDraftChange={setDraft}
+                onSend={send}
+              />
+            </div>
           </>
         )}
       </section>

@@ -123,11 +123,105 @@ export function useLeadMessages(whatsappId: string | null) {
         items: {
           id: number;
           direction: string;
+          message_type: string;
           content: string | null;
           stage_at_moment: string | null;
           created_at: string;
         }[];
       }>(`/api/leads/${encodeURIComponent(whatsappId as string)}/messages?limit=500`),
     enabled: whatsappId !== null,
+    refetchInterval: 5000,
+  });
+}
+
+export interface OutboxItem {
+  id: string;
+  whatsapp_id: string;
+  body: string;
+  sent_by: string | null;
+  status: "queued" | "sent" | "failed";
+  attempts: number;
+  next_attempt_at: string | null;
+  error: string | null;
+  provider_message_id: string | null;
+  created_at: string;
+  sent_at: string | null;
+}
+
+export interface QuickReply {
+  id: string;
+  title: string;
+  body: string;
+  sort: number;
+}
+
+export function useOutbox(whatsappId: string | null) {
+  return useQuery({
+    queryKey: ["outbox", whatsappId],
+    queryFn: () =>
+      api.get<{ items: OutboxItem[]; total: number }>(
+        `/api/chats/${encodeURIComponent(whatsappId as string)}/outbox?limit=100`,
+      ),
+    enabled: whatsappId !== null,
+    refetchInterval: 3000,
+  });
+}
+
+export function useSendMessage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { whatsapp_id: string; body: string }) =>
+      api.post<OutboxItem>(`/api/chats/${encodeURIComponent(input.whatsapp_id)}/messages`, {
+        body: input.body,
+      }),
+    onSettled: (_data, _error, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ["outbox", variables.whatsapp_id] });
+      void queryClient.invalidateQueries({ queryKey: ["lead-messages", variables.whatsapp_id] });
+      void queryClient.invalidateQueries({ queryKey: ["dialog", variables.whatsapp_id] });
+      void queryClient.invalidateQueries({ queryKey: ["dialogs"] });
+    },
+  });
+}
+
+export function useRetryOutbox() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { whatsapp_id: string; outbox_id: string }) =>
+      api.post<OutboxItem>(`/api/chats/outbox/${input.outbox_id}/retry`),
+    onSettled: (_data, _error, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ["outbox", variables.whatsapp_id] });
+    },
+  });
+}
+
+export function useQuickReplies() {
+  return useQuery({
+    queryKey: ["quick-replies"],
+    queryFn: () => api.get<{ items: QuickReply[] }>(`/api/chats/quick-replies`),
+    staleTime: 60000,
+  });
+}
+
+export function usePauseBot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (whatsappId: string) =>
+      api.post<DialogSummary>(`/api/chats/${encodeURIComponent(whatsappId)}/bot/pause`),
+    onSettled: (_data, _error, whatsappId) => {
+      void queryClient.invalidateQueries({ queryKey: ["dialog", whatsappId] });
+      void queryClient.invalidateQueries({ queryKey: ["dialogs"] });
+    },
+  });
+}
+
+export function useResumeBot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (whatsappId: string) =>
+      api.post<DialogSummary>(`/api/chats/${encodeURIComponent(whatsappId)}/bot/resume`),
+    onSettled: (_data, _error, whatsappId) => {
+      void queryClient.invalidateQueries({ queryKey: ["dialog", whatsappId] });
+      void queryClient.invalidateQueries({ queryKey: ["dialogs"] });
+    },
   });
 }

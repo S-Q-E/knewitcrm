@@ -28,6 +28,10 @@ Why: explicit handover without surprising the client; autopause stays opt-in.
 ## D6. Manager outbound messages go through outbox + n8n webhook
 CRM does not store WhatsApp provider keys. It calls the n8n webhook with a secret, and n8n sends via the provider already used in the bot workflow.
 Why: single sender path, no credential duplication.
+- Delivery (Step 9): a `crm_outbox` row (`queued`) is POSTed by the worker as `{outbox_id, whatsapp_id, text}` to `N8N_SEND_WEBHOOK_URL` with header `X-CRM-Secret: N8N_WEBHOOK_SECRET`. On `{"ok": true}` the row becomes `sent` (`sent_at`, `provider_message_id`) and `bot_bridge.insert_outgoing_message` mirrors it into `knewit_messages` as `direction='out', message_type='manager', tokens_used=0`, stamped with the lead's current stage. `crm_outbox.knewit_message_id` links the mirrored row so the timeline shows the sender's name.
+- Reliability: failures do `attempts+1` with exponential backoff (1m/2m/4m/8m, cap 1h via `next_attempt_at`); after 5 attempts the row becomes `failed` and the sender gets an `outbox_failed` notification. HTTP calls run outside DB transactions; outcomes apply with a compare-and-set on `status='queued'`, and `outbox_id` lets n8n dedupe redeliveries — repeated runs never double-send.
+- `httpx` moved into production `requirements.txt` (the worker needs an HTTP client; it was dev-only before).
+- Pause/resume toggles write contact-scoped `bot_paused`/`bot_resumed` activity rows, so the events show in the deal timeline. A manager send auto-pauses the bot via the `auto_pause_on_manual_reply` setting (default true) — unlike `auto_pause_on_manager` (default false), because a human reply mid-bot-flow would otherwise collide with the bot.
 
 ## D7. Soft delete
 `deleted_at` for contacts and deals. Hard delete by admin only.

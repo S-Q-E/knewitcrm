@@ -843,6 +843,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chats/quick-replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Quick Replies */
+        get: operations["list_quick_replies_api_chats_quick_replies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chats/outbox/{outbox_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Outbox */
+        post: operations["retry_outbox_api_chats_outbox__outbox_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chats/{whatsapp_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue Message */
+        post: operations["queue_message_api_chats__whatsapp_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chats/{whatsapp_id}/outbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Outbox */
+        get: operations["list_outbox_api_chats__whatsapp_id__outbox_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chats/{whatsapp_id}/bot/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause Bot */
+        post: operations["pause_bot_api_chats__whatsapp_id__bot_pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chats/{whatsapp_id}/bot/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume Bot */
+        post: operations["resume_bot_api_chats__whatsapp_id__bot_resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notifications": {
         parameters: {
             query?: never;
@@ -1019,7 +1121,9 @@ export interface components {
             /** Trigger Type */
             trigger_type: string;
             /** Trigger Config */
-            trigger_config?: Record<string, never>;
+            trigger_config?: {
+                [key: string]: unknown;
+            };
             /** Actions */
             actions?: components["schemas"]["AutomationAction"][];
         };
@@ -1037,7 +1141,9 @@ export interface components {
             /** Trigger Type */
             trigger_type: string;
             /** Trigger Config */
-            trigger_config: Record<string, never>;
+            trigger_config: {
+                [key: string]: unknown;
+            };
             /** Actions */
             actions: unknown[];
             /** Created At */
@@ -1052,7 +1158,9 @@ export interface components {
             /** Trigger Type */
             trigger_type?: string | null;
             /** Trigger Config */
-            trigger_config?: Record<string, never> | null;
+            trigger_config?: {
+                [key: string]: unknown;
+            } | null;
             /** Actions */
             actions?: components["schemas"]["AutomationAction"][] | null;
         };
@@ -1113,6 +1221,11 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /** ChatMessageIn */
+        ChatMessageIn: {
+            /** Body */
+            body: string;
+        };
         /** ContactCreate */
         ContactCreate: {
             /** Whatsapp Id */
@@ -1131,7 +1244,9 @@ export interface components {
             /** Owner Id */
             owner_id?: string | null;
             /** Custom */
-            custom?: Record<string, never>;
+            custom?: {
+                [key: string]: unknown;
+            };
         };
         /** ContactListOut */
         ContactListOut: {
@@ -1160,7 +1275,9 @@ export interface components {
             /** Owner Id */
             owner_id: string | null;
             /** Custom */
-            custom: Record<string, never>;
+            custom: {
+                [key: string]: unknown;
+            };
             /**
              * Created At
              * Format: date-time
@@ -1192,7 +1309,9 @@ export interface components {
             /** Owner Id */
             owner_id?: string | null;
             /** Custom */
-            custom?: Record<string, never> | null;
+            custom?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** CustomFieldCreate */
         CustomFieldCreate: {
@@ -1288,7 +1407,9 @@ export interface components {
             /** Trial At */
             trial_at?: string | null;
             /** Custom */
-            custom?: Record<string, never>;
+            custom?: {
+                [key: string]: unknown;
+            };
         };
         /** DealListOut */
         DealListOut: {
@@ -1352,7 +1473,9 @@ export interface components {
             /** Stage Locked */
             stage_locked: boolean;
             /** Custom */
-            custom: Record<string, never>;
+            custom: {
+                [key: string]: unknown;
+            };
             /**
              * Created At
              * Format: date-time
@@ -1388,7 +1511,9 @@ export interface components {
             /** Lost Reason Id */
             lost_reason_id?: string | null;
             /** Custom */
-            custom?: Record<string, never> | null;
+            custom?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** DialogUpdate */
         DialogUpdate: {
@@ -1496,6 +1621,37 @@ export interface components {
             /** Pinned */
             pinned?: boolean | null;
         };
+        /** OutboxOut */
+        OutboxOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Whatsapp Id */
+            whatsapp_id: string;
+            /** Body */
+            body: string;
+            /** Sent By */
+            sent_by: string | null;
+            /** Status */
+            status: string;
+            /** Attempts */
+            attempts: number;
+            /** Next Attempt At */
+            next_attempt_at: string | null;
+            /** Error */
+            error: string | null;
+            /** Provider Message Id */
+            provider_message_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Sent At */
+            sent_at: string | null;
+        };
         /** PipelineCreate */
         PipelineCreate: {
             /** Name */
@@ -1550,7 +1706,9 @@ export interface components {
             /** Name */
             name: string;
             /** Filters */
-            filters?: Record<string, never>;
+            filters?: {
+                [key: string]: unknown;
+            };
             /**
              * Is Shared
              * @default false
@@ -1578,7 +1736,9 @@ export interface components {
             /** Name */
             name: string;
             /** Filters */
-            filters: Record<string, never>;
+            filters: {
+                [key: string]: unknown;
+            };
             /** Is Shared */
             is_shared: boolean;
             /**
@@ -1592,7 +1752,9 @@ export interface components {
             /** Name */
             name?: string | null;
             /** Filters */
-            filters?: Record<string, never> | null;
+            filters?: {
+                [key: string]: unknown;
+            } | null;
             /** Is Shared */
             is_shared?: boolean | null;
         };
@@ -1787,7 +1949,9 @@ export interface components {
              */
             at: string;
             /** Data */
-            data?: Record<string, never>;
+            data?: {
+                [key: string]: unknown;
+            };
         };
         /** TimelineOut */
         TimelineOut: {
@@ -4277,6 +4441,188 @@ export interface operations {
         };
     };
     mark_dialog_read_api_dialogs__whatsapp_id__read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                whatsapp_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_quick_replies_api_chats_quick_replies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    retry_outbox_api_chats_outbox__outbox_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outbox_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queue_message_api_chats__whatsapp_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                whatsapp_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatMessageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_outbox_api_chats__whatsapp_id__outbox_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                whatsapp_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pause_bot_api_chats__whatsapp_id__bot_pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                whatsapp_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_bot_api_chats__whatsapp_id__bot_resume_post: {
         parameters: {
             query?: never;
             header?: never;

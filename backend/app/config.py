@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     sync_enabled: bool = Field(default=True, alias="SYNC_ENABLED")
     sync_interval_seconds: int = Field(default=5, ge=1, alias="SYNC_INTERVAL_SECONDS")
 
+    # Step 9 manager outbox: n8n webhook that actually sends WhatsApp messages.
+    n8n_send_webhook_url: str = Field(default="", alias="N8N_SEND_WEBHOOK_URL")
+    n8n_webhook_secret: str = Field(default="", alias="N8N_WEBHOOK_SECRET")
+    outbox_interval_seconds: int = Field(default=5, ge=1, alias="OUTBOX_INTERVAL_SECONDS")
+
     # How many trailing X-Forwarded-For entries are appended by our own
     # trusted proxies (outermost last). The client IP is the entry just
     # before them; 0 means "no proxy, always use the direct peer".

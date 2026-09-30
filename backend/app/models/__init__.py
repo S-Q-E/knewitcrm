@@ -30,6 +30,14 @@ from .deals import (
 )
 from .notes import CrmNote
 from .notify import CrmAutomation, CrmNotification
+from .outbox import (
+    OUTBOX_STATUS_FAILED,
+    OUTBOX_STATUS_QUEUED,
+    OUTBOX_STATUS_SENT,
+    VALID_OUTBOX_STATUSES,
+    CrmOutbox,
+    CrmQuickReply,
+)
 from .pipelines import (
     STAGE_KIND_LOST,
     STAGE_KIND_OPEN,
@@ -65,7 +73,9 @@ __all__ = [
     "CrmLostReason",
     "CrmNote",
     "CrmNotification",
+    "CrmOutbox",
     "CrmPipeline",
+    "CrmQuickReply",
     "CrmSavedView",
     "CrmSession",
     "CrmSetting",
@@ -82,6 +92,9 @@ __all__ = [
     "HISTORY_SOURCE_BOT",
     "HISTORY_SOURCE_MANAGER",
     "HISTORY_SOURCE_SYSTEM",
+    "OUTBOX_STATUS_FAILED",
+    "OUTBOX_STATUS_QUEUED",
+    "OUTBOX_STATUS_SENT",
     "ROLE_ADMIN",
     "ROLE_MANAGER",
     "STAGE_KIND_LOST",
@@ -97,6 +110,7 @@ __all__ = [
     "VALID_DEAL_STATUSES",
     "VALID_FIELD_ENTITIES",
     "VALID_HISTORY_SOURCES",
+    "VALID_OUTBOX_STATUSES",
     "VALID_ROLES",
     "VALID_STAGE_KINDS",
     "VALID_TAG_ENTITIES",

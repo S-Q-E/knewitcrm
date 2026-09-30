@@ -89,7 +89,9 @@ def _id_key(item: dict[str, Any]) -> Any:
     return int(ref) if item["kind"] in ("message", "event") else str(ref)
 
 
-def _keyset_text(column: str, rank: int, numeric_id: bool, cursor: dict | None) -> str:
+def _keyset_text(
+    column: str, rank: int, numeric_id: bool, cursor: dict | None, id_column: str = "id"
+) -> str:
     """Keyset predicate for (at DESC, rank ASC, id DESC) with a fixed source rank."""
     if cursor is None:
         return "TRUE"
@@ -103,8 +105,8 @@ def _keyset_text(column: str, rank: int, numeric_id: bool, cursor: dict | None) 
         f" OR ({column} = CAST(:cursor_at AS timestamptz) AND "
     )
     if numeric_id:
-        return comparator + "id < :cursor_id_int)"
-    return comparator + "id::text < :cursor_id)"
+        return comparator + f"{id_column} < :cursor_id_int)"
+    return comparator + f"{id_column}::text < :cursor_id)"
 
 
 def _cursor_params(cursor: dict | None) -> dict[str, Any]:
@@ -124,30 +126,42 @@ async def _messages(
     rows = (
         await session.execute(
             text(
-                "SELECT id, direction, message_type, content, stage_at_moment,"
-                " tokens_used, response_time_ms, created_at FROM knewit_messages"
-                f" WHERE whatsapp_id = :wa AND {_keyset_text('created_at', 0, True, cursor)}"
-                " ORDER BY created_at DESC, id DESC LIMIT :limit"
+                "SELECT m.id, m.direction, m.message_type, m.content, m.stage_at_moment,"
+                " m.tokens_used, m.response_time_ms, m.created_at,"
+                " o.sent_by AS outbox_sent_by FROM knewit_messages m"
+                " LEFT JOIN crm_outbox o ON o.knewit_message_id = m.id"
+                " WHERE m.whatsapp_id = :wa AND "
+                f"{_keyset_text('m.created_at', 0, True, cursor, 'm.id')}"
+                " ORDER BY m.created_at DESC, m.id DESC LIMIT :limit"
             ),
             {"wa": whatsapp_id, "limit": limit, **_cursor_params(cursor)},
         )
     ).mappings()
-    return [
-        {
-            "key": f"message:{row['id']}",
-            "ref": str(row["id"]),
-            "kind": "message",
-            "at": row["created_at"].isoformat(),
-            "direction": row["direction"],
-            "message_type": row["message_type"],
-            "body": row["content"],
-            "stage_at_moment": row["stage_at_moment"],
-            "tokens_used": row["tokens_used"],
-            "response_time_ms": row["response_time_ms"],
-            "author_kind": "client" if row["direction"] == "in" else "bot",
-        }
-        for row in rows
-    ]
+    items = []
+    for row in rows:
+        if row["message_type"] == "manager":
+            author_kind = "manager"
+        elif row["direction"] == "in":
+            author_kind = "client"
+        else:
+            author_kind = "bot"
+        items.append(
+            {
+                "key": f"message:{row['id']}",
+                "ref": str(row["id"]),
+                "kind": "message",
+                "at": row["created_at"].isoformat(),
+                "direction": row["direction"],
+                "message_type": row["message_type"],
+                "body": row["content"],
+                "stage_at_moment": row["stage_at_moment"],
+                "tokens_used": row["tokens_used"],
+                "response_time_ms": row["response_time_ms"],
+                "author_kind": author_kind,
+                "sent_by": str(row["outbox_sent_by"]) if row["outbox_sent_by"] else None,
+            }
+        )
+    return items
 
 
 async def _events(
@@ -324,7 +338,7 @@ async def _enrich(
     user_ids = {
         item[key]
         for item in items
-        for key in ("changed_by", "author_id", "assignee_id", "actor_id")
+        for key in ("changed_by", "author_id", "assignee_id", "actor_id", "sent_by")
         if item.get(key)
     }
     names: dict[str, str] = {}
@@ -342,6 +356,7 @@ async def _enrich(
             ("author_id", "author_name"),
             ("assignee_id", "assignee_name"),
             ("actor_id", "actor_name"),
+            ("sent_by", "sender_name"),
         ):
             if item.get(key):
                 item[label] = names.get(item[key], "?")
@@ -349,3 +364,5 @@ async def _enrich(
             item["author_name"] = contact_name or "Клиент"
         if item["kind"] == "message" and item["author_kind"] == "bot":
             item["author_name"] = "Бот"
+        if item["kind"] == "message" and item["author_kind"] == "manager":
+            item["author_name"] = item.get("sender_name") or "Менеджер"

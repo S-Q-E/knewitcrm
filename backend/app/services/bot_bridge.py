@@ -78,6 +78,48 @@ async def update_bot_stage(
     return True
 
 
+async def insert_outgoing_message(
+    session: AsyncSession, whatsapp_id: str, body: str
+) -> int:
+    """Mirror a manager-sent outbox message into the bot tables (D6).
+
+    Appends a ``direction='out', message_type='manager'`` row to
+    ``knewit_messages`` stamped with the lead's current stage, in the
+    caller's transaction (no commit here). Returns the new message id.
+    This module is the ONLY place allowed to write to ``knewit_*`` tables.
+    """
+    row = (
+        await session.execute(
+            text(
+                "SELECT current_stage FROM knewit_leads"
+                " WHERE whatsapp_id = :whatsapp_id FOR UPDATE"
+            ),
+            {"whatsapp_id": whatsapp_id},
+        )
+    ).one_or_none()
+    if row is None:
+        raise BotLeadNotFoundError(f"Bot lead not found: {whatsapp_id}")
+    message_id = (
+        await session.execute(
+            text(
+                "INSERT INTO knewit_messages"
+                " (whatsapp_id, direction, message_type, content,"
+                " stage_at_moment, tokens_used, created_at)"
+                " VALUES (:whatsapp_id, 'out', 'manager', :content,"
+                " :stage, 0, :now) RETURNING id"
+            ),
+            {
+                "whatsapp_id": whatsapp_id,
+                "content": body,
+                "stage": row[0],
+                "now": datetime.now(UTC),
+            },
+        )
+    ).scalar_one()
+    logger.info("manager message mirrored whatsapp_id=%s message_id=%s", whatsapp_id, message_id)
+    return int(message_id)
+
+
 def _json(payload: dict) -> str:
     import json
 

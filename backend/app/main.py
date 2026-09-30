@@ -20,6 +20,7 @@ from .middleware import RequestIdMiddleware
 from .routers import (
     auth,
     automations,
+    chats,
     contacts,
     custom_fields,
     deals,
@@ -38,6 +39,7 @@ from .routers import (
 from .services.bootstrap import try_bootstrap
 from .session_middleware import SessionAuthMiddleware
 from .workers.notify_worker import NOTIFY_INTERVAL_SECONDS, notify_loop
+from .workers.outbox_worker import outbox_loop
 from .workers.sync_worker import sync_loop
 
 logger = logging.getLogger(__name__)
@@ -94,10 +96,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             notify_loop(app.state.session_factory, NOTIFY_INTERVAL_SECONDS)
         )
         app.state.notify_task = notify_task
+    outbox_task = None
+    if settings.sync_enabled:
+        outbox_task = asyncio.create_task(
+            outbox_loop(app.state.session_factory, settings, settings.outbox_interval_seconds)
+        )
+        app.state.outbox_task = outbox_task
     try:
         yield
     finally:
-        for task in (sync_task, notify_task):
+        for task in (sync_task, notify_task, outbox_task):
             if task is not None:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
@@ -134,6 +142,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(views.router)
     app.include_router(tasks.router)
     app.include_router(dialogs.router)
+    app.include_router(chats.router)
     app.include_router(notifications.router)
     app.include_router(legacy_bot.router)
 

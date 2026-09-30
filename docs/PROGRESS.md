@@ -38,7 +38,8 @@
 - [x] Pipelines/stages CRUD (admin), reorder, delete-with-recipient; contacts CRUD + ILIKE/phone search + filters + soft/hard delete + restore; deals CRUD + board (grouped sums, per-column cursors) + move (lock/history/bridge) + unlock + bulk (200, atomic)
 - [x] Notes/tags/fields/reasons CRUD with role split; custom type validation; `restrict_managers_to_own` scope (404 on violation); activity log on every mutation
 - [x] 80 tests + ruff clean + manual Swagger/curl lifecycle verified
-## Step 5 — Chat: SSE realtime + outbox + n8n webhook (D4, D6) [todo]
+## Step 5 — Chat: SSE realtime + outbox + n8n webhook [partially done]
+- [x] Outbox half done in Step 9 below (queue, worker, webhook, mirror); SSE realtime polling still [todo]
 ## Step 5b — Frontend scaffold [done]
 - [x] Brief arrived out of PROGRESS order; covers the new `frontend/` shell
 - [x] Vite + React 18 + TS strict + Tailwind + shadcn-style ui + Query + Router + lucide; API client (cookies, auto CSRF, 401->/login, toasts); openapi-typescript types + `gen:api` script
@@ -69,6 +70,17 @@
 - [x] Frontend: /tasks (groups, week view, RHF+zod modal, checkbox, bulk links), bell with count + dropdown + deep links
 - [x] 99 backend tests + tsc/eslint/vitest green; 3 E2E green; manual handover/task/bell curl verified
 ## Step 9 — Notifications + activity log [todo]
+## Step 9 — Manager messaging via outbox + n8n webhook (D6) [done]
+- [x] Brief for this step implements the outbox half of Step 5 (SSE realtime stays [todo]); old "Step 9 — Notifications + activity log" placeholder is superseded (notifications shipped in Step 8b, activity log in Step 4b)
+- [x] Migration `0010_outbox`: `crm_outbox` (body/sent_by/status/attempts/next_attempt_at/error/provider_message_id/knewit_message_id/sent_at + due index) + `crm_quick_replies` (unique title, 3 seeded templates)
+- [x] `bot_bridge.insert_outgoing_message` (sole `knewit_messages` writer: out/manager row, lead stage stamp, tokens 0, RETURNING id)
+- [x] `POST /api/chats/{wa}/messages` (202, EMPTY_BODY/LEAD_NOT_FOUND, auto-pause default true) + outbox list + `/outbox/{id}/retry` + `/bot/pause|resume` (transition-only timeline events) + quick-replies list; `httpx` promoted to production requirements
+- [x] `workers/outbox_worker.py`: advisory-locked cycles, claim via SKIP LOCKED, HTTP outside txn, CAS outcome, exp backoff to 5 attempts then failed+notify, `outbox_loop` in lifespan; 12 backend tests (queue/validation/send+mirror/idempotent double-run/retry-then-success/5-fails-notify/pause-resume-timeline/autopause on-off/retry endpoint/listing+templates/mock-server sender incl. rejection paths/manager e2e with timeline author)
+- [x] Timeline: manager messages get `author_kind='manager'` + sender name via outbox link (fallback "Менеджер")
+- [x] Frontend `/dialogs`: real composer (Enter send / Shift+Enter newline, bot-active warning), pause banner + "Вернуть боту", queued/failed outbox rows with retry, quick-reply chips with {name} substitution, "Менеджер" labels; 2 new vitest files (15 frontend tests green), tsc/eslint/prettier/build green, OpenAPI types regenerated
+- [x] 118 backend tests green; manual local run verified (queue 202, worker attempt recorded, autopause, pause/resume, seeded templates)
+- [x] Fix (found while setting up): migration `0009_sync_snapshot` backfill used `JOIN ... ON c.id = d.contact_id` referencing the UPDATE target alias — invalid Postgres; rewrote with comma-FROM + WHERE
+
 ## Step 10 — Saved views + search filters [todo]
 ## Step 11 — Settings (locale, timezone Asia/Almaty, currency KZT) [todo]
 ## Step 12 — Roles hardening + admin panel [todo]
@@ -79,6 +91,4 @@
 
 ## Deferred
 - Live `DATABASE_URL` dump: `docs/db_schema.md` is reconstructed from code; overwrite via `scripts/dump_schema.py` against real n8n DB when available.
-- Legacy frontend (`frontend-legacy/`) has no session login form; it stays behind the API auth wall until replaced in Step 7.
-- `bot_bridge.insert_outgoing_message` (outbox sender) belongs to Step 5; manager notifications for `МЕНЕДЖЕР`/locked stages belong to Step 9.
 - Staging Railway HTTPS login check: needs Railway project access (unavailable locally); Dockerfile + migrate-on-boot CMD are ready for it.
