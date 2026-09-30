@@ -20,61 +20,6 @@ def row_to_dict(row) -> dict:
     return data
 
 
-@router.get("/api/stats")
-async def get_stats(session: AsyncSession = Depends(get_session)):
-    leads = (
-        await session.execute(
-            text(
-                """
-                SELECT
-                    COUNT(*)                                                          AS total,
-                    COUNT(*) FILTER (WHERE status = 'ACTIVE')                         AS active,
-                    COUNT(*) FILTER (WHERE status = 'ЗАПИСАН')                        AS booked,
-                    COUNT(*) FILTER (WHERE status = 'КЛИЕНТ')                         AS clients,
-                    COUNT(*) FILTER (WHERE status = 'ОТКАЗ')                          AS lost,
-                    COUNT(*) FILTER (WHERE status = 'ДУМАЕТ')                         AS thinking,
-                    COUNT(*) FILTER (WHERE status = 'МЕНЕДЖЕР')                       AS manager,
-                    COUNT(*) FILTER (WHERE created_at > now() - interval '24 hours') AS new_today,
-                    COUNT(*) FILTER (WHERE last_message_at > now() - interval '1 hour')
-                        AS active_last_hour
-                FROM knewit_leads
-                """
-            )
-        )
-    ).one()
-    stages = (
-        await session.execute(
-            text(
-                """
-                SELECT current_stage AS stage, COUNT(*) AS cnt
-                FROM knewit_leads
-                GROUP BY current_stage
-                ORDER BY cnt DESC
-                """
-            )
-        )
-    ).all()
-    msgs = (
-        await session.execute(
-            text(
-                """
-                SELECT
-                    COUNT(*) FILTER (WHERE direction = 'in')  AS incoming,
-                    COUNT(*) FILTER (WHERE direction = 'out') AS outgoing
-                FROM knewit_messages
-                WHERE created_at > now() - interval '24 hours'
-                """
-            )
-        )
-    ).one()
-
-    return {
-        "leads": row_to_dict(leads),
-        "stages": [row_to_dict(r) for r in stages],
-        "messages_24h": row_to_dict(msgs),
-    }
-
-
 @router.get("/api/leads")
 async def list_leads(
     search: str | None = None,
@@ -184,35 +129,3 @@ async def get_lead_events(whatsapp_id: str, session: AsyncSession = Depends(get_
         )
     ).all()
     return {"items": [row_to_dict(r) for r in rows]}
-
-
-@router.get("/api/funnel")
-async def get_funnel(session: AsyncSession = Depends(get_session)):
-    from_events = (
-        await session.execute(
-            text(
-                """
-                SELECT to_stage AS stage, COUNT(DISTINCT whatsapp_id) AS cnt
-                FROM knewit_events
-                WHERE event_type = 'stage_entered'
-                GROUP BY to_stage
-                """
-            )
-        )
-    ).all()
-    from_leads = (
-        await session.execute(
-            text(
-                """
-                SELECT current_stage AS stage, COUNT(*) AS cnt
-                FROM knewit_leads
-                GROUP BY current_stage
-                ORDER BY cnt DESC
-                """
-            )
-        )
-    ).all()
-    return {
-        "from_events": [row_to_dict(r) for r in from_events],
-        "from_leads": [row_to_dict(r) for r in from_leads],
-    }

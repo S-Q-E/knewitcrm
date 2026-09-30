@@ -16,6 +16,7 @@ interface ColumnProps {
   loadingMore: boolean;
   onShowMore: (stageId: string) => void;
   onQuickCreate: (stageId: string) => void;
+  onOpen: (deal: Deal) => void;
   onNote: (deal: Deal) => void;
   onWrite: (deal: Deal) => void;
 }
@@ -28,6 +29,7 @@ export function BoardColumnView({
   loadingMore,
   onShowMore,
   onQuickCreate,
+  onOpen,
   onNote,
   onWrite,
 }: ColumnProps) {
@@ -72,6 +74,7 @@ export function BoardColumnView({
                 contactName={contact?.name ?? null}
                 contactPhone={contact?.phone ?? null}
                 stageId={column.stage_id}
+                onOpen={onOpen}
                 onNote={onNote}
                 onWrite={onWrite}
               />

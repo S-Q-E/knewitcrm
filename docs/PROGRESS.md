@@ -46,15 +46,21 @@
 - [x] Backend serves `frontend/dist` with SPA fallback + cache headers; multi-stage Dockerfile (node:20 -> python:3.12-slim, migrate-on-boot); CI frontend job (typecheck/lint/format/vitest/build)
 - [x] tsc/eslint/prettier/vitest/build green; live run verified (SPA, fallback, assets, login, vite proxy)
 - [ ] `docker build` not run locally (no daemon) — verify in CI; staging HTTPS login needs Railway access
-## Step 6 — Tasks + remaining meta [todo]
-- Notes/tags/custom-fields/lost-reasons API done in Step 4b; left: `crm_tasks` table + tasks endpoints
+## Step 6 — Tasks + remaining meta [done]
+- Notes/tags/custom-fields/lost-reasons API done in Step 4b; `crm_tasks` table + tasks endpoints done in Step 7 below
 ## Step 6b — Kanban «Сделки» [done]
 - [x] Brief arrived out of PROGRESS order; covers the /deals page
 - [x] Migration `0005_saved_views` + CRUD endpoints (own/shared, admin-only share); `contact_source` filter on deals list+board; `source` writable on contacts
 - [x] Board: columns with sums, cards (contact/amount/owner/tags/trial/activity/lock), dnd-kit drag with optimistic update + rollback, per-column cursor loading, inline quick-create modal, note modal, lost-reason modal, won confirm
 - [x] List view: sortable table, column toggle (localStorage), row select + bulk bar; filters in URL + saved views UI; loading/empty/error states; keyboard-accessible drag handles
 - [x] Playwright E2E (login → drag → reload → persisted → cleanup) green locally + CI e2e job; manual stage check confirms `manual_stage_change` in bot DB
-## Step 7 — New React frontend, remove frontend-legacy [todo]
+## Step 7 — New React frontend, remove frontend-legacy [done]
+- [x] Brief arrived out of PROGRESS order; covers deal card + timeline + dialogs
+- [x] Migration `0006_tasks` + tasks CRUD (filters, done/undone, author/admin delete)
+- [x] `GET /api/deals/{id}/timeline` (6 sources, keyset cursor, type filter); deal drawer + `/deals/:id` page (inline fields, custom inputs, bot-data block, won/lost/unlock, quick task)
+- [x] `/dialogs`: list (last message, unread, assignee, pause badge, filters), open dialog with messages, mark-read, assign/pause, send + quick-reply stubs
+- [x] Sync worker counts unread from incoming messages; removed `/api/stats`, `/api/funnel`, `frontend-legacy/`
+- [x] 90 backend tests + tsc/eslint/vitest green; E2E (card shows messages+events) green; manual timeline/dialogs curl verified
 ## Step 8 — Funnel analytics + reports [todo]
 ## Step 9 — Notifications + activity log [todo]
 ## Step 10 — Saved views + search filters [todo]

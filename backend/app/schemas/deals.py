@@ -95,3 +95,17 @@ class BulkDealsIn(BaseModel):
 
 class BulkDealsOut(BaseModel):
     updated: int
+
+
+class TimelineItemOut(BaseModel):
+    key: str
+    kind: str
+    at: datetime
+    data: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = {"from_attributes": True}
+
+
+class TimelineOut(BaseModel):
+    items: list[TimelineItemOut]
+    next_cursor: str | None = None

@@ -17,6 +17,13 @@ def engine_factory(settings):
     return engine, async_sessionmaker(bind=engine, expire_on_commit=False)
 
 
+async def run_sync(factory):
+    """Run one bot-sync cycle against a session factory (commits)."""
+    from backend.app.workers.sync_worker import run_sync_cycle
+
+    return await run_sync_cycle(factory)
+
+
 async def admin_csrf(client, settings) -> str:
     return (await login_admin(client, settings))["csrf"]
 

@@ -27,6 +27,7 @@ interface BoardProps {
   filters: DealFilters;
   contactsById: Map<string, { name: string | null; phone: string | null }>;
   onQuickCreate: (stageId: string) => void;
+  onOpen: (deal: Deal) => void;
   onNote: (deal: Deal) => void;
   onWrite: (deal: Deal) => void;
 }
@@ -44,6 +45,7 @@ export function DealsBoard({
   stageColor,
   contactsById,
   onQuickCreate,
+  onOpen,
   onNote,
   onWrite,
 }: BoardProps) {
@@ -277,6 +279,7 @@ export function DealsBoard({
               loadingMore={loadingMore === column.stage_id}
               onShowMore={showMore}
               onQuickCreate={onQuickCreate}
+              onOpen={onOpen}
               onNote={onNote}
               onWrite={onWrite}
             />

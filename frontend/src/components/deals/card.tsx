@@ -11,6 +11,7 @@ interface DealCardProps {
   contactName: string | null;
   contactPhone: string | null;
   stageId: string;
+  onOpen: (deal: Deal) => void;
   onNote: (deal: Deal) => void;
   onWrite: (deal: Deal) => void;
 }
@@ -20,6 +21,7 @@ export function DealCard({
   contactName,
   contactPhone,
   stageId,
+  onOpen,
   onNote,
   onWrite,
 }: DealCardProps) {
@@ -33,8 +35,9 @@ export function DealCard({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       data-deal-id={deal.id}
+      onClick={() => onOpen(deal)}
       className={cn(
-        "group rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900",
+        "group cursor-pointer rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900",
         isDragging && "opacity-50 shadow-lg",
       )}
     >
@@ -87,7 +90,10 @@ export function DealCard({
         <button
           type="button"
           title="Заметка"
-          onClick={() => onNote(deal)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onNote(deal);
+          }}
           className="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
           <StickyNote className="h-4 w-4" />
@@ -95,7 +101,10 @@ export function DealCard({
         <button
           type="button"
           title="Написать"
-          onClick={() => onWrite(deal)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onWrite(deal);
+          }}
           className="rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
           <MessageSquarePlus className="h-4 w-4" />

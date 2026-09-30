@@ -7,6 +7,7 @@ import type { Deal, DealFilters, Stage } from "@/api/deals";
 import { usePipelines } from "@/api/deals";
 import { DealsBoard } from "@/components/deals/board";
 import { DealFiltersBar } from "@/components/deals/filters";
+import { DealDetail } from "@/components/deals/detail";
 import { DealsListView } from "@/components/deals/list";
 import { CreateDealModal, NoteModal } from "@/components/deals/modals";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,7 @@ export function DealsPage() {
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [createStageId, setCreateStageId] = useState<string | null>(null);
   const [noteDeal, setNoteDeal] = useState<Deal | null>(null);
+  const [openDealId, setOpenDealId] = useState<string | null>(null);
 
   const filters = useMemo(() => filtersFromParams(params), [params]);
   const onFiltersChange = (next: DealFilters) => setParams(filtersToParams(next));
@@ -160,6 +162,7 @@ export function DealsPage() {
           filters={filters}
           contactsById={contactsById}
           onQuickCreate={setCreateStageId}
+          onOpen={(deal) => setOpenDealId(deal.id)}
           onNote={setNoteDeal}
           onWrite={(deal) => navigate(`/dialogs?deal=${deal.id}`)}
         />
@@ -169,6 +172,7 @@ export function DealsPage() {
           filters={filters}
           stagesById={stagesById}
           contactsById={contactsById}
+          onOpen={(id) => setOpenDealId(id)}
         />
       )}
 
@@ -180,6 +184,22 @@ export function DealsPage() {
         />
       )}
       {noteDeal && <NoteModal deal={noteDeal} onClose={() => setNoteDeal(null)} />}
+      {openDealId && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Карточка сделки"
+          className="fixed inset-0 z-30 flex justify-end bg-black/40"
+          onClick={() => setOpenDealId(null)}
+        >
+          <div
+            className="h-full w-full max-w-3xl overflow-y-auto bg-slate-50 p-4 dark:bg-slate-950 md:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <DealDetail dealId={openDealId} onClose={() => setOpenDealId(null)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

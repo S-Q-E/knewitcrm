@@ -16,19 +16,6 @@ async def authed(client, settings):
     return client
 
 
-async def test_stats_contract(authed):
-    response = await authed.get("/api/stats")
-    assert response.status_code == 200
-    body = response.json()
-    assert body["leads"]["total"] == 6
-    assert body["leads"]["active"] == 1
-    assert body["leads"]["booked"] == 1
-    assert body["leads"]["clients"] == 1
-    assert {s["stage"] for s in body["stages"]} >= {"НОВЫЙ_ЛИД", "ЗАПИСЬ", "ПРОДАЖА"}
-    assert body["messages_24h"]["incoming"] >= 1
-    assert body["messages_24h"]["outgoing"] >= 1
-
-
 async def test_leads_list_shape_and_pagination(authed):
     response = await authed.get("/api/leads?limit=2&offset=0")
     assert response.status_code == 200
@@ -76,18 +63,9 @@ async def test_messages_and_events_contract(authed):
     assert any(e["event_type"] == "stage_entered" for e in events.json()["items"])
 
 
-async def test_funnel_contract(authed):
-    response = await authed.get("/api/funnel")
-    assert response.status_code == 200
-    body = response.json()
-    assert any(s["stage"] == "ЗАПИСЬ" for s in body["from_events"])
-    assert any(s["stage"] == "ПРОДАЖА" for s in body["from_leads"])
-
-
-async def test_legacy_frontend_still_served(authed):
-    response = await authed.get("/")
-    assert response.status_code == 200
-    assert "KnewIT CRM" in response.text
+async def test_removed_stats_and_funnel(authed):
+    assert (await authed.get("/api/stats")).status_code == 404
+    assert (await authed.get("/api/funnel")).status_code == 404
 
 
 async def test_migrate_creates_only_version_table(settings):
@@ -131,6 +109,7 @@ async def test_migrate_creates_only_version_table(settings):
                 "crm_deal_stage_history",
                 "crm_notes",
                 "crm_saved_views",
+                "crm_tasks",
                 "crm_lost_reasons",
                 "crm_tags",
                 "crm_entity_tags",

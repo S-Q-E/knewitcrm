@@ -21,6 +21,7 @@ from ..models import (
     HISTORY_SOURCE_MANAGER,
     CrmContact,
     CrmDeal,
+    CrmDealStageHistory,
     CrmEntityTag,
     CrmLostReason,
     CrmPipeline,
@@ -37,12 +38,15 @@ from ..schemas.deals import (
     DealMoveIn,
     DealOut,
     DealUpdate,
+    TimelineItemOut,
+    TimelineOut,
 )
 from ..schemas.meta import TagOut, TagSetIn
 from ..services.activity import diff_payload, log_activity, slim
 from ..services.custom_fields import load_definitions, validate_custom_values
 from ..services.deal_flow import apply_deal_stage
 from ..services.tags import detach_entity_tags, entity_tags_map, replace_entity_tags
+from ..services.timeline import get_deal_timeline, parse_cursor, parse_types
 from ..services.visibility import (
     ensure_visible,
     is_visible,
@@ -335,6 +339,15 @@ async def create_deal(
     )
     session.add(deal)
     await session.flush()
+    session.add(
+        CrmDealStageHistory(
+            deal_id=deal.id,
+            from_stage_id=None,
+            to_stage_id=stage.id,
+            changed_by=user.id,
+            source=HISTORY_SOURCE_MANAGER,
+        )
+    )
     await log_activity(
         session,
         user.id,
@@ -645,3 +658,35 @@ async def bulk_update_deals(
         await log_activity(session, user.id, "deal", deal.id, "deal_bulk_updated", {})
     await session.commit()
     return BulkDealsOut(updated=len(by_id))
+
+
+@router.get("/{deal_id}/timeline", response_model=TimelineOut)
+async def deal_timeline(
+    deal_id: uuid.UUID,
+    types: str | None = Query(default=None, max_length=200),
+    limit: int = Query(default=50, ge=1, le=200),
+    cursor: str | None = Query(default=None, max_length=500),
+    user: CurrentUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Unified newest-first stream: messages, events, stages, notes, tasks, activity."""
+    deal = await _get_visible(session, deal_id, user)
+    contact = await session.get(CrmContact, deal.contact_id)
+    kinds = parse_types(types)
+    position = parse_cursor(cursor)
+    items, next_cursor = await get_deal_timeline(
+        session,
+        deal.id,
+        deal.contact_id,
+        contact.whatsapp_id if contact else None,
+        contact.name if contact else None,
+        kinds,
+        limit,
+        position,
+    )
+    out = []
+    for item in items:
+        at = datetime.fromisoformat(item["at"])
+        data = {k: v for k, v in item.items() if k not in ("key", "kind", "at", "ref")}
+        out.append(TimelineItemOut(key=item["key"], kind=item["kind"], at=at, data=data))
+    return TimelineOut(items=out, next_cursor=next_cursor)

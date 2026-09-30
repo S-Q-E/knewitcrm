@@ -27,6 +27,7 @@ from backend.app.models import (  # noqa: E402,F401
     CrmSetting,
     CrmStage,
     CrmTag,
+    CrmTask,
     CrmUser,
 )
 from backend.app.models.base import Base  # noqa: E402

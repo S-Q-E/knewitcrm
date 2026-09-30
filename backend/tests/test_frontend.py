@@ -32,4 +32,4 @@ async def test_frontend_prefers_dist_build():
     from backend.app.main import resolve_frontend_dir
 
     resolved = resolve_frontend_dir()
-    assert resolved.name in ("dist", "frontend-legacy", "frontend")
+    assert resolved.name in ("dist", "frontend")

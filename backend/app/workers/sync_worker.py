@@ -164,8 +164,26 @@ async def _sync_lead(
 
     state = await session.get(CrmConversationState, whatsapp_id)
     if state is None:
-        session.add(CrmConversationState(whatsapp_id=whatsapp_id))
+        # Fresh rows start as read; unread counts from here forward (D14).
+        state = CrmConversationState(
+            whatsapp_id=whatsapp_id, unread_count=0, last_read_at=datetime.now(UTC)
+        )
+        session.add(state)
         stats.states_created += 1
+    else:
+        if state.last_read_at is None:
+            state.last_read_at = datetime.now(UTC)
+            state.unread_count = 0
+        else:
+            state.unread_count = (
+                await session.execute(
+                    text(
+                        "SELECT COUNT(*) FROM knewit_messages WHERE whatsapp_id = :wa"
+                        " AND direction = 'in' AND created_at > :since"
+                    ),
+                    {"wa": whatsapp_id, "since": state.last_read_at},
+                )
+            ).scalar() or 0
 
     contact = (
         await session.execute(select(CrmContact).where(CrmContact.whatsapp_id == whatsapp_id))

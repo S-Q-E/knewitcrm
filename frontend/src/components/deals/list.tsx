@@ -40,9 +40,10 @@ interface ListViewProps {
   filters: DealFilters;
   stagesById: Map<string, Stage>;
   contactsById: Map<string, { name: string | null; phone: string | null }>;
+  onOpen: (id: string) => void;
 }
 
-export function DealsListView({ filters, stagesById, contactsById }: ListViewProps) {
+export function DealsListView({ filters, stagesById, contactsById, onOpen }: ListViewProps) {
   const { push } = useToast();
   const [sort, setSort] = useState("-created_at");
   const [offset, setOffset] = useState(0);
@@ -240,9 +241,10 @@ export function DealsListView({ filters, stagesById, contactsById }: ListViewPro
               <tr
                 key={deal.id}
                 data-deal-id={deal.id}
-                className="border-b border-slate-100 last:border-0 dark:border-slate-800"
+                onClick={() => onOpen(deal.id)}
+                className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50"
               >
-                <td className="p-2">
+                <td className="p-2" onClick={(event) => event.stopPropagation()}>
                   <input
                     type="checkbox"
                     aria-label={`Выбрать ${deal.title}`}

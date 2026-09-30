@@ -216,8 +216,8 @@ async def test_move_locks_and_calls_bridge(client, settings):
                 .mappings()
                 .all()
             )
-            assert [h["source"] for h in history] == ["manager"]
-            assert history[0]["by_user"] is True
+            assert [h["source"] for h in history] == ["manager", "manager"]
+            assert history[-1]["by_user"] is True
             lead = (
                 await session.execute(
                     text("SELECT current_stage FROM knewit_leads WHERE whatsapp_id = :wa"),

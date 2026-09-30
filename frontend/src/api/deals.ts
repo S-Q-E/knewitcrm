@@ -252,3 +252,68 @@ export function useContactSearch(term: string) {
     enabled: term.trim().length >= 2,
   });
 }
+
+export interface Contact {
+  id: string;
+  whatsapp_id: string | null;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  source: string | null;
+  owner_id: string | null;
+  custom: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  tags: Tag[];
+}
+
+export function useDeal(id: string | null) {
+  return useQuery({
+    queryKey: ["deal", id],
+    queryFn: () => api.get<Deal>(`/api/deals/${id}`),
+    enabled: id !== null,
+  });
+}
+
+export function useContact(id: string | null) {
+  return useQuery({
+    queryKey: ["contact", id],
+    queryFn: () => api.get<Contact>(`/api/contacts/${id}`),
+    enabled: id !== null,
+  });
+}
+
+export interface CustomFieldDef {
+  id: string;
+  entity: string;
+  key: string;
+  label: string;
+  type: string;
+  options: unknown;
+  required: boolean;
+  sort: number;
+}
+
+export function useCustomFields(entity: string) {
+  return useQuery({
+    queryKey: ["custom-fields", entity],
+    queryFn: () =>
+      api.get<{ items: CustomFieldDef[]; total: number }>(
+        `/api/custom-fields?entity=${entity}&limit=100`,
+      ),
+  });
+}
+
+export function useSetDealTags() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; tag_ids: string[] }) =>
+      api.put<Tag[]>(`/api/deals/${input.id}/tags`, { tag_ids: input.tag_ids }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: ["deals"] });
+      void queryClient.invalidateQueries({ queryKey: ["deal"] });
+    },
+  });
+}

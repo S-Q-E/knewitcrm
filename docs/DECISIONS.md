@@ -133,3 +133,19 @@ Why: protects against accidental data loss, keeps audit trail.
   "без задач"/"просроченные" filters are deferred to the tasks step.
 - E2E (Playwright, chromium headless shell) runs against the built SPA + real API
   and restores the moved seed deal (move back + unlock) so reruns stay green.
+
+## D14. Step 7 card, timeline, and dialogs notes
+- `GET /api/deals/{id}/timeline` merges messages, events, stage history, notes,
+  tasks, and activity newest-first with a keyset cursor `{at, kind, id}` and
+  per-source predicates (numeric compare for bot ids, text compare for uuids).
+  Outgoing messages are labeled "Бот" until the outbox (Step 5) adds manager
+  attribution. API deal creation now writes a manager-creation history row so the
+  лента is complete from birth.
+- Fresh conversation rows start read (`last_read_at=now`, unread 0); older rows
+  initialize `last_read_at` on first pass. Unread counts incoming messages after
+  `last_read_at`. Opening a dialog zeroes it. "Ждут менеджера" is covered by the
+  unread filter; route stays `/dialogs` (no rename churn).
+- Removed `/api/stats`, `/api/funnel` (analytics returns in a later step) and
+  `frontend-legacy/`; `/api/leads*` stay until dialogs fully replace them.
+- Card task badges stay deferred (timeline covers tasks); send box and quick
+  replies render as explicit "next step" stubs, never fake sends.

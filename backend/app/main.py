@@ -22,12 +22,14 @@ from .routers import (
     contacts,
     custom_fields,
     deals,
+    dialogs,
     health,
     legacy_bot,
     lost_reasons,
     notes,
     pipelines,
     tags,
+    tasks,
     users,
     views,
 )
@@ -41,13 +43,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 def resolve_frontend_dir() -> Path:
-    """Serve the new SPA build when present, else the legacy static bundle."""
-    dist_index = BASE_DIR / "frontend" / "dist" / "index.html"
-    if dist_index.is_file():
-        return BASE_DIR / "frontend" / "dist"
-    legacy = BASE_DIR / "frontend-legacy"
-    if legacy.exists():
-        return legacy
+    """Serve the built SPA bundle."""
+    dist = BASE_DIR / "frontend" / "dist"
+    if (dist / "index.html").is_file():
+        return dist
     return BASE_DIR / "frontend"
 
 
@@ -122,6 +121,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(custom_fields.router)
     app.include_router(lost_reasons.router)
     app.include_router(views.router)
+    app.include_router(tasks.router)
+    app.include_router(dialogs.router)
     app.include_router(legacy_bot.router)
 
     @app.get("/")

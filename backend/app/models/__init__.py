@@ -39,6 +39,14 @@ from .pipelines import (
     CrmPipeline,
     CrmStage,
 )
+from .tasks import (
+    TASK_TYPE_CALL,
+    TASK_TYPE_MEETING,
+    TASK_TYPE_MESSAGE,
+    TASK_TYPE_OTHER,
+    VALID_TASK_TYPES,
+    CrmTask,
+)
 from .views import CrmSavedView
 
 __all__ = [
@@ -59,6 +67,7 @@ __all__ = [
     "CrmSetting",
     "CrmStage",
     "CrmTag",
+    "CrmTask",
     "CrmUser",
     "DEAL_STATUS_LOST",
     "DEAL_STATUS_OPEN",
@@ -76,10 +85,15 @@ __all__ = [
     "STAGE_KIND_WON",
     "STATUS_CLIENT",
     "STATUS_LOST",
+    "TASK_TYPE_CALL",
+    "TASK_TYPE_MEETING",
+    "TASK_TYPE_MESSAGE",
+    "TASK_TYPE_OTHER",
     "VALID_DEAL_STATUSES",
     "VALID_FIELD_ENTITIES",
     "VALID_HISTORY_SOURCES",
     "VALID_ROLES",
     "VALID_STAGE_KINDS",
     "VALID_TAG_ENTITIES",
+    "VALID_TASK_TYPES",
 ]

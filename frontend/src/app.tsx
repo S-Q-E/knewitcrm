@@ -3,15 +3,10 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useMe } from "@/api/auth";
 import { Layout } from "@/components/layout";
 import { LoginPage } from "@/pages/login";
-import {
-  AnalyticsPage,
-  ContactsPage,
-  DialogsPage,
-  ForbiddenPage,
-  SettingsPage,
-  TasksPage,
-} from "@/pages/stubs";
+import { AnalyticsPage, ContactsPage, ForbiddenPage, SettingsPage, TasksPage } from "@/pages/stubs";
+import { DealPage } from "@/pages/deal";
 import { DealsPage } from "@/pages/deals";
+import { DialogsPage } from "@/pages/dialogs";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const me = useMe();
@@ -59,6 +54,7 @@ export function App() {
       >
         <Route path="/" element={<Navigate to="/deals" replace />} />
         <Route path="/deals" element={<DealsPage />} />
+        <Route path="/deals/:id" element={<DealPage />} />
         <Route path="/dialogs" element={<DialogsPage />} />
         <Route path="/contacts" element={<ContactsPage />} />
         <Route path="/tasks" element={<TasksPage />} />

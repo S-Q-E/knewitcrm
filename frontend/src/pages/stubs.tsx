@@ -20,8 +20,8 @@ export function DealsPage() {
   return <StubPage title="Сделки (legacy)" hint="Старая заглушка, заменена канбаном." />;
 }
 
-export function DialogsPage() {
-  return <StubPage title="Диалоги" hint="Переписка WhatsApp появится здесь на следующем шаге." />;
+export function TasksPage() {
+  return <StubPage title="Задачи" hint="Задачи менеджеров появятся здесь на следующем шаге." />;
 }
 
 export function ContactsPage() {
@@ -31,10 +31,6 @@ export function ContactsPage() {
       hint="Список контактов с поиском появится здесь на следующем шаге."
     />
   );
-}
-
-export function TasksPage() {
-  return <StubPage title="Задачи" hint="Задачи менеджеров появятся здесь на следующем шаге." />;
 }
 
 export function AnalyticsPage() {
