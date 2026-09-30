@@ -39,6 +39,13 @@
 - [x] Notes/tags/fields/reasons CRUD with role split; custom type validation; `restrict_managers_to_own` scope (404 on violation); activity log on every mutation
 - [x] 80 tests + ruff clean + manual Swagger/curl lifecycle verified
 ## Step 5 — Chat: SSE realtime + outbox + n8n webhook (D4, D6) [todo]
+## Step 5b — Frontend scaffold [done]
+- [x] Brief arrived out of PROGRESS order; covers the new `frontend/` shell
+- [x] Vite + React 18 + TS strict + Tailwind + shadcn-style ui + Query + Router + lucide; API client (cookies, auto CSRF, 401->/login, toasts); openapi-typescript types + `gen:api` script
+- [x] amoCRM layout (icon nav, topbar search, bell stub, user menu), /login + stubs, admin-only /settings, light/dark theme, responsive
+- [x] Backend serves `frontend/dist` with SPA fallback + cache headers; multi-stage Dockerfile (node:20 -> python:3.12-slim, migrate-on-boot); CI frontend job (typecheck/lint/format/vitest/build)
+- [x] tsc/eslint/prettier/vitest/build green; live run verified (SPA, fallback, assets, login, vite proxy)
+- [ ] `docker build` not run locally (no daemon) — verify in CI; staging HTTPS login needs Railway access
 ## Step 6 — Tasks + remaining meta [todo]
 - Notes/tags/custom-fields/lost-reasons API done in Step 4b; left: `crm_tasks` table + tasks endpoints
 ## Step 7 — New React frontend, remove frontend-legacy [todo]
@@ -56,3 +63,4 @@
 - Live `DATABASE_URL` dump: `docs/db_schema.md` is reconstructed from code; overwrite via `scripts/dump_schema.py` against real n8n DB when available.
 - Legacy frontend (`frontend-legacy/`) has no session login form; it stays behind the API auth wall until replaced in Step 7.
 - `bot_bridge.insert_outgoing_message` (outbox sender) belongs to Step 5; manager notifications for `МЕНЕДЖЕР`/locked stages belong to Step 9.
+- Staging Railway HTTPS login check: needs Railway project access (unavailable locally); Dockerfile + migrate-on-boot CMD are ready for it.

@@ -9,7 +9,6 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import Settings
@@ -38,11 +37,39 @@ from .workers.sync_worker import sync_loop
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-FRONTEND_DIR = (
-    BASE_DIR / "frontend-legacy"
-    if (BASE_DIR / "frontend-legacy").exists()
-    else BASE_DIR / "frontend"
-)
+
+
+def resolve_frontend_dir() -> Path:
+    """Serve the new SPA build when present, else the legacy static bundle."""
+    dist_index = BASE_DIR / "frontend" / "dist" / "index.html"
+    if dist_index.is_file():
+        return BASE_DIR / "frontend" / "dist"
+    legacy = BASE_DIR / "frontend-legacy"
+    if legacy.exists():
+        return legacy
+    return BASE_DIR / "frontend"
+
+
+FRONTEND_DIR = resolve_frontend_dir()
+
+NO_CACHE = {"Cache-Control": "no-cache"}
+IMMUTABLE_CACHE = {"Cache-Control": "public, max-age=31536000, immutable"}
+
+
+def frontend_response(path: str) -> FileResponse:
+    """SPA fallback: existing files as-is, everything else serves index.html.
+
+    Anything under /api is left to the API routers (JSON 404 there).
+    """
+    if path.startswith("api/"):
+        raise StarletteHTTPException(status_code=404, detail="Not found")
+    if path:
+        candidate = (FRONTEND_DIR / path).resolve()
+        root = FRONTEND_DIR.resolve()
+        if candidate.is_file() and (candidate == root or root in candidate.parents):
+            headers = IMMUTABLE_CACHE if path.startswith("assets/") else NO_CACHE
+            return FileResponse(str(candidate), headers=headers)
+    return FileResponse(str(FRONTEND_DIR / "index.html"), headers=dict(NO_CACHE))
 
 
 @asynccontextmanager
@@ -97,9 +124,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/")
     async def root_index():
-        return FileResponse(str(FRONTEND_DIR / "index.html"))
+        return FileResponse(str(FRONTEND_DIR / "index.html"), headers=dict(NO_CACHE))
 
-    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        return frontend_response(full_path)
+
     logger.info("app created (env=%s)", settings.app_env)
     return app
 

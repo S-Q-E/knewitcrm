@@ -101,3 +101,19 @@ Why: protects against accidental data loss, keeps audit trail.
   403, to avoid leaking existence. Soft-deleted contacts hide their deals.
 - `restrict_managers_to_own` lives in `crm_settings` (default false = amoCRM-style
   open access); no UI yet (Step 11).
+
+## D12. Step 5 frontend scaffold notes
+- New `frontend/` (Vite + React 18 + TS strict + Tailwind v3 + shadcn-style `ui/`
+  components, TanStack Query, React Router, lucide-react). Full shadcn CLI setup
+  was skipped: hand-written `button`/`input` in shadcn style (cva) are enough for
+  the scaffold; adopt the CLI when the component set grows.
+- API client: `fetch` with `credentials: include`, CSRF header auto-attached from
+  the `crm_csrf` cookie (login exempt), 401 redirects to `/login?next=...`, backend
+  error envelope parsed into `ApiError`, toasts for user feedback.
+- Backend serves `frontend/dist` when built (else legacy), with SPA fallback for
+  non-`/api` paths; hashed `assets/*` are `immutable`, `index.html` is `no-cache`.
+- Registry mirror only keeps recent versions, so: `react-router-dom` v7 (v6 pruned;
+  used API is v6-compatible), `happy-dom` instead of `jsdom` (jsdom 30 needs newer
+  Node than the local 20.19), `openapi-typescript` generates `src/api/types.ts`.
+- `docker build` could not run locally (no Docker daemon access); the multi-stage
+  Dockerfile is written for CI/Railway. Staging HTTPS check needs Railway access.
