@@ -117,6 +117,87 @@ async def test_login_rate_limited_after_five_failures(client):
     assert blocked.json()["error"]["code"] == "RATE_LIMITED"
 
 
+def _fake_ip(xff: str | None, peer: str = "peer-ip", hops: int | None = 1) -> str:
+    from starlette.requests import Request
+
+    from backend.app.session_middleware import client_ip
+
+    headers = []
+    if xff is not None:
+        headers.append((b"x-forwarded-for", xff.encode("utf-8")))
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/auth/login",
+        "headers": headers,
+        "client": (peer, 5000),
+    }
+    return client_ip(Request(scope), trusted_proxy_hops=hops)
+
+
+def test_client_ip_trust_levels():
+    # One trusted proxy (default): the last value is proxy-added, a spoofed
+    # prefix to its left is ignored.
+    assert _fake_ip("spoofed, real", hops=1) == "real"
+    assert _fake_ip("only", hops=1) == "only"
+    assert _fake_ip(None, hops=1) == "peer-ip"
+    assert _fake_ip("", hops=1) == "peer-ip"
+    # Two trusted proxies: second value from the right.
+    assert _fake_ip("client, inner-peer, outer-peer", hops=2) == "inner-peer"
+    # Chain shorter than the trusted hops: nothing trustworthy, use the peer.
+    assert _fake_ip("lonely", hops=2) == "peer-ip"
+    assert _fake_ip(None, hops=2) == "peer-ip"
+    # No proxy in front: the header is attacker-controlled, always the peer.
+    assert _fake_ip("spoofed, real", hops=0) == "peer-ip"
+    assert _fake_ip(None, hops=0) == "peer-ip"
+
+
+async def test_login_rate_limit_uses_last_forwarded_ip(client):
+    """A spoofed XFF prefix must not shift the block onto another key."""
+    email = unique_email("spoof")
+    payload = {"email": email, "password": "wrong-password-1"}
+    headers = {"X-Forwarded-For": "10.0.0.1, 10.0.0.2"}
+    for _ in range(5):
+        response = await client.post("/api/auth/login", json=payload, headers=headers)
+        assert response.status_code == 401
+    blocked = await client.post("/api/auth/login", json=payload, headers=headers)
+    assert blocked.status_code == 429
+
+    # Same last IP on its own is still blocked: the last value was keyed.
+    same_last = await client.post(
+        "/api/auth/login", json=payload, headers={"X-Forwarded-For": "10.0.0.2"}
+    )
+    assert same_last.status_code == 429
+    # The spoofed first value on its own is not blocked: it was never keyed.
+    spoofed_first = await client.post(
+        "/api/auth/login", json=payload, headers={"X-Forwarded-For": "10.0.0.1"}
+    )
+    assert spoofed_first.status_code == 401
+
+
+async def test_login_rate_limited_per_email_across_ips(client):
+    """Rotating IPs must not bypass the per-email failure budget."""
+    email = unique_email("emailflood")
+    payload = {"email": email, "password": "wrong-password-1"}
+    for i in range(20):
+        response = await client.post(
+            "/api/auth/login", json=payload, headers={"X-Forwarded-For": f"10.1.0.{i}"}
+        )
+        assert response.status_code == 401, i
+    fresh_ip = await client.post(
+        "/api/auth/login", json=payload, headers={"X-Forwarded-For": "10.9.9.9"}
+    )
+    assert fresh_ip.status_code == 429
+    assert fresh_ip.json()["error"]["code"] == "RATE_LIMITED"
+    # The block is email-scoped: another email from the same IP still passes.
+    other = await client.post(
+        "/api/auth/login",
+        json={"email": unique_email("other"), "password": "wrong-password-1"},
+        headers={"X-Forwarded-For": "10.9.9.9"},
+    )
+    assert other.status_code == 401
+
+
 async def test_csrf_required_for_unsafe_methods(client, settings):
     await login_admin(client, settings)
     no_header = await client.post("/api/auth/logout")

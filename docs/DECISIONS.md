@@ -48,7 +48,12 @@ Why: protects against accidental data loss, keeps audit trail.
   (no session exists yet there; SameSite=Lax is the protection). Auth is enforced in
   `SessionAuthMiddleware` so legacy routers are covered too; `require_user` /
   `require_role('admin')` dependencies expose the current user to handlers.
-- Login rate limit is in-memory: 5 failures / 10 min per (IP, email) -> 429.
+- Login rate limit is in-memory: 5 failures / 10 min per (IP, email) plus
+  20 failures / 10 min per email across all IPs (rotating IPs still trips
+  it); success resets both. A spoofed `X-Forwarded-For` prefix is harmless:
+  the IP is the entry just before the last `TRUSTED_PROXY_HOPS` values
+  (default 1, i.e. the last value added by our proxy), falling back to the
+  direct peer when the chain is shorter or hops is 0.
   Justification: deploy target is a single Railway container, so a process-local
   store is sufficient and avoids an extra table. Revisit if workers scale out.
 - Emails are normalized (strip + lowercase) before lookup/storage; passwords use
@@ -68,17 +73,26 @@ Why: protects against accidental data loss, keeps audit trail.
   otherwise the stage with matching `bot_stage_key`; unknown/NULL stage falls back
   to the first open stage. One managed deal per contact = most recently updated
   non-deleted deal; soft-deleted contacts are skipped, never resurrected.
-- Deal `title` is set once at creation; `custom`/`trial_at` are overwritten from the
-  lead on every pass; new-deal history uses `source='system'`, bot moves `'bot'`,
+- Deal `title` is set once at creation; `custom` is merged by key (only
+  `CUSTOM_FIELDS` from the lead are refreshed, manager keys survive);
+  `trial_at` is refreshed only when `trial_datetime` is non-NULL and differs
+  from `last_bot_trial_at` (NULL never erases a manager value);
+  `contact.name` is refreshed only while it still matches `last_bot_name`
+  (migration `0009_sync_snapshot`); new-deal history uses `source='system'`, bot moves `'bot'`,
   `changed_by=NULL`. Blocked moves (stage_locked) write `bot_stage_blocked` to
   `crm_activity_log`, not to stage history (nothing moved); manager notification
   delivery is Step 9.
 - `bot_bridge.update_bot_stage` joins the caller's transaction (no commit inside);
   it no-ops when the stage is unchanged and raises `BotLeadNotFoundError` otherwise.
-- Worker uses `pg_try_advisory_xact_lock` (transaction-scoped, pool-safe; auto-released
-  on commit/rollback) instead of session-level lock. Backfill pages leads by
-  `whatsapp_id` in batches of 500; progress marker `sync_worker.last_synced_at`
-  lives in `crm_settings`. Interval/flag via `SYNC_ENABLED`/`SYNC_INTERVAL_SECONDS`.
+- Worker holds session-scoped `pg_try_advisory_lock` for the whole cycle and
+  commits after every batch of 500 (no giant transaction). Incremental cycles
+  fetch only leads with `GREATEST(updated_at, last_message_at)` newer than
+  `last_synced_at` minus a 2-minute overlap; a full reconciliation runs when
+  `last_full_synced_at` is older than 10 minutes (both markers in
+  `crm_settings`). Each batch preloads states/contacts/managed-deals with
+  `IN` queries, unread counts with one `GROUP BY`, stage tops with one
+  `GROUP BY`, and handover tasks with one query. Interval/flag via
+  `SYNC_ENABLED`/`SYNC_INTERVAL_SECONDS`.
 
 ## D11. Step 4 domain REST API notes
 - Reads are open to all authenticated users; mutations of funnel (pipelines/stages),

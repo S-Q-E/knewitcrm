@@ -63,3 +63,12 @@ def test_locale_defaults():
     )
     assert s.default_timezone == "Asia/Almaty"
     assert s.default_currency == "KZT"
+
+
+def test_trusted_proxy_hops_default_and_env():
+    s = Settings(DATABASE_URL="postgresql://h/db", SECRET_KEY="x")
+    assert s.trusted_proxy_hops == 1
+    proxied = Settings(
+        DATABASE_URL="postgresql://h/db", SECRET_KEY="x", TRUSTED_PROXY_HOPS="2"
+    )
+    assert proxied.trusted_proxy_hops == 2

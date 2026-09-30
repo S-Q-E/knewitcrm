@@ -140,7 +140,8 @@ async def _counts(factory) -> dict:
 async def test_backfill_seed_leads(settings):
     engine, factory = _factory(settings)
     try:
-        stats = await run_sync_cycle(factory)
+        # Forced full scan: deterministic regardless of other suites' markers.
+        stats = await run_sync_cycle(factory, force_full=True)
         assert stats is not None
         # Idempotent: seed leads may already be synced by an earlier run.
         assert stats.leads_seen >= 6
@@ -212,7 +213,8 @@ async def test_bot_stage_move_writes_history(settings):
                 await session.execute(
                     text(
                         "UPDATE knewit_leads SET current_stage = 'ЗАПИСЬ',"
-                        " previous_stage = 'НОВЫЙ_ЛИД' WHERE whatsapp_id = :wa"
+                        " previous_stage = 'НОВЫЙ_ЛИД', updated_at = now()"
+                        " WHERE whatsapp_id = :wa"
                     ),
                     {"wa": wa},
                 )
@@ -272,8 +274,8 @@ async def test_stage_locked_blocks_move_but_logs(settings):
                 )
                 await session.execute(
                     text(
-                        "UPDATE knewit_leads SET current_stage = 'ПРЕЗЕНТАЦИЯ_РЕШЕНИЯ'"
-                        " WHERE whatsapp_id = :wa"
+                        "UPDATE knewit_leads SET current_stage = 'ПРЕЗЕНТАЦИЯ_РЕШЕНИЯ',"
+                        " updated_at = now() WHERE whatsapp_id = :wa"
                     ),
                     {"wa": wa},
                 )
@@ -321,7 +323,10 @@ async def test_status_client_and_lost_close_deal(settings):
             await run_sync_cycle(factory)
             async with factory() as session:
                 await session.execute(
-                    text("UPDATE knewit_leads SET status = 'КЛИЕНТ' WHERE whatsapp_id = :wa"),
+                    text(
+                        "UPDATE knewit_leads SET status = 'КЛИЕНТ', updated_at = now()"
+                        " WHERE whatsapp_id = :wa"
+                    ),
                     {"wa": wa},
                 )
                 await session.commit()
@@ -333,7 +338,10 @@ async def test_status_client_and_lost_close_deal(settings):
 
             async with factory() as session:
                 await session.execute(
-                    text("UPDATE knewit_leads SET status = 'ОТКАЗ' WHERE whatsapp_id = :wa"),
+                    text(
+                        "UPDATE knewit_leads SET status = 'ОТКАЗ', updated_at = now()"
+                        " WHERE whatsapp_id = :wa"
+                    ),
                     {"wa": wa},
                 )
                 await session.commit()
@@ -360,6 +368,258 @@ async def test_unknown_stage_falls_back_to_first_open(settings):
             assert info["status"] == "open"
         finally:
             await _purge(factory, [14])
+    finally:
+        await engine.dispose()
+
+
+async def test_manager_edits_survive_unchanged_bot_sync(settings):
+    """Manual custom keys, contact.name and trial_at survive a sync pass."""
+    from datetime import timezone
+
+    engine, factory = _factory(settings)
+    try:
+        async with factory() as session:
+            wa = await _insert_lead(session, 21)
+            await session.commit()
+        try:
+            await run_sync_cycle(factory)
+            manager_trial = datetime(2026, 11, 1, 10, 0, 0, tzinfo=timezone.utc)
+            async with factory() as session:
+                await session.execute(
+                    text(
+                        "UPDATE crm_contacts SET name = 'Manager Edited',"
+                        " custom = custom || :patch WHERE whatsapp_id = :wa"
+                    ),
+                    {"wa": wa, "patch": '{"manager_note": "keep me", "vip": true}'},
+                )
+                await session.execute(
+                    text(
+                        "UPDATE crm_deals SET trial_at = :trial,"
+                        " custom = custom || :patch WHERE contact_id ="
+                        " (SELECT id FROM crm_contacts WHERE whatsapp_id = :wa)"
+                    ),
+                    {
+                        "wa": wa,
+                        "trial": manager_trial,
+                        "patch": '{"manager_note": "keep me"}',
+                    },
+                )
+                await session.commit()
+
+            await run_sync_cycle(factory)
+            info = await _deal_info(factory, wa)
+            # Manager values survive an unchanged-bot sync.
+            assert info["contact_name"] == "Manager Edited"
+            assert info["contact_custom"]["manager_note"] == "keep me"
+            assert info["contact_custom"]["vip"] is True
+            assert info["custom"]["manager_note"] == "keep me"
+            assert info["trial_at"] is not None
+            got = info["trial_at"]
+            if got.tzinfo is None:
+                got = got.replace(tzinfo=timezone.utc)
+            assert got == manager_trial
+            # Bot-mirrored keys are still present.
+            assert info["contact_custom"]["goal"] == "test goal"
+        finally:
+            await _purge(factory, [21])
+    finally:
+        await engine.dispose()
+
+
+async def test_bot_changes_still_apply_but_manual_keys_survive(settings):
+    """Bot updates flow through while manual custom keys are preserved."""
+    from datetime import timezone
+
+    engine, factory = _factory(settings)
+    try:
+        async with factory() as session:
+            wa = await _insert_lead(session, 22)
+            await session.commit()
+        try:
+            await run_sync_cycle(factory)
+            async with factory() as session:
+                await session.execute(
+                    text(
+                        "UPDATE crm_contacts SET custom = custom || :patch"
+                        " WHERE whatsapp_id = :wa"
+                    ),
+                    {"wa": wa, "patch": '{"manager_note": "keep me"}'},
+                )
+                await session.execute(
+                    text(
+                        "UPDATE crm_deals SET custom = custom || :patch"
+                        " WHERE contact_id ="
+                        " (SELECT id FROM crm_contacts WHERE whatsapp_id = :wa)"
+                    ),
+                    {"wa": wa, "patch": '{"manager_note": "keep me"}'},
+                )
+                await session.commit()
+
+            new_trial = datetime(2026, 12, 2, 12, 0, 0, tzinfo=timezone.utc)
+            async with factory() as session:
+                await session.execute(
+                    text(
+                        "UPDATE knewit_leads SET name = 'New Bot Name', goal = 'new goal',"
+                        " trial_datetime = :trial, updated_at = now()"
+                        " WHERE whatsapp_id = :wa"
+                    ),
+                    {"wa": wa, "trial": new_trial},
+                )
+                await session.commit()
+
+            await run_sync_cycle(factory)
+            info = await _deal_info(factory, wa)
+            # Bot fields updated (manager did not touch the name).
+            assert info["contact_name"] == "New Bot Name"
+            assert info["contact_custom"]["goal"] == "new goal"
+            assert info["trial_at"] is not None
+            got = info["trial_at"]
+            if got.tzinfo is None:
+                got = got.replace(tzinfo=timezone.utc)
+            assert got == new_trial
+            # Manual keys survived alongside the bot update.
+            assert info["contact_custom"]["manager_note"] == "keep me"
+            assert info["custom"]["manager_note"] == "keep me"
+
+            # Bot NULL trial must not erase the synced trial.
+            async with factory() as session:
+                await session.execute(
+                    text(
+                        "UPDATE knewit_leads SET trial_datetime = NULL, updated_at = now()"
+                        " WHERE whatsapp_id = :wa"
+                    ),
+                    {"wa": wa},
+                )
+                await session.commit()
+            await run_sync_cycle(factory)
+            again = await _deal_info(factory, wa)
+            got = again["trial_at"]
+            if got.tzinfo is None:
+                got = got.replace(tzinfo=timezone.utc)
+            assert got == new_trial
+        finally:
+            await _purge(factory, [22])
+    finally:
+        await engine.dispose()
+
+
+LOAD_WA_PREFIX = "7999loadtest"
+
+
+async def _purge_load(factory) -> None:
+    pattern = f"{LOAD_WA_PREFIX}%"
+    async with factory() as session:
+        await session.execute(
+            text(
+                "DELETE FROM crm_deal_stage_history WHERE deal_id IN"
+                " (SELECT d.id FROM crm_deals d JOIN crm_contacts c ON c.id = d.contact_id"
+                " WHERE c.whatsapp_id LIKE :pattern)"
+            ),
+            {"pattern": pattern},
+        )
+        await session.execute(
+            text(
+                "DELETE FROM crm_activity_log WHERE entity_id IN"
+                " (SELECT d.id FROM crm_deals d JOIN crm_contacts c ON c.id = d.contact_id"
+                " WHERE c.whatsapp_id LIKE :pattern)"
+            ),
+            {"pattern": pattern},
+        )
+        await session.execute(
+            text(
+                "DELETE FROM crm_activity_log WHERE entity_id IN"
+                " (SELECT id FROM crm_contacts WHERE whatsapp_id LIKE :pattern)"
+            ),
+            {"pattern": pattern},
+        )
+        await session.execute(
+            text(
+                "DELETE FROM crm_deals WHERE contact_id IN"
+                " (SELECT id FROM crm_contacts WHERE whatsapp_id LIKE :pattern)"
+            ),
+            {"pattern": pattern},
+        )
+        await session.execute(
+            text("DELETE FROM crm_contacts WHERE whatsapp_id LIKE :pattern"),
+            {"pattern": pattern},
+        )
+        await session.execute(
+            text("DELETE FROM crm_conversation_state WHERE whatsapp_id LIKE :pattern"),
+            {"pattern": pattern},
+        )
+        # Cascades to knewit_messages / knewit_events / knewit_followups.
+        await session.execute(
+            text("DELETE FROM knewit_leads WHERE whatsapp_id LIKE :pattern"),
+            {"pattern": pattern},
+        )
+        await session.commit()
+
+
+async def test_load_idle_cycle_under_one_second(settings):
+    """3000 leads + 30000 messages: a no-change cycle must take < 1s."""
+    engine, factory = _factory(settings)
+    try:
+        async with factory() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO knewit_leads"
+                    " (whatsapp_id, name, current_stage, status, goal, created_at, updated_at)"
+                    " SELECT :prefix || lpad(g::text, 5, '0') || '@c.us',"
+                    " 'Load ' || g, 'НОВЫЙ_ЛИД', 'ACTIVE', 'load goal',"
+                    " now() - interval '1 hour', now() - interval '1 hour'"
+                    " FROM generate_series(0, 2999) g"
+                    " ON CONFLICT (whatsapp_id) DO NOTHING"
+                ),
+                {"prefix": LOAD_WA_PREFIX},
+            )
+            await session.execute(
+                text(
+                    "INSERT INTO knewit_messages"
+                    " (whatsapp_id, direction, message_type, content, created_at)"
+                    " SELECT :prefix || lpad((g / 10)::text, 5, '0') || '@c.us',"
+                    " 'in', 'chat', 'load msg',"
+                    " now() - interval '1 hour' + (g % 10) * interval '1 second'"
+                    " FROM generate_series(0, 29999) g"
+                ),
+                {"prefix": LOAD_WA_PREFIX},
+            )
+            await session.commit()
+        try:
+            synced = await run_sync_cycle(factory, force_full=True)
+            assert synced is not None
+            assert synced.contacts_created >= 3000
+            assert synced.deals_created >= 3000
+            async with factory() as session:
+                pattern = f"{LOAD_WA_PREFIX}%"
+                synced_contacts = (
+                    await session.execute(
+                        text("SELECT COUNT(*) FROM crm_contacts WHERE whatsapp_id LIKE :p"),
+                        {"p": pattern},
+                    )
+                ).scalar()
+                synced_deals = (
+                    await session.execute(
+                        text(
+                            "SELECT COUNT(*) FROM crm_deals d JOIN crm_contacts c"
+                            " ON c.id = d.contact_id WHERE c.whatsapp_id LIKE :p"
+                            " AND d.deleted_at IS NULL"
+                        ),
+                        {"p": pattern},
+                    )
+                ).scalar()
+                assert synced_contacts == 3000
+                assert synced_deals == 3000
+
+            started = time.perf_counter()
+            idle = await run_sync_cycle(factory)
+            elapsed = time.perf_counter() - started
+            assert idle is not None
+            assert idle.leads_seen == 0
+            assert idle.contacts_created == 0
+            assert idle.deals_created == 0
+            assert elapsed < 1.0, f"idle cycle took {elapsed:.3f}s"
+        finally:
+            await _purge_load(factory)
     finally:
         await engine.dispose()
 

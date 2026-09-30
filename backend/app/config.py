@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     sync_enabled: bool = Field(default=True, alias="SYNC_ENABLED")
     sync_interval_seconds: int = Field(default=5, ge=1, alias="SYNC_INTERVAL_SECONDS")
 
+    # How many trailing X-Forwarded-For entries are appended by our own
+    # trusted proxies (outermost last). The client IP is the entry just
+    # before them; 0 means "no proxy, always use the direct peer".
+    trusted_proxy_hops: int = Field(default=1, ge=0, alias="TRUSTED_PROXY_HOPS")
+
     # Fallbacks used when DATABASE_URL is not set (local dev).
     pghost: str = Field(default="localhost", alias="PGHOST")
     pgport: str = Field(default="5432", alias="PGPORT")

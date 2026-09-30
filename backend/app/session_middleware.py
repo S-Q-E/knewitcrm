@@ -32,11 +32,32 @@ PUBLIC_API_PATHS = frozenset({"/api/health", "/api/ready", "/api/auth/login"})
 CSRF_EXEMPT_PATHS = frozenset({"/api/auth/login"})
 
 
-def client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip() or "unknown"
-    return request.client.host if request.client else "unknown"
+def client_ip(request: Request, trusted_proxy_hops: int | None = None) -> str:
+    """Best-effort client IP behind trusted proxies.
+
+    Each proxy appends the peer it received the request from, so with
+    ``hops`` trusted proxies the client IP is the entry just before the
+    last ``hops`` values (outermost last). Taking the last value (hops=1)
+    instead of the first one is what makes a spoofed prefix harmless: the
+    attacker-controlled entries sit to the left of it. When the chain is
+    shorter than ``hops`` (or hops is 0) nothing in the header is
+    trustworthy, so fall back to the direct peer.
+    """
+    hops = trusted_proxy_hops
+    if hops is None:
+        try:
+            hops = int(request.app.state.settings.trusted_proxy_hops)
+        except (AttributeError, TypeError, ValueError):
+            hops = 1
+    hops = max(0, hops)
+    peer = request.client.host if request.client else "unknown"
+    if hops <= 0:
+        return peer
+    parts = [part.strip() for part in request.headers.get("x-forwarded-for", "").split(",")]
+    parts = [part for part in parts if part]
+    if len(parts) >= hops:
+        return parts[len(parts) - hops] or "unknown"
+    return peer
 
 
 class SessionAuthMiddleware(BaseHTTPMiddleware):

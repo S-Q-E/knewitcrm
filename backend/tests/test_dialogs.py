@@ -82,6 +82,14 @@ async def test_dialogs_list_read_and_unread(client, settings):
                 ),
                 {"wa": wa},
             )
+            # The bot also touches the lead row, which is what the sync watches.
+            await session.execute(
+                text(
+                    "UPDATE knewit_leads SET last_message_at = now(), updated_at = now()"
+                    " WHERE whatsapp_id = :wa"
+                ),
+                {"wa": wa},
+            )
             await session.commit()
         await run_sync(factory)
         dialogs = await client.get("/api/dialogs?unread=true")

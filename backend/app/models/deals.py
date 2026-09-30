@@ -70,6 +70,12 @@ class CrmDeal(Base):
         nullable=True,
     )
     trial_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Last non-NULL knewit_leads.trial_datetime seen by sync_worker.
+    # trial_at is overwritten only when the bot value is non-NULL and
+    # differs from this snapshot, so manager edits survive NULL bot syncs.
+    last_bot_trial_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Fractional ordering inside a kanban column (fractional indexing).
     position: Mapped[Decimal | None] = mapped_column(

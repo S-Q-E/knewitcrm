@@ -214,7 +214,10 @@ async def test_locked_stage_notifies_owner(client, settings):
                 {"owner": owner["user"]["id"], "id": deal_id},
             )
             await session.execute(
-                text("UPDATE knewit_leads SET current_stage = 'ЗАПИСЬ' WHERE whatsapp_id = :wa"),
+                text(
+                    "UPDATE knewit_leads SET current_stage = 'ЗАПИСЬ', updated_at = now()"
+                    " WHERE whatsapp_id = :wa"
+                ),
                 {"wa": wa},
             )
             await session.commit()

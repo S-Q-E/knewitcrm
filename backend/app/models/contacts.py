@@ -32,6 +32,10 @@ class CrmContact(Base):
         index=True,
     )
     custom: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # Last bot-provided name seen by sync_worker. Used to detect manual
+    # manager edits: contact.name is overwritten only when it still matches
+    # this snapshot (or is empty).
+    last_bot_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

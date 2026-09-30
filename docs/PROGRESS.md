@@ -22,7 +22,7 @@
 - [x] `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `POST /api/auth/change-password`; CSRF double-submit for unsafe methods (login exempt)
 - [x] `GET/POST/PATCH /api/users` (+ `GET` one): admin full CRUD with pagination, manager lite list (`id`, `name`); deactivation revokes sessions; last-admin guard; password reset
 - [x] Bootstrap first admin from `ADMIN_EMAIL`/`ADMIN_PASSWORD` only when zero admins exist
-- [x] Login rate limit 5 fails/10min per IP+email -> 429 (in-memory, see D9); failed logins logged without secrets
+- [x] Login rate limit 5 fails/10min per IP+email + 20 fails/10min per email -> 429 (in-memory, see D9); IP is the last XFF value added by trusted proxies (`TRUSTED_PROXY_HOPS`, default 1); failed logins logged without secrets
 - [x] `require_user` / `require_role('admin')`; all `/api/*` except health/ready/login require a session; Basic Auth removed
 - [x] 47 tests (auth, users, health, legacy) + ruff clean + manual curl scenario verified
 ## Step 3 — Contacts + deals + kanban [done]
