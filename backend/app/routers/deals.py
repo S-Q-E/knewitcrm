@@ -43,8 +43,10 @@ from ..schemas.deals import (
 )
 from ..schemas.meta import TagOut, TagSetIn
 from ..services.activity import diff_payload, log_activity, slim
+from ..services.assignment import pick_assignee
 from ..services.custom_fields import load_definitions, validate_custom_values
 from ..services.deal_flow import apply_deal_stage
+from ..services.notifications import notify
 from ..services.tags import detach_entity_tags, entity_tags_map, replace_entity_tags
 from ..services.timeline import get_deal_timeline, parse_cursor, parse_types
 from ..services.visibility import (
@@ -315,6 +317,9 @@ async def create_deal(
         raise ApiError("STAGE_CLOSED", "New deals can only be created in open stages", 422)
     if payload.owner_id is not None and await session.get(CrmUser, payload.owner_id) is None:
         raise ApiError("UNKNOWN_OWNER", "Owner not found", 422)
+    owner_id = payload.owner_id
+    if owner_id is None:
+        owner_id = await pick_assignee(session)
     definitions = await load_definitions(session, ENTITY_DEAL)
     validate_custom_values(ENTITY_DEAL, payload.custom, definitions)
     top = (
@@ -331,7 +336,7 @@ async def create_deal(
         title=payload.title.strip(),
         amount=payload.amount,
         currency=payload.currency.upper(),
-        owner_id=payload.owner_id,
+        owner_id=owner_id,
         status=DEAL_STATUS_OPEN,
         trial_at=payload.trial_at,
         position=(top or Decimal(0)) + 1,
@@ -339,6 +344,13 @@ async def create_deal(
     )
     session.add(deal)
     await session.flush()
+    if owner_id is not None and owner_id != user.id:
+        await notify(
+            session,
+            [owner_id],
+            "deal_assigned",
+            {"deal_id": str(deal.id), "title": deal.title, "by": user.name},
+        )
     session.add(
         CrmDealStageHistory(
             deal_id=deal.id,

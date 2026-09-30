@@ -15,6 +15,7 @@ import type { FormEvent } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { useLogout, useMe } from "@/api/auth";
+import { BellBadge, BellDropdown } from "@/components/bell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTheme } from "@/lib/theme";
@@ -103,16 +104,12 @@ export function Layout() {
                   setMenuOpen(false);
                 }}
               >
-                <Bell className="h-5 w-5" />
+                <span className="relative">
+                  <Bell className="h-5 w-5" />
+                  <BellBadge />
+                </span>
               </Button>
-              {bellOpen && (
-                <div className="absolute right-0 z-20 mt-2 w-64 rounded-md border border-slate-200 bg-white p-4 text-sm shadow-lg dark:border-slate-700 dark:bg-slate-900">
-                  <p className="font-medium">Уведомления</p>
-                  <p className="mt-1 text-slate-500 dark:text-slate-400">
-                    Пока нет новых уведомлений.
-                  </p>
-                </div>
-              )}
+              {bellOpen && <BellDropdown onClose={() => setBellOpen(false)} />}
             </div>
             <div className="relative">
               <Button

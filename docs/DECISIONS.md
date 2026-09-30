@@ -149,3 +149,23 @@ Why: protects against accidental data loss, keeps audit trail.
   `frontend-legacy/`; `/api/leads*` stay until dialogs fully replace them.
 - Card task badges stay deferred (timeline covers tasks); send box and quick
   replies render as explicit "next step" stubs, never fake sends.
+
+## D15. Step 8 tasks and notifications notes
+- `crm_notifications` (user FK CASCADE, type, payload with `dedupe_key`, read_at)
+  + `crm_automations` (name, is_active, trigger, config, actions). Standalone
+  tasks allowed (migration `0008` drops the target check).
+- `notify()` dedupes on unread rows with the same (user, type, dedupe_key).
+  Worker (60s loop, own xact lock): overdue + due-within-24h reminders keyed per
+  task per day; automations evaluated in the same cycle.
+- D5 handover in the sync worker: МЕНЕДЖЕР status always creates urgent
+  "Ответить клиенту" (due +1h, once per deal) + notifies owner (or all managers);
+  `auto_pause_on_manager` setting (default false) gates bot pausing. Fresh
+  conversation rows start read; unread 0→N transitions notify the assignee;
+  locked-stage bot moves notify the owner (all managers when unowned).
+- Round-robin (`deal_assignment` setting, default `unassigned`) rotates by roster
+  position among active managers and applies to API-created deals only, plus
+  `deal_assigned` notification when owner != creator.
+- Automations: triggers `deal_entered_stage` / `no_activity_hours` (optional
+  `pipeline_id` scope), actions create_task/assign_owner/add_tag/notify; fire-once
+  per (automation, deal) via `automation_fired` activity rows. Mutations are
+  admin-only; automations UI itself lands in Settings (Step 11).

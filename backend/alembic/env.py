@@ -13,6 +13,7 @@ from backend.app.config import Settings  # noqa: E402
 from backend.app.migrations import VERSION_TABLE, include_object  # noqa: E402
 from backend.app.models import (  # noqa: E402,F401
     CrmActivityLog,
+    CrmAutomation,
     CrmContact,
     CrmConversationState,
     CrmCustomField,
@@ -21,6 +22,7 @@ from backend.app.models import (  # noqa: E402,F401
     CrmEntityTag,
     CrmLostReason,
     CrmNote,
+    CrmNotification,
     CrmPipeline,
     CrmSavedView,
     CrmSession,

@@ -29,12 +29,14 @@ from .deals import (
     CrmDealStageHistory,
 )
 from .notes import CrmNote
+from .notify import CrmAutomation, CrmNotification
 from .pipelines import (
     STAGE_KIND_LOST,
     STAGE_KIND_OPEN,
     STAGE_KIND_WON,
     STATUS_CLIENT,
     STATUS_LOST,
+    STATUS_MANAGER,
     VALID_STAGE_KINDS,
     CrmPipeline,
     CrmStage,
@@ -53,6 +55,7 @@ __all__ = [
     "Base",
     "CONTACT_SOURCE_BOT",
     "CrmActivityLog",
+    "CrmAutomation",
     "CrmContact",
     "CrmConversationState",
     "CrmCustomField",
@@ -61,6 +64,7 @@ __all__ = [
     "CrmEntityTag",
     "CrmLostReason",
     "CrmNote",
+    "CrmNotification",
     "CrmPipeline",
     "CrmSavedView",
     "CrmSession",
@@ -85,6 +89,7 @@ __all__ = [
     "STAGE_KIND_WON",
     "STATUS_CLIENT",
     "STATUS_LOST",
+    "STATUS_MANAGER",
     "TASK_TYPE_CALL",
     "TASK_TYPE_MEETING",
     "TASK_TYPE_MESSAGE",

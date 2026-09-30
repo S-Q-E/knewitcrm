@@ -24,6 +24,7 @@ VALID_STAGE_KINDS = (STAGE_KIND_OPEN, STAGE_KIND_WON, STAGE_KIND_LOST)
 
 STATUS_CLIENT = "КЛИЕНТ"
 STATUS_LOST = "ОТКАЗ"
+STATUS_MANAGER = "МЕНЕДЖЕР"
 
 
 class CrmPipeline(Base):

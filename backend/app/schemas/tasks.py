@@ -43,3 +43,12 @@ class TaskUpdate(BaseModel):
 class TaskListOut(BaseModel):
     items: list[TaskOut]
     total: int
+
+
+class TaskBulkIn(BaseModel):
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+    due_at: datetime | None = None
+
+
+class TaskBulkOut(BaseModel):
+    updated: int

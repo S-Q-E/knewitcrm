@@ -19,6 +19,7 @@ from .logging_utils import setup_logging
 from .middleware import RequestIdMiddleware
 from .routers import (
     auth,
+    automations,
     contacts,
     custom_fields,
     deals,
@@ -27,6 +28,7 @@ from .routers import (
     legacy_bot,
     lost_reasons,
     notes,
+    notifications,
     pipelines,
     tags,
     tasks,
@@ -35,6 +37,7 @@ from .routers import (
 )
 from .services.bootstrap import try_bootstrap
 from .session_middleware import SessionAuthMiddleware
+from .workers.notify_worker import NOTIFY_INTERVAL_SECONDS, notify_loop
 from .workers.sync_worker import sync_loop
 
 logger = logging.getLogger(__name__)
@@ -85,12 +88,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             sync_loop(app.state.session_factory, settings.sync_interval_seconds)
         )
         app.state.sync_task = sync_task
+    notify_task = None
+    if settings.sync_enabled:
+        notify_task = asyncio.create_task(
+            notify_loop(app.state.session_factory, NOTIFY_INTERVAL_SECONDS)
+        )
+        app.state.notify_task = notify_task
     try:
         yield
     finally:
-        if sync_task is not None:
-            sync_task.cancel()
-            await asyncio.gather(sync_task, return_exceptions=True)
+        for task in (sync_task, notify_task):
+            if task is not None:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
         await engine.dispose()
 
 
@@ -111,6 +121,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(auth.router)
+    app.include_router(automations.router)
     app.include_router(users.router)
     app.include_router(pipelines.router)
     app.include_router(pipelines.stages_router)
@@ -123,6 +134,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(views.router)
     app.include_router(tasks.router)
     app.include_router(dialogs.router)
+    app.include_router(notifications.router)
     app.include_router(legacy_bot.router)
 
     @app.get("/")

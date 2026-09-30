@@ -62,6 +62,12 @@
 - [x] Sync worker counts unread from incoming messages; removed `/api/stats`, `/api/funnel`, `frontend-legacy/`
 - [x] 90 backend tests + tsc/eslint/vitest green; E2E (card shows messages+events) green; manual timeline/dialogs curl verified
 ## Step 8 — Funnel analytics + reports [todo]
+## Step 8b — Tasks and notifications [done]
+- [x] Brief arrived out of PROGRESS order; covers tasks page + notifications + assignment + automations
+- [x] Migrations `0007` (notifications, automations) + `0008` (standalone tasks); tasks API gaps (`/complete`, `mine`/date filters, bulk reschedule); notifications list/read/read-all; automations CRUD (admin)
+- [x] Workers: 60s notify loop (overdue/due-soon deduped) + automations; sync handover (urgent task + notify, opt-in autopause), locked-stage and unread-transition notifies; round-robin assignment
+- [x] Frontend: /tasks (groups, week view, RHF+zod modal, checkbox, bulk links), bell with count + dropdown + deep links
+- [x] 99 backend tests + tsc/eslint/vitest green; 3 E2E green; manual handover/task/bell curl verified
 ## Step 9 — Notifications + activity log [todo]
 ## Step 10 — Saved views + search filters [todo]
 ## Step 11 — Settings (locale, timezone Asia/Almaty, currency KZT) [todo]

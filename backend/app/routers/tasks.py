@@ -11,7 +11,7 @@ from ..auth_deps import CurrentUser, require_user
 from ..deps import get_session, pagination
 from ..errors import ApiError
 from ..models import CrmContact, CrmDeal, CrmTask, CrmUser
-from ..schemas.tasks import TaskCreate, TaskListOut, TaskOut, TaskUpdate
+from ..schemas.tasks import TaskBulkIn, TaskBulkOut, TaskCreate, TaskListOut, TaskOut, TaskUpdate
 from ..services.activity import diff_payload, log_activity, slim
 from ..services.visibility import (
     ensure_visible,
@@ -28,8 +28,6 @@ async def _check_target(
     deal_id: uuid.UUID | None,
     contact_id: uuid.UUID | None,
 ) -> None:
-    if deal_id is None and contact_id is None:
-        raise ApiError("TASK_TARGET_REQUIRED", "deal_id or contact_id is required", 422)
     if deal_id is not None:
         deal = await session.get(CrmDeal, deal_id)
         if deal is None or deal.deleted_at is not None:
@@ -59,9 +57,12 @@ async def list_tasks(
     deal_id: uuid.UUID | None = None,
     contact_id: uuid.UUID | None = None,
     assignee_id: uuid.UUID | None = None,
+    mine: bool = False,
     unassigned: bool = False,
     open_only: bool = False,
     overdue: bool = False,
+    due_from: datetime | None = None,
+    due_to: datetime | None = None,
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
     page: dict = Depends(pagination),
@@ -71,7 +72,9 @@ async def list_tasks(
         stmt = stmt.where(CrmTask.deal_id == deal_id)
     if contact_id is not None:
         stmt = stmt.where(CrmTask.contact_id == contact_id)
-    if assignee_id is not None:
+    if mine:
+        stmt = stmt.where(CrmTask.assignee_id == user.id)
+    elif assignee_id is not None:
         stmt = stmt.where(CrmTask.assignee_id == assignee_id)
     if unassigned:
         stmt = stmt.where(CrmTask.assignee_id.is_(None))
@@ -83,6 +86,10 @@ async def list_tasks(
             CrmTask.due_at.is_not(None),
             CrmTask.due_at < datetime.now(UTC),
         )
+    if due_from is not None:
+        stmt = stmt.where(CrmTask.due_at.is_not(None), CrmTask.due_at >= due_from)
+    if due_to is not None:
+        stmt = stmt.where(CrmTask.due_at.is_not(None), CrmTask.due_at <= due_to)
     restricted = await restrict_managers_to_own(session)
     scope = owner_condition(CrmTask.assignee_id, user, restricted)
     if scope is not None:
@@ -177,13 +184,28 @@ async def complete_task(
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    task = await _get_visible(session, task_id, user)
-    task.done_at = datetime.now(UTC)
+    return await _set_done(session, await _get_visible(session, task_id, user), True, user)
+
+
+@router.post("/{task_id}/complete", response_model=TaskOut)
+async def complete_task_alias(
+    task_id: uuid.UUID,
+    user: CurrentUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Alias of /done required by the API contract."""
+    return await _set_done(session, await _get_visible(session, task_id, user), True, user)
+
+
+async def _set_done(session: AsyncSession, task: CrmTask, done: bool, user: CurrentUser) -> CrmTask:
+    task.done_at = datetime.now(UTC) if done else None
     await session.commit()
     await session.refresh(task)
-    await log_activity(session, user.id, "task", task.id, "task_done", {})
+    await log_activity(
+        session, user.id, "task", task.id, "task_done" if done else "task_reopened", {}
+    )
     await session.commit()
-    return TaskOut.model_validate(task)
+    return task
 
 
 @router.post("/{task_id}/undone", response_model=TaskOut)
@@ -192,13 +214,34 @@ async def reopen_task(
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    task = await _get_visible(session, task_id, user)
-    task.done_at = None
+    return await _set_done(session, await _get_visible(session, task_id, user), False, user)
+
+
+@router.post("/bulk", response_model=TaskBulkOut)
+async def bulk_reschedule_tasks(
+    payload: TaskBulkIn,
+    user: CurrentUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    tasks = (await session.execute(select(CrmTask).where(CrmTask.id.in_(payload.ids)))).scalars()
+    by_id = {task.id: task for task in tasks}
+    missing = set(payload.ids) - set(by_id)
+    if missing:
+        raise ApiError(
+            "BULK_NOT_FOUND",
+            "Some tasks were not found",
+            404,
+            {"ids": [str(i) for i in missing]},
+        )
+    restricted = await restrict_managers_to_own(session)
+    for task in by_id.values():
+        ensure_visible(is_visible(task.assignee_id, user, restricted))
+        task.due_at = payload.due_at
+    await session.flush()
+    for task in by_id.values():
+        await log_activity(session, user.id, "task", task.id, "task_bulk_updated", {})
     await session.commit()
-    await session.refresh(task)
-    await log_activity(session, user.id, "task", task.id, "task_reopened", {})
-    await session.commit()
-    return TaskOut.model_validate(task)
+    return TaskBulkOut(updated=len(by_id))
 
 
 @router.delete("/{task_id}")

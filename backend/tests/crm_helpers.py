@@ -75,6 +75,9 @@ async def default_pipeline(client) -> dict:
     assert response.status_code == 200
     pipelines = response.json()
     assert pipelines, "default funnel must be seeded"
+    for pipeline in pipelines:
+        if pipeline.get("is_default"):
+            return pipeline
     return pipelines[0]
 
 

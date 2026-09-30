@@ -5,7 +5,7 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select, text
@@ -20,6 +20,7 @@ from ..models import (
     HISTORY_SOURCE_SYSTEM,
     STATUS_CLIENT,
     STATUS_LOST,
+    STATUS_MANAGER,
     CrmActivityLog,
     CrmContact,
     CrmConversationState,
@@ -27,7 +28,9 @@ from ..models import (
     CrmDealStageHistory,
     CrmPipeline,
     CrmStage,
+    CrmTask,
 )
+from ..services.notifications import active_managers, notify
 
 logger = logging.getLogger(__name__)
 
@@ -170,11 +173,14 @@ async def _sync_lead(
         )
         session.add(state)
         stats.states_created += 1
+        unread_before = 0
     else:
         if state.last_read_at is None:
             state.last_read_at = datetime.now(UTC)
             state.unread_count = 0
+            unread_before = 0
         else:
+            unread_before = state.unread_count
             state.unread_count = (
                 await session.execute(
                     text(
@@ -184,6 +190,13 @@ async def _sync_lead(
                     {"wa": whatsapp_id, "since": state.last_read_at},
                 )
             ).scalar() or 0
+    if unread_before == 0 and state.unread_count > 0 and state.assigned_to is not None:
+        await notify(
+            session,
+            [state.assigned_to],
+            "dialog_message",
+            {"whatsapp_id": whatsapp_id, "unread": state.unread_count},
+        )
 
     contact = (
         await session.execute(select(CrmContact).where(CrmContact.whatsapp_id == whatsapp_id))
@@ -237,11 +250,13 @@ async def _sync_lead(
         )
         stats.deals_created += 1
         _count_terminal(stats, target_status)
+        await _maybe_handover(session, lead, deal, state)
         return
 
     deal.custom = custom
     deal.trial_at = lead.get("trial_datetime")
     if deal.stage_id == target_stage.id and deal.status == target_status:
+        await _maybe_handover(session, lead, deal, state)
         return
     if deal.stage_locked:
         session.add(
@@ -259,6 +274,8 @@ async def _sync_lead(
             )
         )
         stats.blocked += 1
+        await _notify_locked(session, deal, target_stage.id)
+        await _maybe_handover(session, lead, deal, state)
         return
 
     from_stage_id = deal.stage_id
@@ -276,6 +293,7 @@ async def _sync_lead(
     )
     stats.moved += 1
     _count_terminal(stats, target_status)
+    await _maybe_handover(session, lead, deal, state)
 
 
 def _resolve_target(
@@ -331,6 +349,80 @@ def _count_terminal(stats: SyncStats, status: str) -> None:
         stats.won += 1
     elif status == DEAL_STATUS_LOST:
         stats.lost += 1
+
+
+async def _get_setting(session: AsyncSession, key: str) -> Any:
+    return (
+        await session.execute(text("SELECT value FROM crm_settings WHERE key = :key"), {"key": key})
+    ).scalar_one_or_none()
+
+
+async def _notify_locked(session: AsyncSession, deal: CrmDeal, target_stage_id: uuid.UUID) -> None:
+    """Tell the owner (or all managers) that the bot hit a locked deal."""
+    if deal.owner_id is not None:
+        targets = [deal.owner_id]
+    else:
+        targets = [user_id for user_id, _ in await active_managers(session)]
+    await notify(
+        session,
+        targets,
+        "locked_stage",
+        {
+            "deal_id": str(deal.id),
+            "target_stage_id": str(target_stage_id),
+            "dedupe_key": f"locked-stage:{deal.id}:{target_stage_id}",
+        },
+    )
+
+
+async def _maybe_handover(
+    session: AsyncSession,
+    lead: dict[str, Any],
+    deal: CrmDeal,
+    state: CrmConversationState,
+) -> None:
+    """D5: on МЕНЕДЖЕР status create an urgent task + notify; pause only if set."""
+    if lead.get("status") != STATUS_MANAGER:
+        return
+    existing = (
+        await session.execute(
+            select(CrmTask.id).where(
+                CrmTask.deal_id == deal.id,
+                CrmTask.done_at.is_(None),
+                CrmTask.title == "Ответить клиенту",
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        session.add(
+            CrmTask(
+                deal_id=deal.id,
+                contact_id=deal.contact_id,
+                assignee_id=deal.owner_id,
+                type="message",
+                title="Ответить клиенту",
+                due_at=datetime.now(UTC) + timedelta(hours=1),
+            )
+        )
+    if deal.owner_id is not None:
+        targets = [deal.owner_id]
+    else:
+        targets = [user_id for user_id, _ in await active_managers(session)]
+    await notify(
+        session,
+        targets,
+        "manager_handover",
+        {
+            "deal_id": str(deal.id),
+            "whatsapp_id": lead["whatsapp_id"],
+            "dedupe_key": f"handover:{deal.id}",
+        },
+    )
+    auto_pause = await _get_setting(session, "auto_pause_on_manager")
+    if auto_pause is True and not state.bot_paused:
+        state.bot_paused = True
+        state.paused_at = datetime.now(UTC)
+        state.paused_by = None
 
 
 async def _store_last_synced(session: AsyncSession) -> None:

@@ -30,10 +30,14 @@ async def test_tasks_crud_and_lifecycle(client, settings):
         contact = await create_contact(client, token, whatsapp_id=_wa())
         contact_ids.append(contact["id"])
 
-        orphan = await client.post(
-            "/api/tasks", json={"title": "nowhere"}, headers=csrf_headers(token)
+        created = await client.post(
+            "/api/tasks",
+            json={"title": "Standalone", "type": "call"},
+            headers=csrf_headers(token),
         )
-        assert orphan.status_code == 422
+        assert created.status_code == 201
+        assert created.json()["deal_id"] is None
+        standalone_id = created.json()["id"]
 
         created = await client.post(
             "/api/tasks",
@@ -68,6 +72,11 @@ async def test_tasks_crud_and_lifecycle(client, settings):
             headers=csrf_headers(token),
         )
         assert bad_assignee.status_code == 422
+
+        gone_standalone = await client.delete(
+            f"/api/tasks/{standalone_id}", headers=csrf_headers(token)
+        )
+        assert gone_standalone.json() == {"ok": True}
 
         gone = await client.delete(f"/api/tasks/{task_id}", headers=csrf_headers(token))
         assert gone.json() == {"ok": True}

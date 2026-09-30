@@ -17,15 +17,12 @@ VALID_TASK_TYPES = (TASK_TYPE_CALL, TASK_TYPE_MEETING, TASK_TYPE_MESSAGE, TASK_T
 
 
 class CrmTask(Base):
-    """Manager follow-up task attached to a deal and/or a contact."""
+    """Manager follow-up task, optionally attached to a deal and/or a contact."""
 
     __tablename__ = "crm_tasks"
     __table_args__ = (
         CheckConstraint(
             "type IN ('call', 'meeting', 'message', 'other')", name="ck_crm_tasks_type"
-        ),
-        CheckConstraint(
-            "deal_id IS NOT NULL OR contact_id IS NOT NULL", name="ck_crm_tasks_target"
         ),
     )
 

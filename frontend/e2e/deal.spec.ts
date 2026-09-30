@@ -23,6 +23,10 @@ test("deal drawer shows messages and events", async ({ page }) => {
   await card.click();
   const drawer = page.getByRole("dialog", { name: "Карточка сделки" });
   await expect(drawer).toBeVisible();
+  // Isolate message and event kinds: the stream is newest-first with paging.
+  for (const label of ["Стадии", "Заметки", "Задачи", "Системные"]) {
+    await drawer.getByRole("button", { name: label, exact: true }).click();
+  }
   await expect(drawer.locator('[data-timeline-kind="message"]').first()).toBeVisible({
     timeout: 10_000,
   });
@@ -35,10 +39,13 @@ test("deal drawer shows messages and events", async ({ page }) => {
 
   // Standalone page shows the same stream.
   await page.goto(`/deals/${dealId}`);
-  await expect(page.locator('[data-timeline-kind="message"]').first()).toBeVisible({
+  await expect(page.locator('[data-timeline-kind="stage"]').first()).toBeVisible({
     timeout: 10_000,
   });
-  await expect(page.locator('[data-timeline-kind="stage"]').first()).toBeVisible({
+  for (const label of ["События", "Стадии", "Заметки", "Задачи", "Системные"]) {
+    await page.getByRole("button", { name: label, exact: true }).click();
+  }
+  await expect(page.locator('[data-timeline-kind="message"]').first()).toBeVisible({
     timeout: 10_000,
   });
 });
