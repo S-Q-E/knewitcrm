@@ -28,6 +28,7 @@ from .deals import (
     CrmDeal,
     CrmDealStageHistory,
 )
+from .notes import CrmNote
 from .pipelines import (
     STAGE_KIND_LOST,
     STAGE_KIND_OPEN,
@@ -50,6 +51,7 @@ __all__ = [
     "CrmDealStageHistory",
     "CrmEntityTag",
     "CrmLostReason",
+    "CrmNote",
     "CrmPipeline",
     "CrmSession",
     "CrmSetting",

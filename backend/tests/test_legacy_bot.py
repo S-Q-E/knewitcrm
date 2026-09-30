@@ -129,6 +129,7 @@ async def test_migrate_creates_only_version_table(settings):
                 "crm_contacts",
                 "crm_deals",
                 "crm_deal_stage_history",
+                "crm_notes",
                 "crm_lost_reasons",
                 "crm_tags",
                 "crm_entity_tags",

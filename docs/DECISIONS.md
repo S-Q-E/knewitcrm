@@ -79,3 +79,25 @@ Why: protects against accidental data loss, keeps audit trail.
   on commit/rollback) instead of session-level lock. Backfill pages leads by
   `whatsapp_id` in batches of 500; progress marker `sync_worker.last_synced_at`
   lives in `crm_settings`. Interval/flag via `SYNC_ENABLED`/`SYNC_INTERVAL_SECONDS`.
+
+## D11. Step 4 domain REST API notes
+- Reads are open to all authenticated users; mutations of funnel (pipelines/stages),
+  custom-field definitions, and lost reasons are admin-only. Managers do full tag
+  CRUD and note CRUD (foreign notes: delete by author or admin).
+- `crm_deals.position` is `NUMERIC(20,10)` (migration `0004`, fractional indexing);
+  I/O uses float. Same-stage `move` only reorders (no lock/history/bridge);
+  cross-stage `move` locks, records manager history, and calls `bot_bridge` when the
+  target has `bot_stage_key` (missing bot lead logs a warning, manager move stands).
+- New deals only into open stages; `lost` requires `lost_reason_id`; reopening
+  clears `closed_at`/`lost_reason`. Stage delete with deals needs `to_stage_id`
+  (query param); pipeline delete with stages is refused. `bulk` (max 200 ids) is
+  all-or-nothing in one transaction.
+- Board: per-column `limit` (default 50) + opaque `next_cursor` per column;
+  `cursors` request param is a JSON `{stage_id: cursor}` map. Totals/amounts cover
+  the whole column, not the page.
+- Custom validation checks only defined fields (unknown keys pass through: the bot
+  sync mirrors lead attributes into the same payload); `required` must be present
+  and non-null. Tag filter on lists is ANY-match. Scope violations return 404, not
+  403, to avoid leaking existence. Soft-deleted contacts hide their deals.
+- `restrict_managers_to_own` lives in `crm_settings` (default false = amoCRM-style
+  open access); no UI yet (Step 11).

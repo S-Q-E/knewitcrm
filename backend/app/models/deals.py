@@ -9,7 +9,6 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
-    Integer,
     Numeric,
     String,
     func,
@@ -72,7 +71,10 @@ class CrmDeal(Base):
     )
     trial_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # Fractional ordering inside a kanban column (fractional indexing).
+    position: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 10), nullable=False, server_default="0"
+    )
     stage_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=func.false())
     custom: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(

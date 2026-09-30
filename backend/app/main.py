@@ -18,7 +18,19 @@ from .deps import get_settings
 from .errors import ApiError, api_error_handler, error_payload
 from .logging_utils import setup_logging
 from .middleware import RequestIdMiddleware
-from .routers import auth, health, legacy_bot, users
+from .routers import (
+    auth,
+    contacts,
+    custom_fields,
+    deals,
+    health,
+    legacy_bot,
+    lost_reasons,
+    notes,
+    pipelines,
+    tags,
+    users,
+)
 from .services.bootstrap import try_bootstrap
 from .session_middleware import SessionAuthMiddleware
 from .workers.sync_worker import sync_loop
@@ -73,6 +85,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(users.router)
+    app.include_router(pipelines.router)
+    app.include_router(pipelines.stages_router)
+    app.include_router(contacts.router)
+    app.include_router(deals.router)
+    app.include_router(notes.router)
+    app.include_router(tags.router)
+    app.include_router(custom_fields.router)
+    app.include_router(lost_reasons.router)
     app.include_router(legacy_bot.router)
 
     @app.get("/")

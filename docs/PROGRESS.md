@@ -32,8 +32,15 @@
 - [x] 58 tests (bridge, sync, seed idempotency, lifespan worker) + ruff clean + manual run verified
 ## Step 4 — Bot sync worker + stage locks (D3) [done]
 - [x] Implemented together with Step 3 above (single scope in the step brief): backfill, bot-driven moves, stage_locked, won/lost, idempotency
+## Step 4b — Domain model REST API [done]
+- [x] Brief arrived out of PROGRESS order; covers funnel/contacts/deals/notes/tags/fields/reasons API
+- [x] Migration `0004_notes_position`: `crm_notes` + fractional `position NUMERIC(20,10)`
+- [x] Pipelines/stages CRUD (admin), reorder, delete-with-recipient; contacts CRUD + ILIKE/phone search + filters + soft/hard delete + restore; deals CRUD + board (grouped sums, per-column cursors) + move (lock/history/bridge) + unlock + bulk (200, atomic)
+- [x] Notes/tags/fields/reasons CRUD with role split; custom type validation; `restrict_managers_to_own` scope (404 on violation); activity log on every mutation
+- [x] 80 tests + ruff clean + manual Swagger/curl lifecycle verified
 ## Step 5 — Chat: SSE realtime + outbox + n8n webhook (D4, D6) [todo]
-## Step 6 — Tasks, notes, tags, custom fields, lost reasons [todo]
+## Step 6 — Tasks + remaining meta [todo]
+- Notes/tags/custom-fields/lost-reasons API done in Step 4b; left: `crm_tasks` table + tasks endpoints
 ## Step 7 — New React frontend, remove frontend-legacy [todo]
 ## Step 8 — Funnel analytics + reports [todo]
 ## Step 9 — Notifications + activity log [todo]
