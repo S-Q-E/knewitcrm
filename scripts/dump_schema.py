@@ -3,6 +3,7 @@
 Usage:
     DATABASE_URL=postgresql://... python scripts/dump_schema.py
 """
+
 from __future__ import annotations
 
 import os
@@ -115,10 +116,13 @@ async def main() -> None:
             lines.append("| column | type | nullable | default |")
             lines.append("|---|---|---|---|")
             for c in cols:
-                dtype = c["udt_name"] if c["data_type"] == "USER-DEFINED" else c["data_type"]
-                lines.append(
-                    f"| {c['column_name']} | {dtype} | {c['is_nullable']} | {c['column_default'] or ''} |"
-                )
+                if c["data_type"] == "USER-DEFINED":
+                    dtype = c["udt_name"]
+                else:
+                    dtype = c["data_type"]
+                default = c["column_default"] or ""
+                col = c["column_name"]
+                lines.append(f"| {col} | {dtype} | {c['is_nullable']} | {default} |")
             lines.append("")
             pk = await _fetch_pk(conn, table)
             lines.append(f"PK: {', '.join(r['column_name'] for r in pk) or '(none)'}")
@@ -127,9 +131,8 @@ async def main() -> None:
             if fks:
                 lines.append("FKs:")
                 for fk in fks:
-                    lines.append(
-                        f"- {fk['column_name']} -> {fk['foreign_table']}.{fk['foreign_column']} ({fk['constraint_name']})"
-                    )
+                    target = f"{fk['foreign_table']}.{fk['foreign_column']}"
+                    lines.append(f"- {fk['column_name']} -> {target} ({fk['constraint_name']})")
             else:
                 lines.append("FKs: (none)")
             lines.append("")
@@ -145,8 +148,9 @@ async def main() -> None:
         lines.append("")
         stages = await _fetch_distinct(
             conn,
-            "SELECT current_stage, status, COUNT(*) AS cnt FROM knewit_leads "
-            "GROUP BY current_stage, status ORDER BY cnt DESC",
+            "SELECT current_stage, status, COUNT(*) AS cnt "
+            "FROM knewit_leads GROUP BY current_stage, status "
+            "ORDER BY cnt DESC",
         )
         lines.append("### knewit_leads.current_stage + status (with counts)")
         lines.append("")
@@ -154,7 +158,8 @@ async def main() -> None:
             lines.append(f"- {dict(r)}")
         lines.append("")
         statuses = await _fetch_distinct(
-            conn, "SELECT status, COUNT(*) AS cnt FROM knewit_leads GROUP BY status ORDER BY cnt DESC"
+            conn,
+            "SELECT status, COUNT(*) AS cnt " "FROM knewit_leads GROUP BY status ORDER BY cnt DESC",
         )
         lines.append("### knewit_leads.status (with counts)")
         lines.append("")
@@ -162,7 +167,9 @@ async def main() -> None:
             lines.append(f"- {dict(r)}")
         lines.append("")
         events = await _fetch_distinct(
-            conn, "SELECT event_type, COUNT(*) AS cnt FROM knewit_events GROUP BY event_type ORDER BY cnt DESC"
+            conn,
+            "SELECT event_type, COUNT(*) AS cnt "
+            "FROM knewit_events GROUP BY event_type ORDER BY cnt DESC",
         )
         lines.append("### knewit_events.event_type (with counts)")
         lines.append("")

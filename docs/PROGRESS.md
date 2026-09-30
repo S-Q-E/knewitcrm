@@ -8,7 +8,15 @@
 - [x] `docker-compose.yml` + local Postgres 16 + `tests/fixtures/knewit_schema.sql` + seed
 - [x] Legacy frontend moved to `frontend-legacy/`
 
-## Step 1 — Backend skeleton (FastAPI + SQLAlchemy + Alembic) [todo]
+## Step 1 — Backend skeleton (FastAPI + SQLAlchemy + Alembic) [done]
+- [x] `backend/app/` (config, db, deps, errors, middleware, logging, routers, models/base, migrations)
+- [x] SQLAlchemy 2.0 async engine, lifecycle in app lifespan (`app.state`)
+- [x] Alembic async env, `version_table='crm_alembic_version'`, `include_object` allows only `crm_*`
+- [x] Baseline migration `0001_baseline` (empty); `upgrade head` creates only the version table
+- [x] Legacy endpoints moved to `routers/legacy_bot.py` (same contract, SQLAlchemy `text()`)
+- [x] Unified errors `{error:{code,message,details}}`, request-id middleware, JSON logs, `/api/health` + `/api/ready`
+- [x] Pytest (25 tests) + ruff + pre-commit + GitHub Actions (lint + tests on push)
+- [x] Contract change: missing lead 404 body is now `{error:{code:NOT_FOUND,...}}` (was `{"detail":...}`)
 ## Step 2 — Auth with sessions + roles, remove Basic Auth [todo]
 ## Step 3 — Contacts + deals + kanban [todo]
 ## Step 4 — Bot sync worker + stage locks (D3) [todo]
@@ -27,4 +35,3 @@
 
 ## Deferred
 - Live `DATABASE_URL` dump: `docs/db_schema.md` is reconstructed from code; overwrite via `scripts/dump_schema.py` against real n8n DB when available.
-- Runtime check blocked in this env (no docker daemon permission, no pip): `docker compose up db`, `scripts/seed_local.py`, and manual open of `/` with Basic Auth still need a run on dev machine/CI.

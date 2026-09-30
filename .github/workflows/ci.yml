@@ -1,0 +1,48 @@
+name: lint-tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: knewit
+          POSTGRES_PASSWORD: knewit
+          POSTGRES_DB: knewit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U knewit -d knewit"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_URL: postgresql://knewit:knewit@localhost:5432/knewit
+      CRM_BASIC_USER: test
+      CRM_BASIC_PASS: test
+      SECRET_KEY: ci-secret-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check backend scripts
+      - name: Apply knewit fixtures
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          psql "$DATABASE_URL" -f tests/fixtures/knewit_schema.sql
+          psql "$DATABASE_URL" -f tests/fixtures/seed.sql
+      - name: Migrate
+        run: alembic -c backend/alembic.ini upgrade head
+      - name: Tests
+        run: pytest -q

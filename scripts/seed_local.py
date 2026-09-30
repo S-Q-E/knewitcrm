@@ -1,4 +1,5 @@
 """Seed local DB with knewit_* schema + test data (dev only)."""
+
 from __future__ import annotations
 
 import asyncio

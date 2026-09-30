@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -15,4 +15,4 @@ COPY frontend-legacy ./frontend-legacy
 EXPOSE 8000
 
 # Railway passes $PORT automatically
-CMD uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}
+CMD uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}

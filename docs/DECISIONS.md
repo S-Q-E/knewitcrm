@@ -32,3 +32,10 @@ Why: single sender path, no credential duplication.
 ## D7. Soft delete
 `deleted_at` for contacts and deals. Hard delete by admin only.
 Why: protects against accidental data loss, keeps audit trail.
+
+## D8. Step 1 skeleton notes
+- Pytest modules live in `backend/tests/`; SQL fixtures stay in `tests/fixtures/` (referenced by `docker-compose.yml` and `scripts/seed_local.py`).
+- SQLAlchemy engine lifecycle belongs to the app (`lifespan`, `app.state`), never to module globals — globals bind asyncpg connections to the first event loop and break tests/reloads.
+- `/api/ready` is public alongside `/api/health` so orchestrators can probe readiness without credentials.
+- `alembic.ini` uses a repo-root-relative `script_location = backend/alembic` so `alembic -c backend/alembic.ini` works from the repo root (CI, dev).
+- Ruff ignores `B008` because `Depends(...)` in endpoint defaults is the standard FastAPI idiom.
