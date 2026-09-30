@@ -16,8 +16,10 @@ from .db import create_engine, create_session_factory
 from .deps import get_settings
 from .errors import ApiError, api_error_handler, error_payload
 from .logging_utils import setup_logging
-from .middleware import BasicAuthMiddleware, RequestIdMiddleware
-from .routers import health, legacy_bot
+from .middleware import RequestIdMiddleware
+from .routers import auth, health, legacy_bot, users
+from .services.bootstrap import try_bootstrap
+from .session_middleware import SessionAuthMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +30,6 @@ FRONTEND_DIR = (
     else BASE_DIR / "frontend"
 )
 
-# /api/health and /api/ready stay public for orchestrator probes.
-PUBLIC_PATHS = {"/api/health", "/api/ready"}
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -38,6 +37,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_engine(settings)
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
+    await try_bootstrap(app.state.session_factory, settings.admin_email, settings.admin_password)
     try:
         yield
     finally:
@@ -51,13 +51,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="KnewIT CRM", version="1.0.0", lifespan=lifespan)
     app.state.settings = settings
 
+    app.add_middleware(SessionAuthMiddleware)
     app.add_middleware(RequestIdMiddleware)
-    app.add_middleware(
-        BasicAuthMiddleware,
-        username=settings.basic_user,
-        password=settings.basic_pass,
-        public_paths=PUBLIC_PATHS,
-    )
 
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
@@ -65,6 +60,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(Exception, unhandled_error_handler)
 
     app.include_router(health.router)
+    app.include_router(auth.router)
+    app.include_router(users.router)
     app.include_router(legacy_bot.router)
 
     @app.get("/")

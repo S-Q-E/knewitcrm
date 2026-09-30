@@ -23,9 +23,9 @@ jobs:
           --health-retries=10
     env:
       DATABASE_URL: postgresql://knewit:knewit@localhost:5432/knewit
-      CRM_BASIC_USER: test
-      CRM_BASIC_PASS: test
       SECRET_KEY: ci-secret-key
+      ADMIN_EMAIL: admin-test@example.com
+      ADMIN_PASSWORD: admin-test-password-1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -39,3 +39,22 @@ Why: protects against accidental data loss, keeps audit trail.
 - `/api/ready` is public alongside `/api/health` so orchestrators can probe readiness without credentials.
 - `alembic.ini` uses a repo-root-relative `script_location = backend/alembic` so `alembic -c backend/alembic.ini` works from the repo root (CI, dev).
 - Ruff ignores `B008` because `Depends(...)` in endpoint defaults is the standard FastAPI idiom.
+
+## D9. Step 2 auth notes
+- Cookies: `crm_session` (httpOnly, Secure per `COOKIE_SECURE`, SameSite=Lax, 14 days)
+  + `crm_csrf` (readable by JS) for double-submit CSRF. The CSRF token hash is stored
+  on the session row, so a token is bound to its session, not just to the browser.
+- CSRF is required for unsafe `/api/*` methods, except `POST /api/auth/login`
+  (no session exists yet there; SameSite=Lax is the protection). Auth is enforced in
+  `SessionAuthMiddleware` so legacy routers are covered too; `require_user` /
+  `require_role('admin')` dependencies expose the current user to handlers.
+- Login rate limit is in-memory: 5 failures / 10 min per (IP, email) -> 429.
+  Justification: deploy target is a single Railway container, so a process-local
+  store is sufficient and avoids an extra table. Revisit if workers scale out.
+- Emails are normalized (strip + lowercase) before lookup/storage; passwords use
+  argon2 (`argon2-cffi`), minimum length 10, enforced by Pydantic and bootstrap.
+- First admin is bootstrapped at startup from `ADMIN_EMAIL`/`ADMIN_PASSWORD` only
+  when zero admins exist; afterwards the variables are ignored. Deactivating or
+  demoting the last active admin is rejected (`LAST_ADMIN`). Deactivation revokes
+  all sessions; password change revokes all other sessions.
+- Step 0 Basic Auth removed entirely (middleware, settings, `.env.example`).

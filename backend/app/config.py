@@ -18,9 +18,9 @@ class Settings(BaseSettings):
     default_currency: str = Field(default="KZT", alias="DEFAULT_CURRENCY")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
-    # Step 0 temporary protection, removed in step 2.
-    basic_user: str = Field(alias="CRM_BASIC_USER")
-    basic_pass: str = Field(alias="CRM_BASIC_PASS")
+    # Step 2 bootstrap: used once to create the first admin, then ignored.
+    admin_email: str = Field(default="", alias="ADMIN_EMAIL")
+    admin_password: str = Field(default="", alias="ADMIN_PASSWORD")
 
     # Fallbacks used when DATABASE_URL is not set (local dev).
     pghost: str = Field(default="localhost", alias="PGHOST")

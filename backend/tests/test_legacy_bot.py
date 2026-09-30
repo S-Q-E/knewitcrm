@@ -3,13 +3,21 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import text
 
+from backend.tests.conftest import login_admin
+
 pytestmark = pytest.mark.usefixtures("db_available")
 
 LEAD_ID = "77010000001@c.us"
 
 
-async def test_stats_contract(client, auth_headers):
-    response = await client.get("/api/stats", headers=auth_headers)
+@pytest.fixture()
+async def authed(client, settings):
+    await login_admin(client, settings)
+    return client
+
+
+async def test_stats_contract(authed):
+    response = await authed.get("/api/stats")
     assert response.status_code == 200
     body = response.json()
     assert body["leads"]["total"] == 6
@@ -21,8 +29,8 @@ async def test_stats_contract(client, auth_headers):
     assert body["messages_24h"]["outgoing"] >= 1
 
 
-async def test_leads_list_shape_and_pagination(client, auth_headers):
-    response = await client.get("/api/leads?limit=2&offset=0", headers=auth_headers)
+async def test_leads_list_shape_and_pagination(authed):
+    response = await authed.get("/api/leads?limit=2&offset=0")
     assert response.status_code == 200
     body = response.json()
     assert len(body["items"]) == 2
@@ -32,52 +40,52 @@ async def test_leads_list_shape_and_pagination(client, auth_headers):
         assert key in first
 
 
-async def test_leads_search_and_filters(client, auth_headers):
-    by_name = await client.get("/api/leads?search=айгерим", headers=auth_headers)
+async def test_leads_search_and_filters(authed):
+    by_name = await authed.get("/api/leads?search=айгерим")
     assert by_name.json()["count"] == 1
 
-    by_status = await client.get("/api/leads?status=ЗАПИСАН", headers=auth_headers)
+    by_status = await authed.get("/api/leads?status=ЗАПИСАН")
     items = by_status.json()["items"]
     assert items and all(i["status"] == "ЗАПИСАН" for i in items)
 
-    by_stage = await client.get("/api/leads?stage=ПРОДАЖА", headers=auth_headers)
+    by_stage = await authed.get("/api/leads?stage=ПРОДАЖА")
     items = by_stage.json()["items"]
     assert items and all(i["current_stage"] == "ПРОДАЖА" for i in items)
 
 
-async def test_get_lead_and_404(client, auth_headers):
-    ok = await client.get(f"/api/leads/{LEAD_ID}", headers=auth_headers)
+async def test_get_lead_and_404(authed):
+    ok = await authed.get(f"/api/leads/{LEAD_ID}")
     assert ok.status_code == 200
     assert ok.json()["whatsapp_id"] == LEAD_ID
 
-    missing = await client.get("/api/leads/unknown@c.us", headers=auth_headers)
+    missing = await authed.get("/api/leads/unknown@c.us")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "NOT_FOUND"
 
 
-async def test_messages_and_events_contract(client, auth_headers):
-    messages = await client.get(f"/api/leads/{LEAD_ID}/messages", headers=auth_headers)
+async def test_messages_and_events_contract(authed):
+    messages = await authed.get(f"/api/leads/{LEAD_ID}/messages")
     assert messages.status_code == 200
     items = messages.json()["items"]
     assert len(items) >= 3
     assert items[0]["direction"] == "in"
     assert "content" in items[0]
 
-    events = await client.get(f"/api/leads/{LEAD_ID}/events", headers=auth_headers)
+    events = await authed.get(f"/api/leads/{LEAD_ID}/events")
     assert events.status_code == 200
     assert any(e["event_type"] == "stage_entered" for e in events.json()["items"])
 
 
-async def test_funnel_contract(client, auth_headers):
-    response = await client.get("/api/funnel", headers=auth_headers)
+async def test_funnel_contract(authed):
+    response = await authed.get("/api/funnel")
     assert response.status_code == 200
     body = response.json()
     assert any(s["stage"] == "ЗАПИСЬ" for s in body["from_events"])
     assert any(s["stage"] == "ПРОДАЖА" for s in body["from_leads"])
 
 
-async def test_legacy_frontend_still_served(client, auth_headers):
-    response = await client.get("/", headers=auth_headers)
+async def test_legacy_frontend_still_served(authed):
+    response = await authed.get("/")
     assert response.status_code == 200
     assert "KnewIT CRM" in response.text
 
@@ -113,7 +121,7 @@ async def test_migrate_creates_only_version_table(settings):
             )
             assert "crm_alembic_version" in tables
             crm_tables = [t for t in tables if t.startswith("crm_") and t != "crm_alembic_version"]
-            assert crm_tables == []
+            assert set(crm_tables) == {"crm_users", "crm_sessions"}
             # Bot data untouched.
             count = await conn.execute(text("SELECT COUNT(*) FROM knewit_leads"))
             assert count.scalar() == 6
