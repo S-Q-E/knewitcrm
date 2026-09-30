@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import CrmNotification
+from .event_bus import bus
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,10 @@ async def notify(
     Callers put ``dedupe_key`` into the payload for repeatable events
     (e.g. daily overdue reminders); without it every call notifies.
     Returns the number of created rows.
+
+    Each created row is also fanned out on the realtime bus so the bell
+    updates live. The bus event may arrive just before the caller's commit;
+    subscribers refetch on receipt, which converges on the next event.
     """
     payload = dict(payload or {})
     dedupe_key = payload.get("dedupe_key")
@@ -33,6 +38,7 @@ async def notify(
         ):
             continue
         session.add(CrmNotification(user_id=user_id, type=type, payload=payload))
+        bus.publish("notification", {"user_id": str(user_id), "type": type, "payload": payload})
         created += 1
     if created:
         await session.flush()

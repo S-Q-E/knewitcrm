@@ -82,7 +82,15 @@
 - [x] Fix (found while setting up): migration `0009_sync_snapshot` backfill used `JOIN ... ON c.id = d.contact_id` referencing the UPDATE target alias — invalid Postgres; rewrote with comma-FROM + WHERE
 
 ## Step 10 — Saved views + search filters [todo]
-## Step 11 — Settings (locale, timezone Asia/Almaty, currency KZT) [todo]
+## Step 10 — Realtime via SSE + event bus (D4) [done]
+- [x] Brief for this step arrives out of PROGRESS order (same as Step 9 before it); the saved-views/filter step keeps its number above and stays [todo]
+- [x] `services/event_bus.py`: process-local fan-out hub (bounded queues, drop-oldest, publishers never block, subscriber stats, test reset)
+- [x] `workers/realtime_poller.py`: 2s poll of `knewit_messages`/`knewit_events` by id (in-memory cursors from current maxima at startup), emits `new_message` + `bot_event`; `realtime_loop` wired in lifespan
+- [x] `GET /api/stream` (SSE, cookie auth, per-user visibility filter, 15s heartbeat comments, disconnect cleanup)
+- [x] Publishers: `notify()` → `notification`; sync bot moves → `deal_moved` (flushed post-commit per batch); deals create/update/move/bulk → `deal_updated`/`deal_moved`; tasks create → `task_created`; chats queue/retry/pause/resume → `outbox_status`/`bot_paused`; outbox worker sent/failed → `outbox_status`
+- [x] 11 backend tests in `test_realtime.py` (bus fanout/backpressure/churn, poller once-only, auth, 2-subscriber broadcast, notification owner-only, heartbeat, sync/manager/task publish, visibility matrix); streaming tests boot real uvicorn (httpx ASGI transport cannot stream, see D16)
+- [x] Frontend `useEventStream` (layout-mounted): backoff reconnect, 15s polling fallback, per-event invalidations, ping+toast for own incoming, unread tab title; 5 vitest cases; tsc/eslint/prettier/build green
+- [x] `scripts/stream_load_test.py`: 50 concurrent streams, all receive the event, server responsive after close — PASSED## Step 11 — Settings (locale, timezone Asia/Almaty, currency KZT) [todo]
 ## Step 12 — Roles hardening + admin panel [todo]
 ## Step 13 — Production deploy (Railway, Dockerfile, migrations) [todo]
 ## Step 14 — Load test + polling/SSE tuning [todo]

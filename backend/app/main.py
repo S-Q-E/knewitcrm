@@ -31,15 +31,18 @@ from .routers import (
     notes,
     notifications,
     pipelines,
+    stream,
     tags,
     tasks,
     users,
     views,
 )
 from .services.bootstrap import try_bootstrap
+from .services.event_bus import bus
 from .session_middleware import SessionAuthMiddleware
 from .workers.notify_worker import NOTIFY_INTERVAL_SECONDS, notify_loop
 from .workers.outbox_worker import outbox_loop
+from .workers.realtime_poller import POLL_INTERVAL_SECONDS, realtime_loop
 from .workers.sync_worker import sync_loop
 
 logger = logging.getLogger(__name__)
@@ -102,10 +105,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             outbox_loop(app.state.session_factory, settings, settings.outbox_interval_seconds)
         )
         app.state.outbox_task = outbox_task
+    realtime_task = None
+    if settings.sync_enabled:
+        realtime_task = asyncio.create_task(
+            realtime_loop(app.state.session_factory, bus, POLL_INTERVAL_SECONDS)
+        )
+        app.state.realtime_task = realtime_task
     try:
         yield
     finally:
-        for task in (sync_task, notify_task, outbox_task):
+        for task in (sync_task, notify_task, outbox_task, realtime_task):
             if task is not None:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
@@ -143,6 +152,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(tasks.router)
     app.include_router(dialogs.router)
     app.include_router(chats.router)
+    app.include_router(stream.router)
     app.include_router(notifications.router)
     app.include_router(legacy_bot.router)
 

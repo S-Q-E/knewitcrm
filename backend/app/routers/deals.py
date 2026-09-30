@@ -46,6 +46,7 @@ from ..services.activity import diff_payload, log_activity, slim
 from ..services.assignment import pick_assignee
 from ..services.custom_fields import load_definitions, validate_custom_values
 from ..services.deal_flow import apply_deal_stage
+from ..services.event_bus import bus
 from ..services.notifications import notify
 from ..services.tags import detach_entity_tags, entity_tags_map, replace_entity_tags
 from ..services.timeline import get_deal_timeline, parse_cursor, parse_types
@@ -370,6 +371,14 @@ async def create_deal(
     )
     await session.commit()
     await session.refresh(deal)
+    bus.publish(
+        "deal_updated",
+        {
+            "deal_id": str(deal.id),
+            "owner_id": str(deal.owner_id) if deal.owner_id else None,
+            "created": True,
+        },
+    )
     return await _deal_out(session, deal, [])
 
 
@@ -449,6 +458,13 @@ async def update_deal(
         ),
     )
     await session.commit()
+    bus.publish(
+        "deal_updated",
+        {
+            "deal_id": str(deal.id),
+            "owner_id": str(deal.owner_id) if deal.owner_id else None,
+        },
+    )
     return await _deal_out(session, deal)
 
 
@@ -539,6 +555,15 @@ async def move_deal(
     )
     await session.commit()
     await session.refresh(deal)
+    bus.publish(
+        "deal_moved",
+        {
+            "deal_id": str(deal.id),
+            "to_stage_id": str(target.id),
+            "source": "manager",
+            "owner_id": str(deal.owner_id) if deal.owner_id else None,
+        },
+    )
     return await _deal_out(session, deal)
 
 
@@ -669,6 +694,16 @@ async def bulk_update_deals(
     for deal in by_id.values():
         await log_activity(session, user.id, "deal", deal.id, "deal_bulk_updated", {})
     await session.commit()
+    for deal in by_id.values():
+        bus.publish(
+            "deal_moved" if target_stage is not None else "deal_updated",
+            {
+                "deal_id": str(deal.id),
+                "to_stage_id": str(target_stage.id) if target_stage is not None else None,
+                "source": "manager",
+                "owner_id": str(deal.owner_id) if deal.owner_id else None,
+            },
+        )
     return BulkDealsOut(updated=len(by_id))
 
 

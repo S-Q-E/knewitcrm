@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from typing import Any
+
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..auth_deps import CurrentUser, require_user
+from ..deps import get_session
+from ..services.event_bus import bus
+from ..services.visibility import restrict_managers_to_own
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/stream", tags=["stream"])
+
+# SSE comment heartbeat; keeps proxies from closing idle connections.
+HEARTBEAT_SECONDS = 15
+
+
+def event_visible(event: dict[str, Any], user: CurrentUser, restricted: bool) -> bool:
+    """Per-user filter mirror of the REST visibility rules."""
+    kind = event.get("type")
+    data = event.get("data") or {}
+    if kind == "notification":
+        return str(data.get("user_id")) == str(user.id)
+    if kind in ("deal_moved", "deal_updated"):
+        if user.is_admin or not restricted:
+            return True
+        owner_id = data.get("owner_id")
+        return owner_id is None or str(owner_id) == str(user.id)
+    return True
+
+
+def format_sse(type: str, data: dict[str, Any]) -> str:
+    return f"event: {type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@router.get("")
+async def stream(
+    request: Request,
+    user: CurrentUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    # Visibility snapshot per connection; a role/scope change applies on reconnect.
+    restricted = await restrict_managers_to_own(session)
+
+    async def generate():
+        queue = bus.subscribe()
+        try:
+            yield ": connected\n\n"
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_SECONDS)
+                except TimeoutError:
+                    yield ": heartbeat\n\n"
+                    continue
+                if await request.is_disconnected():
+                    break
+                if event_visible(event, user, restricted):
+                    yield format_sse(event["type"], event["data"])
+        except asyncio.CancelledError:
+            raise
+        finally:
+            bus.unsubscribe(queue)
+            logger.debug("stream closed user=%s", user.email)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )

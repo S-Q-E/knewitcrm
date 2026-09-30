@@ -187,3 +187,31 @@ Why: protects against accidental data loss, keeps audit trail.
   `pipeline_id` scope), actions create_task/assign_owner/add_tag/notify; fire-once
   per (automation, deal) via `automation_fired` activity rows. Mutations are
   admin-only; automations UI itself lands in Settings (Step 11).
+
+## D16. Step 10 realtime notes
+- `services/event_bus.py` is a process-local fan-out hub (bounded per-subscriber
+  queues, slow consumers drop oldest, publishers never block). Single-container
+  deploy, so one event loop is enough; every worker and router shares it.
+- `workers/realtime_poller.py` polls `knewit_messages` / `knewit_events` by id
+  every 2s (cursors in memory, seeded from current maxima at startup so restarts
+  never replay history). It emits `new_message` and `bot_event`; CRM-side changes
+  publish directly at their call sites instead: sync bot moves buffer `deal_moved`
+  per batch and flush after the batch commit; deals/tasks/chats/outbox publish
+  after their own commits. `notify()` publishes `notification` for every created
+  row (pre-commit by design, covering workers and API uniformly; subscribers
+  refetch, which converges on the next event).
+- `GET /api/stream` (SSE, session cookie, no CSRF on GET): `: connected` prologue,
+  `event: <type>` + JSON data frames, `: heartbeat` comments every 15s, disconnect
+  detection with guaranteed unsubscribe. Per-user filter mirrors REST visibility:
+  notifications go only to their owner; deal events respect
+  `restrict_managers_to_own` via the published `owner_id`; everything else is
+  visible to any authenticated user (dialogs/tasks lists are global).
+- Frontend `useEventStream` (mounted once in the layout): one EventSource,
+  per-type listeners, TanStack invalidations per event, ping + toast for incoming
+  messages in dialogs assigned to the current user, unread count in the tab title.
+  Reconnect uses capped exponential backoff (1s→30s); after 6 failures (or no
+  EventSource at all) it falls back to 15s polling of the core query keys.
+- Tests hit a real limit: httpx's ASGI transport buffers the entire response
+  body, so infinite SSE streams hang forever under it. Streaming tests therefore
+  boot uvicorn on 127.0.0.1:0 (`live_server` fixture); the 50-connection load
+  test (`scripts/stream_load_test.py`) does the same against a dev server.

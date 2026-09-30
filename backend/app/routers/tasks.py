@@ -13,6 +13,7 @@ from ..errors import ApiError
 from ..models import CrmContact, CrmDeal, CrmTask, CrmUser
 from ..schemas.tasks import TaskBulkIn, TaskBulkOut, TaskCreate, TaskListOut, TaskOut, TaskUpdate
 from ..services.activity import diff_payload, log_activity, slim
+from ..services.event_bus import bus
 from ..services.visibility import (
     ensure_visible,
     is_visible,
@@ -134,6 +135,15 @@ async def create_task(
         diff_payload(None, slim({"title": task.title})),
     )
     await session.commit()
+    bus.publish(
+        "task_created",
+        {
+            "task_id": str(task.id),
+            "deal_id": str(task.deal_id) if task.deal_id else None,
+            "contact_id": str(task.contact_id) if task.contact_id else None,
+            "assignee_id": str(task.assignee_id) if task.assignee_id else None,
+        },
+    )
     return TaskOut.model_validate(task)
 
 

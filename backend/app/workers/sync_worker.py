@@ -30,6 +30,7 @@ from ..models import (
     CrmStage,
     CrmTask,
 )
+from ..services.event_bus import bus
 from ..services.notifications import active_managers, notify
 
 logger = logging.getLogger(__name__)
@@ -155,6 +156,8 @@ class SyncStats:
     won: int = 0
     lost: int = 0
     states_created: int = 0
+    # Realtime events buffered during a batch, published after its commit.
+    events: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -231,6 +234,9 @@ async def sync_all(session: AsyncSession, *, force_full: bool = False) -> SyncSt
             session, funnel, [dict(row) for row in rows], stats, manager_ids, auto_pause
         )
         await session.commit()
+        for pending in stats.events:
+            bus.publish(pending["type"], pending["data"])
+        stats.events.clear()
         last_id = rows[-1]["whatsapp_id"]
     finished = datetime.now(UTC)
     await _store_marker(session, SETTINGS_KEY_LAST_SYNCED, finished)
@@ -659,6 +665,17 @@ async def _sync_existing_deal(
         )
     )
     stats.moved += 1
+    stats.events.append(
+        {
+            "type": "deal_moved",
+            "data": {
+                "deal_id": str(deal.id),
+                "to_stage_id": str(target_stage.id),
+                "source": "bot",
+                "owner_id": str(deal.owner_id) if deal.owner_id else None,
+            },
+        }
+    )
     _count_terminal(stats, target_status)
     await _maybe_handover(session, lead, deal, state, manager_ids, auto_pause, open_tasks)
 

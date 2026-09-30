@@ -15,6 +15,7 @@ import type { FormEvent } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { useLogout, useMe } from "@/api/auth";
+import { useEventStream } from "@/api/stream";
 import { BellBadge, BellDropdown } from "@/components/bell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ const NAV = [
 
 export function Layout() {
   const { data: me } = useMe();
+  useEventStream();
   const logout = useLogout();
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ..config import Settings
 from ..models import CrmOutbox
 from ..services.bot_bridge import BotLeadNotFoundError, insert_outgoing_message
+from ..services.event_bus import bus
 from ..services.notifications import notify
 
 logger = logging.getLogger(__name__)
@@ -174,6 +175,10 @@ async def _apply_success(
                     {"mid": message_id, "id": outbox_id},
                 )
             stats["sent"] += 1
+    bus.publish(
+        "outbox_status",
+        {"outbox_id": str(outbox_id), "whatsapp_id": whatsapp_id, "status": "sent"},
+    )
     logger.info("outbox sent id=%s whatsapp_id=%s", outbox_id, whatsapp_id)
 
 
@@ -197,10 +202,12 @@ async def _apply_failure(
                 return
             row.attempts += 1
             row.error = str(exc)[:2000]
+            failed_now = False
             if row.attempts >= OUTBOX_MAX_ATTEMPTS:
                 row.status = "failed"
                 row.next_attempt_at = None
                 stats["failed"] += 1
+                failed_now = True
                 if sent_by is not None:
                     await notify(
                         session,
@@ -215,6 +222,11 @@ async def _apply_failure(
             else:
                 row.next_attempt_at = datetime.now(UTC) + _retry_delay(row.attempts)
                 stats["pending_retry"] += 1
+    if failed_now:
+        bus.publish(
+            "outbox_status",
+            {"outbox_id": str(outbox_id), "whatsapp_id": whatsapp_id, "status": "failed"},
+        )
     logger.warning("outbox %s attempt failed: %s", outbox_id, exc)
 
 

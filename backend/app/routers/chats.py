@@ -14,6 +14,7 @@ from ..errors import ApiError
 from ..models import CrmContact, CrmConversationState, CrmOutbox, CrmQuickReply
 from ..schemas.chats import ChatMessageIn, OutboxOut, QuickReplyOut
 from ..services.activity import log_activity
+from ..services.event_bus import bus
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
 
@@ -116,6 +117,10 @@ async def retry_outbox(
     row.next_attempt_at = None
     await session.commit()
     await session.refresh(row)
+    bus.publish(
+        "outbox_status",
+        {"outbox_id": str(row.id), "whatsapp_id": row.whatsapp_id, "status": "queued"},
+    )
     return row
 
 
@@ -141,10 +146,17 @@ async def queue_message(
     row = CrmOutbox(whatsapp_id=whatsapp_id, body=body, sent_by=user.id, status="queued")
     session.add(row)
     state = await _ensure_state(session, whatsapp_id)
-    if await _autopause_enabled(session) and _pause(state, user):
+    paused_now = await _autopause_enabled(session) and _pause(state, user)
+    if paused_now:
         await _log_pause_event(session, user, whatsapp_id, "bot_paused", True)
     await session.commit()
     await session.refresh(row)
+    bus.publish(
+        "outbox_status",
+        {"outbox_id": str(row.id), "whatsapp_id": whatsapp_id, "status": "queued"},
+    )
+    if paused_now:
+        bus.publish("bot_paused", {"whatsapp_id": whatsapp_id, "paused": True})
     return row
 
 
@@ -187,6 +199,7 @@ async def pause_bot(
         await _log_pause_event(session, user, whatsapp_id, "bot_paused", True)
     await session.commit()
     await session.refresh(state)
+    bus.publish("bot_paused", {"whatsapp_id": whatsapp_id, "paused": True})
     return _pause_payload(state)
 
 
@@ -204,4 +217,5 @@ async def resume_bot(
         await _log_pause_event(session, user, whatsapp_id, "bot_resumed", False)
     await session.commit()
     await session.refresh(state)
+    bus.publish("bot_paused", {"whatsapp_id": whatsapp_id, "paused": False})
     return _pause_payload(state)

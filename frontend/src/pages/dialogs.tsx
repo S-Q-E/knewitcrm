@@ -51,6 +51,14 @@ export function DialogsPage() {
   const outbox = useOutbox(selected);
   const quickReplies = useQuickReplies();
 
+  const totalUnread = dialogs.data?.items.reduce((sum, item) => sum + item.unread_count, 0) ?? 0;
+  useEffect(() => {
+    document.title = totalUnread > 0 ? `(${totalUnread}) KnewIT CRM` : "KnewIT CRM";
+    return () => {
+      document.title = "KnewIT CRM";
+    };
+  }, [totalUnread]);
+
   useEffect(() => {
     if (selected) {
       markRead.mutate(selected);
