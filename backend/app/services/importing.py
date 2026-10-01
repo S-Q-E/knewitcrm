@@ -65,9 +65,7 @@ def validate_record(record: dict, row_no: int) -> dict | None:
     return None
 
 
-def preview_from_text(
-    text: str, mapping: dict[str, str], limit: int = 20
-) -> dict:
+def preview_from_text(text: str, mapping: dict[str, str], limit: int = 20) -> dict:
     header, data = parse_csv_text(text)
     records, errors = apply_mapping(header, data, mapping)
     return {

@@ -101,14 +101,18 @@ async def test_duplicates_and_merge(client, settings):
 
         async with factory() as session:
             row = (
-                await session.execute(
-                    text(
-                        "SELECT diff FROM crm_activity_log WHERE entity='contact'"
-                        " AND entity_id=:id AND action='contact_merged'"
-                    ),
-                    {"id": first["id"]},
+                (
+                    await session.execute(
+                        text(
+                            "SELECT diff FROM crm_activity_log WHERE entity='contact'"
+                            " AND entity_id=:id AND action='contact_merged'"
+                        ),
+                        {"id": first["id"]},
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
         assert row is not None
         await purge_rows(factory, "crm_notes", [note["id"]])
         await purge_rows(factory, "crm_tasks", [task["id"]])

@@ -176,9 +176,7 @@ async def run_sync_cycle(
     """Run one sync pass. Returns None when another instance holds the lock."""
     async with session_factory() as session:
         got_lock = (
-            await session.execute(
-                text("SELECT pg_try_advisory_lock(:key)"), {"key": SYNC_LOCK_KEY}
-            )
+            await session.execute(text("SELECT pg_try_advisory_lock(:key)"), {"key": SYNC_LOCK_KEY})
         ).scalar()
         if not got_lock:
             logger.debug("sync skipped: lock held by another instance")
@@ -260,18 +258,13 @@ async def _fetch_lead_batch(
     """One keyset page of leads; incremental when ``cutoff`` is set."""
     if cutoff is None:
         result = await session.execute(
-            text(
-                _LEAD_SELECT
-                + " WHERE whatsapp_id > :last"
-                " ORDER BY whatsapp_id LIMIT :limit"
-            ),
+            text(_LEAD_SELECT + " WHERE whatsapp_id > :last" " ORDER BY whatsapp_id LIMIT :limit"),
             {"last": last_id, "limit": BATCH_SIZE},
         )
     else:
         result = await session.execute(
             text(
-                _LEAD_SELECT
-                + " WHERE whatsapp_id > :last"
+                _LEAD_SELECT + " WHERE whatsapp_id > :last"
                 " AND GREATEST(updated_at, COALESCE(last_message_at, updated_at)) > :cutoff"
                 " ORDER BY whatsapp_id LIMIT :limit"
             ),
@@ -367,9 +360,7 @@ async def _sync_batch(
     contacts = {
         contact.whatsapp_id: contact
         for contact in (
-            await session.execute(
-                select(CrmContact).where(CrmContact.whatsapp_id.in_(wa_ids))
-            )
+            await session.execute(select(CrmContact).where(CrmContact.whatsapp_id.in_(wa_ids)))
         )
         .scalars()
         .all()
@@ -427,9 +418,7 @@ async def _sync_batch(
         pending.append((lead, contact, target_stage, target_status))
     tops: dict[uuid.UUID, Any] = {}
     if pending:
-        tops = await _stage_tops(
-            session, list({target.id for _, _, target, _ in pending})
-        )
+        tops = await _stage_tops(session, list({target.id for _, _, target, _ in pending}))
     open_tasks = (
         await _open_handover_tasks(session, [deal.id for deal in managed.values()])
         if managed
@@ -489,8 +478,13 @@ async def _sync_batch(
             stats.deals_created += 1
             _count_terminal(stats, target_status)
             await _maybe_handover(
-                session, lead, deal, states[lead["whatsapp_id"]],
-                manager_ids, auto_pause, open_tasks,
+                session,
+                lead,
+                deal,
+                states[lead["whatsapp_id"]],
+                manager_ids,
+                auto_pause,
+                open_tasks,
             )
 
     for lead in leads:
@@ -501,8 +495,15 @@ async def _sync_batch(
         if deal is None:
             continue
         await _sync_existing_deal(
-            session, funnel, lead, deal, states[lead["whatsapp_id"]],
-            stats, manager_ids, auto_pause, open_tasks,
+            session,
+            funnel,
+            lead,
+            deal,
+            states[lead["whatsapp_id"]],
+            stats,
+            manager_ids,
+            auto_pause,
+            open_tasks,
         )
 
 
@@ -521,9 +522,7 @@ async def _load_states(
     for whatsapp_id in wa_ids:
         state = states.get(whatsapp_id)
         if state is None:
-            state = CrmConversationState(
-                whatsapp_id=whatsapp_id, unread_count=0, last_read_at=now
-            )
+            state = CrmConversationState(whatsapp_id=whatsapp_id, unread_count=0, last_read_at=now)
             session.add(state)
             states[whatsapp_id] = state
             fresh.add(whatsapp_id)
@@ -555,9 +554,7 @@ async def _unread_counts(session: AsyncSession, wa_ids: list[str]) -> dict[str, 
     return {row["wa"]: row["cnt"] for row in rows}
 
 
-async def _stage_tops(
-    session: AsyncSession, stage_ids: list[uuid.UUID]
-) -> dict[uuid.UUID, Any]:
+async def _stage_tops(session: AsyncSession, stage_ids: list[uuid.UUID]) -> dict[uuid.UUID, Any]:
     if not stage_ids:
         return {}
     rows = (
@@ -570,9 +567,7 @@ async def _stage_tops(
     return {stage_id: top for top, stage_id in rows}
 
 
-async def _open_handover_tasks(
-    session: AsyncSession, deal_ids: list[uuid.UUID]
-) -> set[uuid.UUID]:
+async def _open_handover_tasks(session: AsyncSession, deal_ids: list[uuid.UUID]) -> set[uuid.UUID]:
     if not deal_ids:
         return set()
     return set(

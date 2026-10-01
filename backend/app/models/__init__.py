@@ -36,6 +36,7 @@ from .notify import CrmAutomation, CrmNotification
 from .outbox import (
     OUTBOX_STATUS_FAILED,
     OUTBOX_STATUS_QUEUED,
+    OUTBOX_STATUS_SENDING,
     OUTBOX_STATUS_SENT,
     VALID_OUTBOX_STATUSES,
     CrmOutbox,
@@ -98,6 +99,7 @@ __all__ = [
     "HISTORY_SOURCE_SYSTEM",
     "OUTBOX_STATUS_FAILED",
     "OUTBOX_STATUS_QUEUED",
+    "OUTBOX_STATUS_SENDING",
     "OUTBOX_STATUS_SENT",
     "ROLE_ADMIN",
     "ROLE_MANAGER",

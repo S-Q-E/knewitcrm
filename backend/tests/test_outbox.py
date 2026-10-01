@@ -5,6 +5,7 @@ import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+import httpx
 import pytest
 from sqlalchemy import text
 
@@ -110,12 +111,13 @@ def _ok_sender(provider_id: str = "pv-1"):
 
 
 def _flaky_sender(fail_times: int):
+    """Fails with a connect-level error (safe to retry), then succeeds."""
     calls: list[dict] = []
 
     async def sender(**kwargs):
         calls.append(kwargs)
         if len(calls) <= fail_times:
-            raise RuntimeError("n8n exploded")
+            raise httpx.ConnectError("n8n exploded")
         return {"ok": True, "provider_message_id": "pv-9"}
 
     sender.calls = calls
@@ -297,7 +299,7 @@ async def test_worker_fails_after_five_attempts_and_notifies(client, settings):
         assert queued.status_code == 202
 
         async def always_fail(**kwargs):
-            raise RuntimeError("n8n is down")
+            raise httpx.ConnectError("n8n is down")
 
         for _ in range(OUTBOX_MAX_ATTEMPTS):
             stats = await run_outbox_cycle(factory, settings, sender=always_fail)
@@ -638,3 +640,314 @@ async def test_manager_send_flow_end_to_end(client, app, settings):
     finally:
         await _purge(factory, wa, [])
         await engine.dispose()
+
+
+async def test_mirror_failure_keeps_sent_status(client, settings, monkeypatch):
+    """A broken mirror must not roll back the send: exactly one delivery,
+    status sent, error recorded for the missing timeline row."""
+    import backend.app.workers.outbox_worker as worker_mod
+
+    engine, factory = engine_factory(settings)
+    wa = _wa()
+    try:
+        token = await admin_csrf(client, settings)
+        await _insert_lead(factory, wa)
+        queued = await client.post(
+            f"/api/chats/{wa}/messages",
+            json={"body": "Дойдёт, но не отразится"},
+            headers=csrf_headers(token),
+        )
+        assert queued.status_code == 202
+
+        async def broken_mirror(session, whatsapp_id, body):
+            raise RuntimeError("knewit_messages is wedged")
+
+        monkeypatch.setattr(worker_mod, "insert_outgoing_message", broken_mirror)
+        sender = _ok_sender()
+        stats = await run_outbox_cycle(factory, settings, sender=sender)
+        assert stats is not None and stats["sent"] == 1
+        assert len(sender.calls) == 1
+
+        row = await _outbox_row(factory, wa)
+        assert row is not None
+        assert row["status"] == "sent"
+        assert row["sent_at"] is not None
+        assert row["knewit_message_id"] is None
+        assert row["error"] and row["error"].startswith("mirror_failed")
+    finally:
+        await _purge(factory, wa, [])
+        await engine.dispose()
+
+
+async def test_parallel_cycles_send_only_once(client, settings):
+    """Two overlapping cycles must produce a single n8n delivery."""
+    import asyncio
+
+    engine, factory = engine_factory(settings)
+    wa = _wa()
+    try:
+        token = await admin_csrf(client, settings)
+        await _insert_lead(factory, wa)
+        queued = await client.post(
+            f"/api/chats/{wa}/messages",
+            json={"body": "Только раз"},
+            headers=csrf_headers(token),
+        )
+        assert queued.status_code == 202
+
+        sender = _ok_sender()
+
+        async def slow_sender(**kwargs):
+            await asyncio.sleep(0.5)
+            return await sender(**kwargs)
+
+        first, second = await asyncio.gather(
+            run_outbox_cycle(factory, settings, sender=slow_sender),
+            run_outbox_cycle(factory, settings, sender=slow_sender),
+        )
+        assert len(sender.calls) == 1
+        sent_total = (first or {}).get("sent", 0) + (second or {}).get("sent", 0)
+        assert sent_total == 1
+
+        row = await _outbox_row(factory, wa)
+        assert row is not None and row["status"] == "sent"
+        async with factory() as session:
+            count = (
+                await session.execute(
+                    text(
+                        "SELECT COUNT(*) FROM knewit_messages"
+                        " WHERE whatsapp_id = :wa AND message_type = 'manager'"
+                    ),
+                    {"wa": wa},
+                )
+            ).scalar()
+            assert count == 1
+    finally:
+        await _purge(factory, wa, [])
+        await engine.dispose()
+
+
+async def test_read_timeout_fails_without_retry(client, settings):
+    """Ambiguous failures (read timeout) fail at once: no auto-retry."""
+    engine, factory = engine_factory(settings)
+    wa = _wa()
+    try:
+        token = await admin_csrf(client, settings)
+        await _insert_lead(factory, wa)
+        queued = await client.post(
+            f"/api/chats/{wa}/messages",
+            json={"body": "Неоднозначно"},
+            headers=csrf_headers(token),
+        )
+        assert queued.status_code == 202
+
+        calls: list[dict] = []
+
+        async def timeout_sender(**kwargs):
+            calls.append(kwargs)
+            raise httpx.ReadTimeout("read timed out")
+
+        stats = await run_outbox_cycle(factory, settings, sender=timeout_sender)
+        assert stats is not None and stats["failed"] == 1
+        assert stats["pending_retry"] == 0
+        row = await _outbox_row(factory, wa)
+        assert row is not None
+        assert row["status"] == "failed"
+        assert row["attempts"] == 1
+        assert row["error"]
+
+        again = await run_outbox_cycle(factory, settings, sender=timeout_sender)
+        assert again is not None and again["failed"] == 0
+        assert len(calls) == 1
+    finally:
+        await _purge(factory, wa, [])
+        await engine.dispose()
+
+
+async def test_stale_sending_reaped_without_redelivery(client, settings):
+    """Rows stuck in 'sending' become failed with an unknown-state error."""
+    from backend.app.workers.outbox_worker import STALE_SENDING_ERROR
+
+    engine, factory = engine_factory(settings)
+    wa_stale = _wa()
+    wa_fresh = _wa()
+    try:
+        token = await admin_csrf(client, settings)
+        for wa in (wa_stale, wa_fresh):
+            await _insert_lead(factory, wa)
+            queued = await client.post(
+                f"/api/chats/{wa}/messages",
+                json={"body": "Перехват"},
+                headers=csrf_headers(token),
+            )
+            assert queued.status_code == 202
+        async with factory() as session:
+            await session.execute(
+                text(
+                    "UPDATE crm_outbox SET status = 'sending',"
+                    " claimed_at = now() - interval '10 minutes'"
+                    " WHERE whatsapp_id = :wa"
+                ),
+                {"wa": wa_stale},
+            )
+            await session.execute(
+                text(
+                    "UPDATE crm_outbox SET status = 'sending', claimed_at = now()"
+                    " WHERE whatsapp_id = :wa"
+                ),
+                {"wa": wa_fresh},
+            )
+            await session.commit()
+
+        sender = _ok_sender()
+        stats = await run_outbox_cycle(factory, settings, sender=sender)
+        assert stats is not None and stats["reaped"] == 1
+        assert len(sender.calls) == 0
+
+        stale = await _outbox_row(factory, wa_stale)
+        assert stale is not None
+        assert stale["status"] == "failed"
+        assert stale["error"] == STALE_SENDING_ERROR
+
+        fresh = await _outbox_row(factory, wa_fresh)
+        assert fresh is not None and fresh["status"] == "sending"
+    finally:
+        await _purge(factory, wa_stale, [])
+        await _purge(factory, wa_fresh, [])
+        await engine.dispose()
+
+
+async def test_pause_resume_unknown_lead_404(client, settings):
+    engine, factory = engine_factory(settings)
+    try:
+        token = await admin_csrf(client, settings)
+        assert (
+            await client.post("/api/chats/nonexistent@c.us/bot/pause", headers=csrf_headers(token))
+        ).status_code == 404
+        assert (
+            await client.post("/api/chats/nonexistent@c.us/bot/resume", headers=csrf_headers(token))
+        ).status_code == 404
+        async with factory() as session:
+            exists = (
+                await session.execute(
+                    text("SELECT 1 FROM crm_conversation_state WHERE whatsapp_id = :wa"),
+                    {"wa": "nonexistent@c.us"},
+                )
+            ).scalar_one_or_none()
+            assert exists is None
+    finally:
+        await engine.dispose()
+
+
+async def test_chats_respect_manager_scope(client, settings, app):
+    from backend.tests.crm_helpers import ManagerSession, create_contact
+
+    engine, factory = engine_factory(settings)
+    wa = _wa()
+    try:
+        token = await admin_csrf(client, settings)
+        owner = await make_manager(client, token)
+        stranger = await make_manager(client, token)
+        await _insert_lead(factory, wa)
+        await create_contact(
+            client, token, whatsapp_id=wa, owner_id=owner["user"]["id"], name="Scoped Lead"
+        )
+        async with factory() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO crm_settings (key, value) VALUES"
+                    " ('restrict_managers_to_own', 'true')"
+                    " ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value"
+                )
+            )
+            await session.commit()
+        try:
+            async with ManagerSession(app, stranger["email"], stranger["password"]) as mgr:
+                assert mgr.client is not None
+                assert (await mgr.client.get(f"/api/chats/{wa}/outbox")).status_code == 404
+                assert (
+                    await mgr.client.post(
+                        f"/api/chats/{wa}/messages",
+                        json={"body": "чужой лид"},
+                        headers=mgr.headers(),
+                    )
+                ).status_code == 404
+                assert (
+                    await mgr.client.post(f"/api/chats/{wa}/bot/pause", headers=mgr.headers())
+                ).status_code == 404
+                assert (
+                    await mgr.client.post(f"/api/chats/{wa}/bot/resume", headers=mgr.headers())
+                ).status_code == 404
+            async with ManagerSession(app, owner["email"], owner["password"]) as mgr2:
+                assert mgr2.client is not None
+                assert (await mgr2.client.get(f"/api/chats/{wa}/outbox")).status_code == 200
+                assert (
+                    await mgr2.client.post(
+                        f"/api/chats/{wa}/messages",
+                        json={"body": "свой лид"},
+                        headers=mgr2.headers(),
+                    )
+                ).status_code == 202
+        finally:
+            async with factory() as session:
+                await session.execute(
+                    text("DELETE FROM crm_settings WHERE key = 'restrict_managers_to_own'")
+                )
+                await session.commit()
+    finally:
+        await _purge(factory, wa, [])
+        await engine.dispose()
+
+
+async def test_retry_only_author_or_admin(client, settings, app):
+    from backend.tests.crm_helpers import ManagerSession
+
+    engine, factory = engine_factory(settings)
+    wa = _wa()
+    try:
+        token = await admin_csrf(client, settings)
+        author = await make_manager(client, token)
+        other = await make_manager(client, token)
+        await _insert_lead(factory, wa)
+        async with ManagerSession(app, author["email"], author["password"]) as mgr:
+            assert mgr.client is not None
+            queued = await mgr.client.post(
+                f"/api/chats/{wa}/messages",
+                json={"body": "Авторское"},
+                headers=mgr.headers(),
+            )
+            assert queued.status_code == 202
+            outbox_id = queued.json()["id"]
+        await _fail_outbox(factory, outbox_id)
+
+        async with ManagerSession(app, other["email"], other["password"]) as mgr2:
+            assert mgr2.client is not None
+            denied = await mgr2.client.post(
+                f"/api/chats/outbox/{outbox_id}/retry", headers=mgr2.headers()
+            )
+            assert denied.status_code == 403
+
+        async with ManagerSession(app, author["email"], author["password"]) as mgr3:
+            assert mgr3.client is not None
+            allowed = await mgr3.client.post(
+                f"/api/chats/outbox/{outbox_id}/retry", headers=mgr3.headers()
+            )
+            assert allowed.status_code == 200
+
+        await _fail_outbox(factory, outbox_id)
+        admin_retry = await client.post(
+            f"/api/chats/outbox/{outbox_id}/retry", headers=csrf_headers(token)
+        )
+        assert admin_retry.status_code == 200
+    finally:
+        await _purge(factory, wa, [])
+        await engine.dispose()
+
+
+async def _fail_outbox(factory, outbox_id: str) -> None:
+    async with factory() as session:
+        await session.execute(
+            text("UPDATE crm_outbox SET status = 'failed', attempts = 5 WHERE id = :id"),
+            {"id": outbox_id},
+        )
+        await session.commit()

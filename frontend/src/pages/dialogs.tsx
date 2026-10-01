@@ -274,9 +274,10 @@ export function DialogsPage() {
                           type="button"
                           onClick={() => retry(item)}
                           disabled={retryOutbox.isPending}
+                          title="Сообщение уже могло дойти до клиента — возможна дубль-доставка"
                           className="font-medium underline underline-offset-2"
                         >
-                          Повторить
+                          Повторить (возможна дубль-доставка)
                         </button>
                       )}
                     </p>

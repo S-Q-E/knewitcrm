@@ -81,6 +81,13 @@
 - [x] 118 backend tests green; manual local run verified (queue 202, worker attempt recorded, autopause, pause/resume, seeded templates)
 - [x] Fix (found while setting up): migration `0009_sync_snapshot` backfill used `JOIN ... ON c.id = d.contact_id` referencing the UPDATE target alias — invalid Postgres; rewrote with comma-FROM + WHERE
 
+## Step 9B — Outbox and chats hotfix [done]
+- [x] Worker: mirror in SAVEPOINT (`sent` kept, `error='mirror_failed: ...'` + ERROR log), per-row try/except, `queued -> sending -> sent|failed` with `claimed_at` (migration `0012_outbox_sending`), stale `sending` > 2 min reaped to `failed` without retry, auto-retry only on connect-level errors, read-timeout/5xx fail at once with manual retry (UI warns about possible double delivery)
+- [x] `/api/chats/*`: `restrict_managers_to_own` via linked contact owner, pause/resume/send 404 when the lead is gone, retry author-or-admin (403)
+- [x] SSE: `new_message`/`bot_event` filtered by linked deal visibility (per-connection owner cache)
+- [x] Misc: `ruff check --fix` + `ruff format` green, `SECRET_KEY` optional, Dockerfile non-root user + `--proxy-headers` single process, `railway.json` healthcheck `/api/health`, `.env.example` has `N8N_SEND_WEBHOOK_URL`/`N8N_WEBHOOK_SECRET`, board `sum()` cartesian SAWarning fixed via subquery column
+- [x] Tests: mirror-failure single-send, parallel cycles single-send, read-timeout no-retry, stale reaper, chats scope (404s), retry authorship (403), SSE foreign-event hiding; `ruff check backend scripts` + `ruff format --check` green; manual local run verified
+
 ## Step 10 — Saved views + search filters [todo]
 ## Step 10 — Realtime via SSE + event bus (D4) [done]
 - [x] Brief for this step arrives out of PROGRESS order (same as Step 9 before it); the saved-views/filter step keeps its number above and stays [todo]

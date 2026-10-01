@@ -114,9 +114,7 @@ async def merge_contacts(
     loser_tags = loser_map[loser.id]
     for tag in loser_tags:
         if tag.id not in winner_tags:
-            session.add(
-                CrmEntityTag(tag_id=tag.id, entity=ENTITY_CONTACT, entity_id=winner.id)
-            )
+            session.add(CrmEntityTag(tag_id=tag.id, entity=ENTITY_CONTACT, entity_id=winner.id))
     # Fill empty winner fields from loser (name/phone/email/source/custom keys)
     for field in ("name", "phone", "email", "whatsapp_id"):
         if getattr(winner, field) in (None, "") and getattr(loser, field) not in (None, ""):
@@ -137,8 +135,13 @@ async def merge_contacts(
         "contact",
         winner.id,
         "contact_merged",
-        {"merged_from": str(loser.id), "merged_from_name": loser.name,
-         "deals_moved": len(deals), "notes_moved": len(notes), "tasks_moved": len(tasks)},
+        {
+            "merged_from": str(loser.id),
+            "merged_from_name": loser.name,
+            "deals_moved": len(deals),
+            "notes_moved": len(notes),
+            "tasks_moved": len(tasks),
+        },
     )
     await log_activity(
         session,

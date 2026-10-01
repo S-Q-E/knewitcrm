@@ -142,9 +142,7 @@ async def bulk_update_contacts(
             ).scalar_one_or_none()
             if exists is None:
                 session.add(
-                    CrmEntityTag(
-                        tag_id=add_tag.id, entity=ENTITY_CONTACT, entity_id=contact.id
-                    )
+                    CrmEntityTag(tag_id=add_tag.id, entity=ENTITY_CONTACT, entity_id=contact.id)
                 )
         if payload.delete:
             contact.deleted_at = datetime.now(UTC)
@@ -167,15 +165,17 @@ async def contact_deals(
         raise ApiError("NOT_FOUND", "Contact not found", 404)
     restricted = await restrict_managers_to_own(session)
     ensure_visible(is_visible(contact.owner_id, user, restricted))
-    stmt = select(CrmDeal).where(
-        CrmDeal.contact_id == contact.id, CrmDeal.deleted_at.is_(None)
-    )
+    stmt = select(CrmDeal).where(CrmDeal.contact_id == contact.id, CrmDeal.deleted_at.is_(None))
     total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar() or 0
     rows = (
-        await session.execute(
-            stmt.order_by(CrmDeal.updated_at.desc()).limit(page["limit"]).offset(page["offset"])
+        (
+            await session.execute(
+                stmt.order_by(CrmDeal.updated_at.desc()).limit(page["limit"]).offset(page["offset"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return DealListOut(items=await deals_out(session, list(rows)), total=total)
 
 

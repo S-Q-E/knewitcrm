@@ -10,7 +10,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
     database_url: str = Field(default="", alias="DATABASE_URL")
-    secret_key: str = Field(alias="SECRET_KEY")
+    # Kept for operator tooling; app auth uses opaque random session tokens
+    # (sha256 in DB), so nothing signs with this today.
+    secret_key: str = Field(default="", alias="SECRET_KEY")
     app_env: str = Field(default="local", alias="APP_ENV")
     cookie_secure: bool = Field(default=True, alias="COOKIE_SECURE")
     allowed_origins: list[str] = Field(default_factory=list, alias="ALLOWED_ORIGINS")

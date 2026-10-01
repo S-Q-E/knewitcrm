@@ -429,3 +429,136 @@ def test_deal_visibility_filter_for_restricted_manager():
         {"type": "notification", "data": {"user_id": str(other)}}, manager, True
     )
     assert event_visible({"type": "new_message", "data": {}}, manager, True)
+
+
+async def test_whatsapp_visibility_lookup(client, settings):
+    """Bot events resolve visibility through the linked contact owner."""
+    from backend.app.auth_deps import CurrentUser
+    from backend.app.routers.stream import whatsapp_visible
+
+    engine, factory = engine_factory(settings)
+    wa_owned = _wa()
+    wa_free = _wa()
+    try:
+        admin = await login_admin(client, settings)
+        stranger = await make_manager(client, admin["csrf"])
+        owned = await create_contact(
+            client,
+            admin["csrf"],
+            whatsapp_id=wa_owned,
+            owner_id=stranger["user"]["id"],
+            name="Owned Lead",
+        )
+        manager = CurrentUser(id=uuid.uuid4(), email="m@x.com", name="M", role="manager")
+        try:
+            async with factory() as session:
+                cache: dict[str, bool] = {}
+                assert await whatsapp_visible(session, cache, wa_owned, manager, True) is False
+                assert await whatsapp_visible(session, cache, wa_free, manager, True) is True
+                assert await whatsapp_visible(session, cache, wa_owned, manager, False) is True
+                admin_user = CurrentUser(id=uuid.uuid4(), email="a@x.com", name="A", role="admin")
+                assert await whatsapp_visible(session, cache, wa_owned, admin_user, True) is True
+        finally:
+            await purge_contacts(factory, [owned["id"]])
+    finally:
+        await engine.dispose()
+
+
+async def test_stream_hides_foreign_bot_events_when_scoped(app, settings, clean_bus):
+    engine, factory = engine_factory(settings)
+    wa_foreign = _wa()
+    wa_free = _wa()
+    try:
+        async with live_server(app) as (base, timeout):
+            async with (
+                AsyncClient(base_url=base, timeout=timeout) as admin_client,
+                AsyncClient(base_url=base, timeout=timeout) as mgr_client,
+            ):
+                await login_admin(admin_client, settings)
+                admin_token = admin_client.cookies.get("crm_csrf")
+                assert admin_token
+                stranger = await make_manager(admin_client, admin_token)
+                manager = await make_manager(admin_client, admin_token)
+                await login(mgr_client, manager["email"], manager["password"])
+                await _insert_lead(factory, wa_foreign)
+                await _insert_lead(factory, wa_free)
+                foreign = await create_contact(
+                    admin_client,
+                    admin_token,
+                    whatsapp_id=wa_foreign,
+                    owner_id=stranger["user"]["id"],
+                    name="Foreign Lead",
+                )
+                async with factory() as session:
+                    await session.execute(
+                        text(
+                            "INSERT INTO crm_settings (key, value) VALUES"
+                            " ('restrict_managers_to_own', 'true')"
+                            " ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value"
+                        )
+                    )
+                    await session.commit()
+                try:
+
+                    async def _expect_silence(kind: str, payload: dict) -> None:
+                        # A silence check cancels the pending read, which may
+                        # break resuming on the same connection, so every
+                        # check gets a fresh stream.
+                        probe = await _open_stream(mgr_client)
+                        try:
+                            bus.publish(kind, payload)
+                            with pytest.raises(asyncio.TimeoutError):
+                                await asyncio.wait_for(_next_event(probe.iterator), timeout=2)
+                        finally:
+                            await probe.aclose()
+
+                    async def _expect_delivery(kind: str, payload: dict) -> dict:
+                        probe = await _open_stream(mgr_client)
+                        try:
+                            bus.publish(kind, payload)
+                            return await asyncio.wait_for(_next_event(probe.iterator), timeout=15)
+                        finally:
+                            await probe.aclose()
+
+                    foreign_message = {
+                        "message_id": 1,
+                        "whatsapp_id": wa_foreign,
+                        "direction": "in",
+                        "message_type": "chat",
+                    }
+                    free_message = {
+                        "message_id": 2,
+                        "whatsapp_id": wa_free,
+                        "direction": "in",
+                        "message_type": "chat",
+                    }
+                    foreign_event = {
+                        "event_id": 1,
+                        "whatsapp_id": wa_foreign,
+                        "event_type": "stage_entered",
+                    }
+                    free_event = {
+                        "event_id": 2,
+                        "whatsapp_id": wa_free,
+                        "event_type": "stage_entered",
+                    }
+                    await _expect_silence("new_message", foreign_message)
+                    event = await _expect_delivery("new_message", free_message)
+                    assert event["name"] == "new_message"
+                    assert event["data"]["whatsapp_id"] == wa_free
+                    await _expect_silence("bot_event", foreign_event)
+                    event = await _expect_delivery("bot_event", free_event)
+                    assert event["name"] == "bot_event"
+                    assert event["data"]["whatsapp_id"] == wa_free
+                    await _wait_for_subscribers(0)
+                finally:
+                    async with factory() as session:
+                        await session.execute(
+                            text("DELETE FROM crm_settings WHERE key = 'restrict_managers_to_own'")
+                        )
+                        await session.commit()
+                await purge_contacts(factory, [foreign["id"]])
+    finally:
+        await _purge_lead(factory, wa_foreign)
+        await _purge_lead(factory, wa_free)
+        await engine.dispose()

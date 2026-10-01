@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import text
@@ -374,7 +374,6 @@ async def test_unknown_stage_falls_back_to_first_open(settings):
 
 async def test_manager_edits_survive_unchanged_bot_sync(settings):
     """Manual custom keys, contact.name and trial_at survive a sync pass."""
-    from datetime import timezone
 
     engine, factory = _factory(settings)
     try:
@@ -383,7 +382,7 @@ async def test_manager_edits_survive_unchanged_bot_sync(settings):
             await session.commit()
         try:
             await run_sync_cycle(factory)
-            manager_trial = datetime(2026, 11, 1, 10, 0, 0, tzinfo=timezone.utc)
+            manager_trial = datetime(2026, 11, 1, 10, 0, 0, tzinfo=UTC)
             async with factory() as session:
                 await session.execute(
                     text(
@@ -416,7 +415,7 @@ async def test_manager_edits_survive_unchanged_bot_sync(settings):
             assert info["trial_at"] is not None
             got = info["trial_at"]
             if got.tzinfo is None:
-                got = got.replace(tzinfo=timezone.utc)
+                got = got.replace(tzinfo=UTC)
             assert got == manager_trial
             # Bot-mirrored keys are still present.
             assert info["contact_custom"]["goal"] == "test goal"
@@ -428,7 +427,6 @@ async def test_manager_edits_survive_unchanged_bot_sync(settings):
 
 async def test_bot_changes_still_apply_but_manual_keys_survive(settings):
     """Bot updates flow through while manual custom keys are preserved."""
-    from datetime import timezone
 
     engine, factory = _factory(settings)
     try:
@@ -455,7 +453,7 @@ async def test_bot_changes_still_apply_but_manual_keys_survive(settings):
                 )
                 await session.commit()
 
-            new_trial = datetime(2026, 12, 2, 12, 0, 0, tzinfo=timezone.utc)
+            new_trial = datetime(2026, 12, 2, 12, 0, 0, tzinfo=UTC)
             async with factory() as session:
                 await session.execute(
                     text(
@@ -475,7 +473,7 @@ async def test_bot_changes_still_apply_but_manual_keys_survive(settings):
             assert info["trial_at"] is not None
             got = info["trial_at"]
             if got.tzinfo is None:
-                got = got.replace(tzinfo=timezone.utc)
+                got = got.replace(tzinfo=UTC)
             assert got == new_trial
             # Manual keys survived alongside the bot update.
             assert info["contact_custom"]["manager_note"] == "keep me"
@@ -495,7 +493,7 @@ async def test_bot_changes_still_apply_but_manual_keys_survive(settings):
             again = await _deal_info(factory, wa)
             got = again["trial_at"]
             if got.tzinfo is None:
-                got = got.replace(tzinfo=timezone.utc)
+                got = got.replace(tzinfo=UTC)
             assert got == new_trial
         finally:
             await _purge(factory, [22])

@@ -261,15 +261,12 @@ async def deal_board(
         ]
         if contact_source is not None:
             contact_conditions.append(CrmContact.source == contact_source)
-        contact_scope = select(CrmContact.id).where(*contact_conditions)
+        contact_scope = select(CrmContact.id).where(*contact_conditions).correlate(CrmDeal)
         base = select(CrmDeal).where(*filters, contact_scope.exists())
-        total = (
-            await session.execute(select(func.count()).select_from(base.subquery()))
-        ).scalar() or 0
+        column = base.subquery()
+        total = (await session.execute(select(func.count()).select_from(column))).scalar() or 0
         amount_total = (
-            await session.execute(
-                select(func.coalesce(func.sum(CrmDeal.amount), 0)).select_from(base.subquery())
-            )
+            await session.execute(select(func.coalesce(func.sum(column.c.amount), 0)))
         ).scalar() or 0
 
         page_stmt = base.order_by(*BOARD_ORDER)

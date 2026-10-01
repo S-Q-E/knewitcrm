@@ -78,9 +78,7 @@ async def update_bot_stage(
     return True
 
 
-async def insert_outgoing_message(
-    session: AsyncSession, whatsapp_id: str, body: str
-) -> int:
+async def insert_outgoing_message(session: AsyncSession, whatsapp_id: str, body: str) -> int:
     """Mirror a manager-sent outbox message into the bot tables (D6).
 
     Appends a ``direction='out', message_type='manager'`` row to

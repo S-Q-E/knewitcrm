@@ -19,9 +19,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .base import Base
 
 OUTBOX_STATUS_QUEUED = "queued"
+OUTBOX_STATUS_SENDING = "sending"
 OUTBOX_STATUS_SENT = "sent"
 OUTBOX_STATUS_FAILED = "failed"
-VALID_OUTBOX_STATUSES = (OUTBOX_STATUS_QUEUED, OUTBOX_STATUS_SENT, OUTBOX_STATUS_FAILED)
+VALID_OUTBOX_STATUSES = (
+    OUTBOX_STATUS_QUEUED,
+    OUTBOX_STATUS_SENDING,
+    OUTBOX_STATUS_SENT,
+    OUTBOX_STATUS_FAILED,
+)
 
 
 class CrmOutbox(Base):
@@ -32,7 +38,10 @@ class CrmOutbox(Base):
 
     __tablename__ = "crm_outbox"
     __table_args__ = (
-        CheckConstraint("status IN ('queued', 'sent', 'failed')", name="ck_crm_outbox_status"),
+        CheckConstraint(
+            "status IN ('queued', 'sending', 'sent', 'failed')",
+            name="ck_crm_outbox_status",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -49,6 +58,7 @@ class CrmOutbox(Base):
     )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     provider_message_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     knewit_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

@@ -7,12 +7,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth_deps import CurrentUser, require_user
 from ..deps import get_session
+from ..models import CrmContact
 from ..services.event_bus import bus
-from ..services.visibility import restrict_managers_to_own
+from ..services.visibility import is_visible, restrict_managers_to_own
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,32 @@ def event_visible(event: dict[str, Any], user: CurrentUser, restricted: bool) ->
     return True
 
 
+async def whatsapp_visible(
+    session: AsyncSession,
+    cache: dict[str, bool],
+    whatsapp_id: str | None,
+    user: CurrentUser,
+    restricted: bool,
+) -> bool:
+    """Visibility of bot-table events by the linked contact owner.
+
+    Leads without a CRM contact yet count as unassigned (visible to all).
+    Results are cached per connection; a scope change applies on reconnect.
+    """
+    if user.is_admin or not restricted or not whatsapp_id:
+        return True
+    if whatsapp_id in cache:
+        return cache[whatsapp_id]
+    owner_id = (
+        await session.execute(
+            select(CrmContact.owner_id).where(CrmContact.whatsapp_id == whatsapp_id)
+        )
+    ).scalar_one_or_none()
+    visible = is_visible(owner_id, user, restricted)
+    cache[whatsapp_id] = visible
+    return visible
+
+
 def format_sse(type: str, data: dict[str, Any]) -> str:
     return f"event: {type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -48,9 +76,11 @@ async def stream(
 ):
     # Visibility snapshot per connection; a role/scope change applies on reconnect.
     restricted = await restrict_managers_to_own(session)
+    factory = request.app.state.session_factory
 
     async def generate():
         queue = bus.subscribe()
+        owner_cache: dict[str, bool] = {}
         try:
             yield ": connected\n\n"
             while True:
@@ -61,8 +91,19 @@ async def stream(
                     continue
                 if await request.is_disconnected():
                     break
-                if event_visible(event, user, restricted):
-                    yield format_sse(event["type"], event["data"])
+                if not event_visible(event, user, restricted):
+                    continue
+                if event["type"] in ("new_message", "bot_event"):
+                    async with factory() as lookup:
+                        if not await whatsapp_visible(
+                            lookup,
+                            owner_cache,
+                            (event.get("data") or {}).get("whatsapp_id"),
+                            user,
+                            restricted,
+                        ):
+                            continue
+                yield format_sse(event["type"], event["data"])
         except asyncio.CancelledError:
             raise
         finally:
