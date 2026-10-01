@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -12,6 +13,7 @@ from ..cookies import clear_session_cookies, session_expiry, set_session_cookies
 from ..deps import get_session
 from ..errors import ApiError
 from ..models import CrmSession, CrmUser
+from ..schemas.settings import ProfileUpdate, SessionListOut, SessionOut
 from ..schemas.users import ChangePasswordIn, LoginIn, UserOut
 from ..security import (
     MIN_PASSWORD_LENGTH,
@@ -141,3 +143,87 @@ async def change_password(
     )
     await session.commit()
     return {"ok": True}
+
+
+@router.patch("/profile", response_model=UserOut)
+async def update_profile(
+    payload: ProfileUpdate,
+    user: CurrentUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Self-service display name change (email stays the login key)."""
+    row = await session.get(CrmUser, user.id)
+    if row is None or not row.is_active:
+        raise ApiError("UNAUTHORIZED", "Authentication required", 401)
+    row.name = payload.name.strip()
+    await session.commit()
+    await session.refresh(row)
+    return row
+
+
+@router.get("/sessions", response_model=SessionListOut)
+async def list_sessions(
+    request: Request,
+    user: CurrentUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Own active sessions (devices), newest first, with the current one marked."""
+    current_id = getattr(request.state, "crm_session_id", None)
+    rows = (
+        await session.execute(
+            select(CrmSession)
+            .where(CrmSession.user_id == user.id, CrmSession.revoked_at.is_(None))
+            .order_by(CrmSession.created_at.desc(), CrmSession.id.desc())
+        )
+    ).scalars()
+    return SessionListOut(
+        items=[
+            SessionOut(
+                id=row.id,
+                ip=row.ip,
+                user_agent=row.user_agent,
+                created_at=row.created_at,
+                expires_at=row.expires_at,
+                is_current=row.id == current_id,
+            )
+            for row in rows
+        ]
+    )
+
+
+@router.delete("/sessions/{session_id}")
+async def revoke_session(
+    session_id: uuid.UUID,
+    request: Request,
+    user: CurrentUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    row = await session.get(CrmSession, session_id)
+    if row is None or row.user_id != user.id or row.revoked_at is not None:
+        raise ApiError("NOT_FOUND", "Session not found", 404)
+    if row.id == getattr(request.state, "crm_session_id", None):
+        raise ApiError("CANNOT_REVOKE_CURRENT", "Log out instead of revoking this session", 422)
+    row.revoked_at = datetime.now(UTC)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.post("/sessions/revoke-others")
+async def revoke_other_sessions(
+    request: Request,
+    user: CurrentUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Log out on all other devices; the current session stays alive."""
+    current_id = getattr(request.state, "crm_session_id", None)
+    result = await session.execute(
+        update(CrmSession)
+        .where(
+            CrmSession.user_id == user.id,
+            CrmSession.revoked_at.is_(None),
+            CrmSession.id != current_id,
+        )
+        .values(revoked_at=datetime.now(UTC))
+    )
+    await session.commit()
+    return {"ok": True, "revoked": result.rowcount or 0}

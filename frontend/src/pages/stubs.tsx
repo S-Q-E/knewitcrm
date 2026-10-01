@@ -20,12 +20,6 @@ export function DealsPage() {
   return <StubPage title="Сделки (legacy)" hint="Старая заглушка, заменена канбаном." />;
 }
 
-export function SettingsPage() {
-  return (
-    <StubPage title="Настройки" hint="Настройки CRM, воронка и пользователи (только для админа)." />
-  );
-}
-
 export function ForbiddenPage() {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">

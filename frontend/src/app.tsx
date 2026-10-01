@@ -4,8 +4,8 @@ import { useMe } from "@/api/auth";
 import { Layout } from "@/components/layout";
 import { AnalyticsPage } from "@/pages/analytics";
 import { LoginPage } from "@/pages/login";
-import { ForbiddenPage, SettingsPage } from "@/pages/stubs";
 import { ContactPage } from "@/pages/contact";
+import { SettingsPage } from "@/pages/settings";
 import { ContactsPage } from "@/pages/contacts";
 import { DealPage } from "@/pages/deal";
 import { DealsPage } from "@/pages/deals";
@@ -23,24 +23,6 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   }
   if (me.isError || !me.data) {
     return <Navigate to="/login" replace />;
-  }
-  return children;
-}
-
-function RequireAdmin({ children }: { children: JSX.Element }) {
-  const me = useMe();
-  if (me.isPending) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">
-        Загрузка…
-      </div>
-    );
-  }
-  if (me.isError || !me.data) {
-    return <Navigate to="/login" replace />;
-  }
-  if (me.data.role !== "admin") {
-    return <ForbiddenPage />;
   }
   return children;
 }
@@ -64,14 +46,7 @@ export function App() {
         <Route path="/contacts/:id" element={<ContactPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route
-          path="/settings"
-          element={
-            <RequireAdmin>
-              <SettingsPage />
-            </RequireAdmin>
-          }
-        />
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

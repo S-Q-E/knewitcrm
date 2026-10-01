@@ -144,6 +144,26 @@
   `/tmp/opencode/node`); drive-by фиксы красных гейтов (см. D20)
 - [ ] `docker build` не запускался локально; проверить в CI
 ## Step 13 — Production deploy (Railway, Dockerfile, migrations) [todo]
+## Step 13b — Раздел «Настройки» [done]
+- Note: brief numbering collides with the old `Step 13 — Production deploy` placeholder
+  above; this step keeps the `13b` suffix like earlier out-of-order briefs, deploy stays [todo].
+- [x] Backend: `routers/settings.py` (`GET/PATCH /api/settings` с 4 курируемыми ключами,
+  `GET /api/settings/bot-stages` — живые DISTINCT из `knewit_leads` read-only,
+  `GET /api/settings/integrations` — пробы БД бота + n8n URL без секрета + счётчики outbox),
+  `routers/activity.py` (`GET /api/activity` с фильтрами и пагинацией + `/entities`),
+  quick-reply CRUD (admin) и глобальный `GET /api/chats/outbox` в `chats.py`,
+  сессии (`GET/DELETE /api/auth/sessions`, `revoke-others`) и `PATCH /api/auth/profile` в `auth.py`
+- [x] Вкладки: воронки+стадии (dnd-kit порядок, привязки к этапу/статусу бота, удаление с
+  переносом, причины отказа), поля (конструктор), теги, пользователи (CRUD, роли,
+  деактивация, сброс пароля), шаблоны, автоматизация+распределение (тумблеры, round-robin,
+  редактор правил), профиль (имя, пароль, часовой пояс, звук, сессии), интеграции
+  (проверка, журнал outbox с retry), журнал действий (фильтры, пагинация)
+- [x] Тесты: `test_settings.py` (9 тестов: roundtrip+частичный PATCH, валидация, 403 менеджеров,
+  bot-stages, quick-reply CRUD, две сессии+revoke, профиль+пароль, интеграции без секрета,
+  журнал outbox, журнал activity); полный backend-сьют зелёный (170 тестов);
+  `settings.test.ts` (prefs + часовой пояс); tsc/eslint/prettier/vitest/build зелёные;
+  ручной прогон всех новых эндпоинтов и SPA `/settings` на локальном сервере
+- [ ] `docker build` не запускался локально; проверить в CI
 ## Step 14 — Load test + polling/SSE tuning [todo]
 ## Step 15 — Docs + handover [todo]
 ## Step 16 — Final audit [todo]

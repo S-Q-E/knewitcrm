@@ -28,7 +28,7 @@ const NAV = [
   { to: "/contacts", label: "Контакты", icon: Users, adminOnly: false },
   { to: "/tasks", label: "Задачи", icon: Bell, adminOnly: false },
   { to: "/analytics", label: "Аналитика", icon: BarChart3, adminOnly: false },
-  { to: "/settings", label: "Настройки", icon: Settings, adminOnly: true },
+  { to: "/settings", label: "Настройки", icon: Settings, adminOnly: false },
 ];
 
 export function Layout() {

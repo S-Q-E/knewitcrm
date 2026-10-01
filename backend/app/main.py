@@ -18,6 +18,7 @@ from .errors import ApiError, api_error_handler, error_payload
 from .logging_utils import setup_logging
 from .middleware import RequestIdMiddleware
 from .routers import (
+    activity,
     analytics,
     auth,
     automations,
@@ -41,6 +42,7 @@ from .routers import (
     users,
     views,
 )
+from .routers.settings import router as settings_router
 from .services.bootstrap import try_bootstrap
 from .services.event_bus import bus
 from .session_middleware import SessionAuthMiddleware
@@ -142,6 +144,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(auth.router)
+    app.include_router(activity.router)
     app.include_router(analytics.router)
     app.include_router(automations.router)
     app.include_router(users.router)
@@ -161,6 +164,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(chats.router)
     app.include_router(trash.router)
     app.include_router(stream.router)
+    app.include_router(settings_router)
     app.include_router(notifications.router)
     app.include_router(legacy_bot.router)
 

@@ -359,3 +359,36 @@ Why: protects against accidental data loss, keeps audit trail.
   one intentional `set-state-in-effect` documented with an inline disable
   comment, prettier-only reformat of 4 contacts files.
 
+## D21. Step 13 settings notes
+- No migration: every tab reads/writes existing tables (`crm_settings` KV,
+  `crm_quick_replies`, `crm_sessions`, `crm_outbox`, `crm_activity_log`).
+  New routers: `settings.py` (`/api/settings`, `/api/settings/bot-stages`,
+  `/api/settings/integrations`), `activity.py` (`/api/activity`,
+  `/api/activity/entities`); extensions in `chats.py` (quick-reply CRUD +
+  global `GET /api/chats/outbox`) and `auth.py` (profile + sessions).
+- Curated settings keys with code defaults: `restrict_managers_to_own=false`,
+  `auto_pause_on_manager=false`, `auto_pause_on_manual_reply=true`,
+  `deal_assignment.mode=unassigned` (round-robin keeps its `last_index` across
+  mode switches; unknown keys are rejected, never stored). PATCH logs
+  `settings_updated` into the activity journal.
+- `bot-stages` returns live `DISTINCT current_stage/status` from `knewit_leads`
+  (read-only; rule 1 safe) for the stage-editor dropdowns.
+- Quick replies: list stays open to all authenticated users (dialog composer
+  needs it); create/update/delete are admin-only with `QUICK_REPLY_EXISTS` 409.
+- Sessions are strictly own-only; revoking the current session is 422
+  (`CANNOT_REVOKE_CURRENT`, use logout); `revoke-others` powers "exit on other
+  devices". Profile self-edit covers `name` only (email stays the login key);
+  password change already existed and revokes other sessions.
+- Integrations: bot DB probe is three read-only `COUNT(*)` with latency and a
+  sanitized `unreachable` error (raw DB errors may carry host info, so they are
+  only logged server-side). n8n status reports `N8N_SEND_WEBHOOK_URL` as-is:
+  it contains no secret by design (the secret travels in the `X-CRM-Secret`
+  header, which is never returned by any endpoint).
+- Profile display prefs (timezone, notification sound) live in localStorage
+  like the theme (precedent `lib/theme.ts`); the instance default timezone /
+  currency stay env-based (`DEFAULT_TIMEZONE` / `DEFAULT_CURRENCY`) because
+  analytics buckets and API semantics depend on them server-side.
+- `/settings` route is open to all authenticated users; the 8 admin tabs are
+  gated inside the page (`ForbiddenPage` for managers) while `Профиль` is
+  available to everyone, so the nav entry is no longer admin-only.
+

@@ -4,16 +4,18 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth_deps import CurrentUser, require_user
+from ..auth_deps import CurrentUser, require_role, require_user
 from ..deps import get_session, pagination
 from ..errors import ApiError
-from ..models import CrmContact, CrmConversationState, CrmOutbox, CrmQuickReply
+from ..models import CrmContact, CrmConversationState, CrmOutbox, CrmQuickReply, CrmUser
 from ..schemas.chats import ChatMessageIn, OutboxOut, QuickReplyOut
-from ..services.activity import log_activity
+from ..schemas.settings import QuickReplyCreate, QuickReplyUpdate
+from ..services.activity import diff_payload, log_activity, slim
 from ..services.event_bus import bus
 from ..services.visibility import (
     ensure_visible,
@@ -23,6 +25,8 @@ from ..services.visibility import (
 )
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
+
+require_admin = require_role("admin")
 
 SETTING_AUTOPAUSE_ON_MANUAL_REPLY = "auto_pause_on_manual_reply"
 
@@ -119,6 +123,121 @@ async def list_quick_replies(
         )
     ).scalars()
     return {"items": [QuickReplyOut.model_validate(row).model_dump() for row in rows]}
+
+
+@router.post("/quick-replies", response_model=QuickReplyOut, status_code=201)
+async def create_quick_reply(
+    payload: QuickReplyCreate,
+    admin: CurrentUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    row = CrmQuickReply(title=payload.title.strip(), body=payload.body.strip(), sort=payload.sort)
+    session.add(row)
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ApiError("QUICK_REPLY_EXISTS", "A quick reply with this title exists", 409) from exc
+    await session.refresh(row)
+    await log_activity(
+        session,
+        admin.id,
+        "quick_reply",
+        row.id,
+        "quick_reply_created",
+        diff_payload(None, slim({"title": row.title})),
+    )
+    await session.commit()
+    return row
+
+
+@router.patch("/quick-replies/{reply_id}", response_model=QuickReplyOut)
+async def update_quick_reply(
+    reply_id: uuid.UUID,
+    payload: QuickReplyUpdate,
+    admin: CurrentUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    row = await session.get(CrmQuickReply, reply_id)
+    if row is None:
+        raise ApiError("NOT_FOUND", "Quick reply not found", 404)
+    before = slim({"title": row.title, "sort": row.sort})
+    if payload.title is not None:
+        row.title = payload.title.strip()
+    if payload.body is not None:
+        row.body = payload.body.strip()
+    if payload.sort is not None:
+        row.sort = payload.sort
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ApiError("QUICK_REPLY_EXISTS", "A quick reply with this title exists", 409) from exc
+    await session.refresh(row)
+    await log_activity(
+        session,
+        admin.id,
+        "quick_reply",
+        row.id,
+        "quick_reply_updated",
+        diff_payload(before, slim({"title": row.title, "sort": row.sort})),
+    )
+    await session.commit()
+    return row
+
+
+@router.delete("/quick-replies/{reply_id}")
+async def delete_quick_reply(
+    reply_id: uuid.UUID,
+    admin: CurrentUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    row = await session.get(CrmQuickReply, reply_id)
+    if row is None:
+        raise ApiError("NOT_FOUND", "Quick reply not found", 404)
+    await log_activity(
+        session,
+        admin.id,
+        "quick_reply",
+        row.id,
+        "quick_reply_deleted",
+        diff_payload(slim({"title": row.title}), None),
+    )
+    await session.delete(row)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.get("/outbox")
+async def list_outbox_global(
+    status: str | None = Query(default=None, pattern="^(queued|sending|sent|failed)$"),
+    admin: CurrentUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+    page: dict = Depends(pagination),
+):
+    """Delivery journal across all dialogs (admin)."""
+    del admin
+    stmt = select(CrmOutbox, CrmUser.name).outerjoin(CrmUser, CrmUser.id == CrmOutbox.sent_by)
+    if status is not None:
+        stmt = stmt.where(CrmOutbox.status == status)
+    total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar() or 0
+    rows = (
+        await session.execute(
+            stmt.order_by(CrmOutbox.created_at.desc(), CrmOutbox.id.desc())
+            .limit(page["limit"])
+            .offset(page["offset"])
+        )
+    ).all()
+    return {
+        "items": [
+            {
+                **OutboxOut.model_validate(row).model_dump(mode="json"),
+                "sent_by_name": name,
+            }
+            for row, name in rows
+        ],
+        "total": total,
+    }
 
 
 @router.post("/outbox/{outbox_id}/retry", response_model=OutboxOut)
