@@ -98,7 +98,14 @@
 - [x] Visibility (D18): dialogs/chats/SSE (`new_message`, `bot_event`, `outbox_status`, `bot_paused`) via managed deal owner; admin/manager matrix tests (REST + live SSE)
 - [x] Frontend: `useStreamStatus()` shared store; message/outbox polling only while SSE disconnected (+ status unit test)
 - [x] README rewritten (entrypoint, migrations, env, workers, n8n, deploy, tests)
-- [ ] `tsc/eslint/vitest` not run locally (no Node); verify in CI
+- [x] Re-audit 2026-10-01: all 10 items verified present in tree; targeted suites green
+  (unassign, round-robin, notify, dialogs+pagination incl. 20k case, worker flags, legacy,
+  visibility matrix, realtime, outbox, auth, users); ruff + tsc/eslint/vitest green;
+  dialogs pagination and messages route hand-checked on a live server.
+  Note: never run two pytest processes against one Postgres — parallel runs caused
+  flaky cross-talk failures in test_dialogs.py; sequential runs are green.
+- [x] `tsc/eslint/vitest` run locally (Node 20 at `/tmp/opencode/node`): typecheck, eslint,
+  prettier, 29 vitest, all green
 
 ## Step 10 — Saved views + search filters [todo]
 ## Step 10 — Realtime via SSE + event bus (D4) [done]
