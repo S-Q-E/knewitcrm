@@ -3,7 +3,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useMe } from "@/api/auth";
 import { Layout } from "@/components/layout";
 import { LoginPage } from "@/pages/login";
-import { AnalyticsPage, ContactsPage, ForbiddenPage, SettingsPage } from "@/pages/stubs";
+import { AnalyticsPage, ForbiddenPage, SettingsPage } from "@/pages/stubs";
+import { ContactPage } from "@/pages/contact";
+import { ContactsPage } from "@/pages/contacts";
 import { DealPage } from "@/pages/deal";
 import { DealsPage } from "@/pages/deals";
 import { DialogsPage } from "@/pages/dialogs";
@@ -58,6 +60,7 @@ export function App() {
         <Route path="/deals/:id" element={<DealPage />} />
         <Route path="/dialogs" element={<DialogsPage />} />
         <Route path="/contacts" element={<ContactsPage />} />
+        <Route path="/contacts/:id" element={<ContactPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route

@@ -331,6 +331,164 @@ async def _activity(
     ]
 
 
+async def get_contact_timeline(
+    session: AsyncSession,
+    contact_id: uuid.UUID,
+    whatsapp_id: str | None,
+    contact_name: str | None,
+    kinds: tuple[str, ...],
+    limit: int,
+    cursor: dict[str, Any] | None,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Contact лента: bot messages/events + all deals stages + notes/tasks/activity."""
+    from sqlalchemy import text as _text
+
+    per_source = limit + 1
+    collections: list[list[dict[str, Any]]] = []
+    if "message" in kinds and whatsapp_id:
+        collections.append(await _messages(session, whatsapp_id, cursor, per_source))
+    if "event" in kinds and whatsapp_id:
+        collections.append(await _events(session, whatsapp_id, cursor, per_source))
+    if "stage" in kinds:
+        keyset = _keyset_text("h.at", 2, False, cursor)
+        rows = (
+            await session.execute(
+                _text(
+                    "SELECT h.id, h.from_stage_id, h.to_stage_id, h.changed_by,"
+                    " h.source, h.at, h.deal_id,"
+                    " fs.name AS from_name, ts.name AS to_name"
+                    " FROM crm_deal_stage_history h"
+                    " JOIN crm_deals d ON d.id = h.deal_id"
+                    " LEFT JOIN crm_stages fs ON fs.id = h.from_stage_id"
+                    " LEFT JOIN crm_stages ts ON ts.id = h.to_stage_id"
+                    f" WHERE d.contact_id = :contact AND {keyset}"
+                    " ORDER BY h.at DESC, h.id DESC LIMIT :limit"
+                ),
+                {"contact": contact_id, "limit": per_source, **_cursor_params(cursor)},
+            )
+        ).mappings()
+        collections.append(
+            [
+                {
+                    "key": f"stage:{row['id']}",
+                    "ref": str(row["id"]),
+                    "kind": "stage",
+                    "at": row["at"].isoformat(),
+                    "deal_id": str(row["deal_id"]),
+                    "from_stage": {
+                        "id": str(row["from_stage_id"]) if row["from_stage_id"] else None,
+                        "name": row["from_name"],
+                    },
+                    "to_stage": {
+                        "id": str(row["to_stage_id"]) if row["to_stage_id"] else None,
+                        "name": row["to_name"],
+                    },
+                    "source": row["source"],
+                    "changed_by": str(row["changed_by"]) if row["changed_by"] else None,
+                }
+                for row in rows
+            ]
+        )
+    if "note" in kinds:
+        rows = (
+            await session.execute(
+                _text(
+                    "SELECT n.id, n.body, n.author_id, n.pinned, n.created_at, n.deal_id"
+                    " FROM crm_notes n LEFT JOIN crm_deals d ON d.id = n.deal_id"
+                    " WHERE (n.contact_id = :contact OR d.contact_id = :contact)"
+                    f" AND {_keyset_text('n.created_at', 3, False, cursor)}"
+                    " ORDER BY n.created_at DESC, n.id DESC LIMIT :limit"
+                ),
+                {"contact": contact_id, "limit": per_source, **_cursor_params(cursor)},
+            )
+        ).mappings()
+        collections.append(
+            [
+                {
+                    "key": f"note:{row['id']}",
+                    "ref": str(row["id"]),
+                    "kind": "note",
+                    "at": row["created_at"].isoformat(),
+                    "body": row["body"],
+                    "pinned": row["pinned"],
+                    "author_id": str(row["author_id"]) if row["author_id"] else None,
+                    "deal_id": str(row["deal_id"]) if row["deal_id"] else None,
+                }
+                for row in rows
+            ]
+        )
+    if "task" in kinds:
+        rows = (
+            await session.execute(
+                _text(
+                    "SELECT t.id, t.title, t.type, t.assignee_id, t.due_at,"
+                    " t.done_at, t.created_at, t.deal_id"
+                    " FROM crm_tasks t LEFT JOIN crm_deals d ON d.id = t.deal_id"
+                    " WHERE (t.contact_id = :contact OR d.contact_id = :contact)"
+                    f" AND {_keyset_text('t.created_at', 4, False, cursor)}"
+                    " ORDER BY t.created_at DESC, t.id DESC LIMIT :limit"
+                ),
+                {"contact": contact_id, "limit": per_source, **_cursor_params(cursor)},
+            )
+        ).mappings()
+        collections.append(
+            [
+                {
+                    "key": f"task:{row['id']}",
+                    "ref": str(row["id"]),
+                    "kind": "task",
+                    "at": row["created_at"].isoformat(),
+                    "title": row["title"],
+                    "type": row["type"],
+                    "assignee_id": str(row["assignee_id"]) if row["assignee_id"] else None,
+                    "due_at": row["due_at"].isoformat() if row["due_at"] else None,
+                    "done_at": row["done_at"].isoformat() if row["done_at"] else None,
+                    "deal_id": str(row["deal_id"]) if row["deal_id"] else None,
+                }
+                for row in rows
+            ]
+        )
+    if "activity" in kinds:
+        rows = (
+            await session.execute(
+                _text(
+                    "SELECT a.id, a.entity, a.action, a.actor_id, a.diff, a.created_at"
+                    " FROM crm_activity_log a LEFT JOIN crm_deals d"
+                    " ON (a.entity = 'deal' AND a.entity_id = d.id)"
+                    " WHERE (a.entity = 'contact' AND a.entity_id = :contact)"
+                    " OR (a.entity = 'deal' AND d.contact_id = :contact)"
+                    f" AND {_keyset_text('a.created_at', 5, False, cursor)}"
+                    " ORDER BY a.created_at DESC, a.id DESC LIMIT :limit"
+                ),
+                {"contact": contact_id, "limit": per_source, **_cursor_params(cursor)},
+            )
+        ).mappings()
+        collections.append(
+            [
+                {
+                    "key": f"activity:{row['id']}",
+                    "ref": str(row["id"]),
+                    "kind": "activity",
+                    "at": row["created_at"].isoformat(),
+                    "entity": row["entity"],
+                    "action": row["action"],
+                    "actor_id": str(row["actor_id"]) if row["actor_id"] else None,
+                    "diff": row["diff"],
+                }
+                for row in rows
+            ]
+        )
+    merged = sorted(
+        (item for chunk in collections for item in chunk),
+        key=lambda item: (item["at"], -_TYPE_RANK[item["kind"]], _id_key(item)),
+        reverse=True,
+    )
+    page = merged[: limit + 1]
+    await _enrich(session, page, contact_name)
+    next_cursor = encode_cursor(page[limit - 1]) if len(page) > limit else None
+    return page[:limit], next_cursor
+
+
 async def _enrich(
     session: AsyncSession, items: list[dict[str, Any]], contact_name: str | None
 ) -> None:

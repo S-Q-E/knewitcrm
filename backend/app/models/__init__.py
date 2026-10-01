@@ -28,6 +28,9 @@ from .deals import (
     CrmDeal,
     CrmDealStageHistory,
 )
+from .imports import (
+    CrmImport,
+)
 from .notes import CrmNote
 from .notify import CrmAutomation, CrmNotification
 from .outbox import (
@@ -71,6 +74,7 @@ __all__ = [
     "CrmDealStageHistory",
     "CrmEntityTag",
     "CrmLostReason",
+    "CrmImport",
     "CrmNote",
     "CrmNotification",
     "CrmOutbox",

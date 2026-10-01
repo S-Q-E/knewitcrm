@@ -90,7 +90,18 @@
 - [x] Publishers: `notify()` → `notification`; sync bot moves → `deal_moved` (flushed post-commit per batch); deals create/update/move/bulk → `deal_updated`/`deal_moved`; tasks create → `task_created`; chats queue/retry/pause/resume → `outbox_status`/`bot_paused`; outbox worker sent/failed → `outbox_status`
 - [x] 11 backend tests in `test_realtime.py` (bus fanout/backpressure/churn, poller once-only, auth, 2-subscriber broadcast, notification owner-only, heartbeat, sync/manager/task publish, visibility matrix); streaming tests boot real uvicorn (httpx ASGI transport cannot stream, see D16)
 - [x] Frontend `useEventStream` (layout-mounted): backoff reconnect, 15s polling fallback, per-event invalidations, ping+toast for own incoming, unread tab title; 5 vitest cases; tsc/eslint/prettier/build green
-- [x] `scripts/stream_load_test.py`: 50 concurrent streams, all receive the event, server responsive after close — PASSED## Step 11 — Settings (locale, timezone Asia/Almaty, currency KZT) [todo]
+- [x] `scripts/stream_load_test.py`: 50 concurrent streams, all receive the event, server responsive after close — PASSED
+
+## Step 11b — Контакты и данные [done]
+- Note: brief numbering collides with the old `Step 11 — Settings` placeholder below; this step keeps the `11b` suffix like earlier out-of-order briefs (4b/5b/6b), settings stays [todo].
+- [x] `/contacts`: таблица (сортировка, выбор колонок в localStorage, пагинация, фильтры, сохранённые виды `entity=contact`), быстрый поиск, массовые действия (тег, ответственный, в корзину)
+- [x] Карточка `/contacts/:id`: все сделки контакта, общая лента (`messages/events/stages/notes/tasks/activity`), custom-поля, теги, заметки
+- [x] Дубликаты (`GET /api/contacts/duplicates`, `POST /api/contacts/merge`): группы по нормализованному телефону/whatsapp/email; экран «Дубликаты» со слиянием сделок/заметок/задач/тегов; `contact_merged` в `crm_activity_log`; источник остаётся мягко удалённым
+- [x] Экспорт CSV/XLSX контактов и сделок с учётом фильтров (потоковый CSV с UTF-8 BOM; `openpyxl` для XLSX); импорт CSV контактов (загрузка → маппинг → предпросмотр с ошибками по строкам → фоновая задача `crm_imports` с отчётом)
+- [x] Корзина (`GET /api/trash`, admin): просмотр и восстановление мягко удалённых контактов/сделок
+- [x] Тесты: `test_contacts_data.py` (нормализация, дубли+слияние, bulk, экспорт csv/xlsx, импорт с ошибками в фоне, корзина, таймлайн) + `contacts.test.ts` (query/mapping/export-url); ruff clean; ручной прогон API локально
+- [ ] Frontend tsc/eslint/vitest/build не запускались локально (нет Node); проверить в CI
+## Step 11 — Settings (locale, timezone Asia/Almaty, currency KZT) [todo]
 ## Step 12 — Roles hardening + admin panel [todo]
 ## Step 13 — Production deploy (Railway, Dockerfile, migrations) [todo]
 ## Step 14 — Load test + polling/SSE tuning [todo]

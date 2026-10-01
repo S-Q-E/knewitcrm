@@ -22,7 +22,9 @@ from .routers import (
     automations,
     chats,
     contacts,
+    contacts_data,
     custom_fields,
+    data_exchange,
     deals,
     dialogs,
     health,
@@ -34,6 +36,7 @@ from .routers import (
     stream,
     tags,
     tasks,
+    trash,
     users,
     views,
 )
@@ -142,6 +145,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(users.router)
     app.include_router(pipelines.router)
     app.include_router(pipelines.stages_router)
+    app.include_router(contacts_data.router)
+    app.include_router(data_exchange.router)
     app.include_router(contacts.router)
     app.include_router(deals.router)
     app.include_router(notes.router)
@@ -152,6 +157,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(tasks.router)
     app.include_router(dialogs.router)
     app.include_router(chats.router)
+    app.include_router(trash.router)
     app.include_router(stream.router)
     app.include_router(notifications.router)
     app.include_router(legacy_bot.router)

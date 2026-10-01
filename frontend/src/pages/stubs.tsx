@@ -20,15 +20,6 @@ export function DealsPage() {
   return <StubPage title="Сделки (legacy)" hint="Старая заглушка, заменена канбаном." />;
 }
 
-export function ContactsPage() {
-  return (
-    <StubPage
-      title="Контакты"
-      hint="Список контактов с поиском появится здесь на следующем шаге."
-    />
-  );
-}
-
 export function AnalyticsPage() {
   return <StubPage title="Аналитика" hint="Воронка и отчёты появятся здесь на следующем шаге." />;
 }

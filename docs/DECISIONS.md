@@ -215,3 +215,36 @@ Why: protects against accidental data loss, keeps audit trail.
   body, so infinite SSE streams hang forever under it. Streaming tests therefore
   boot uvicorn on 127.0.0.1:0 (`live_server` fixture); the 50-connection load
   test (`scripts/stream_load_test.py`) does the same against a dev server.
+
+## D17. Step 11 contacts and data notes
+- Normalization lives in `services/normalize.py`: digits-only phones
+  (leading 8 -> 7 for 11-digit KZ/RU numbers), `whatsapp_id` stripped of
+  `@c.us`/`@lid` suffixes into the same digit space, emails lower+strip.
+  Duplicates group live contacts by `phone:<digits>=7+>` or `email:<lower>`;
+  no DB column is added (volumes are hundreds, Python grouping is enough).
+- Merge (`POST /api/contacts/merge`): deals/notes/tasks re-point to the
+  winner, tags union, empty winner fields filled from the loser, loser
+  soft-deleted, `contact_merged` + `contact_merged_from` activity rows.
+  No rollback (per brief); the source row stays recoverable via restore.
+- Contact bulk (`POST /api/contacts/bulk`, max 200): set owner, add tag,
+  soft-delete. Static `/duplicates`, `/bulk`, `/export`, `/import/*` routes
+  are registered before `/{contact_id}` so FastAPI does not capture them
+  as UUIDs.
+- Contact timeline (`GET /api/contacts/{id}/timeline`) reuses the deal
+  keyset scheme: bot messages/events by `whatsapp_id`, stage history of all
+  contact deals, notes/tasks/activity across the contact and its deals.
+- Export (`GET /api/contacts/export`, `/api/deals/export`, `?format=csv|xlsx`):
+  CSV streams with UTF-8 BOM for Excel; XLSX via `openpyxl` (new production
+  dep, added together with `python-multipart` for CSV uploads).
+- Import is contacts-only (deals import stays deferred): `POST
+  /api/contacts/import/preview` validates mapping+C SV and returns
+  per-row errors; `POST /api/contacts/import` stores header+rows inside
+  `crm_imports.mapping` (migration `0011_contacts_data`) and processes them
+  in a background `asyncio` task with `ok_count`/`error_count`/`errors[:200]`;
+  `GET /api/contacts/import/{id}` polls the job.
+- Trash (`GET /api/trash`, admin-only) lists soft-deleted contacts+deals;
+  restore reuses the existing per-entity endpoints.
+- Frontend `/contacts` has tabs Список/Дубликаты/Импорт/Корзина plus
+  `/contacts/:id` (deals, timeline, custom fields, tags). Saved views with
+  `entity=contact` are supported. `src/api/types.ts` was not regenerated
+  (no Node locally); the new API module uses hand-written types.
