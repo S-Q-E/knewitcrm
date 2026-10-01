@@ -1,97 +1,102 @@
-# KnewIT CRM — дашборд для WhatsApp-бота
+# KnewIT CRM — amoCRM-style CRM for the WhatsApp course bot
 
-Веб-CRM для мониторинга диалогов AI-агента с клиентами. Читает данные
-напрямую из той же Postgres, что использует ваш n8n workflow
-(`knewit_leads`, `knewit_messages`, `knewit_events`, `knewit_followups`).
+Web CRM for managers of KnewIT (online courses). Clients arrive through a
+WhatsApp bot on n8n with an AI agent. The bot writes directly to Postgres
+(`knewit_leads`, `knewit_messages`, `knewit_events`, `knewit_followups`);
+the CRM lives in the same Postgres in its own `crm_*` tables and never
+migrates bot tables (see `docs/DECISIONS.md`, rules 1–2).
 
-## Что внутри
+**Stack:** Python 3.12 + FastAPI + SQLAlchemy 2.0 (async) + Alembic on the
+backend; React 18 + Vite + TypeScript + Tailwind on the frontend. UI is in
+Russian; default currency KZT, default timezone Asia/Almaty (Settings).
 
-**Backend:** FastAPI + asyncpg  
-**Frontend:** ванильный JS + CSS (без сборки)  
-**БД:** Postgres (тот же инстанс, что и в n8n)  
-**Деплой:** один Docker-контейнер, готов под Railway
-
-## Возможности
-
-- 📊 Сводные метрики по лидам (всего / активные / записаны / клиенты)
-- 🔍 Поиск по имени или номеру + фильтры по статусу
-- 💬 Полная переписка бота с клиентом (входящие/исходящие, этап, время ответа)
-- 📈 Timeline событий воронки (переходы, возражения, запись, продажа)
-- 🗂 Карточка лида со всеми собранными данными (`direction`, `goal`, `format`, …)
-- 🔄 Автообновление каждые 10 секунд
-
-## Переменные окружения
-
-Railway подставит `DATABASE_URL` автоматически, если прилинковать Postgres-плагин
-к этому сервису. Если Postgres внешний — задайте один из вариантов:
-
-| Переменная     | Описание                                          |
-|----------------|---------------------------------------------------|
-| `DATABASE_URL` | Полный DSN (`postgresql://user:pass@host:port/db`) |
-| `PGHOST`       | Хост                                              |
-| `PGPORT`       | Порт (по умолчанию 5432)                          |
-| `PGUSER`       | Пользователь                                      |
-| `PGPASSWORD`   | Пароль                                            |
-| `PGDATABASE`   | Имя БД (по умолчанию `railway`)                   |
-| `PGSSL`        | `true`/`false` — форсировать SSL (auto по умолчанию) |
-| `PORT`         | Задаётся Railway автоматически                    |
-
-## Деплой на Railway (2 минуты)
-
-### Способ 1 — из GitHub
-
-1. Запушьте папку проекта в репозиторий GitHub.
-2. Railway → **New Project** → **Deploy from GitHub repo** → выберите репо.
-3. Railway сам соберёт Docker-образ (`railway.json` + `Dockerfile`).
-4. **+ New** → **Database** → **Add PostgreSQL** (если ещё нет — можно
-   подключить уже существующий от n8n).
-5. Откройте сервис CRM → **Variables** → **+ New Variable** →
-   **Add Reference** → выберите `DATABASE_URL` из Postgres-плагина.
-6. **Settings → Networking → Generate Domain** — получите публичную ссылку.
-
-### Способ 2 — из локальной папки
+## Quick start (local)
 
 ```bash
-npm i -g @railway/cli
-railway login
-railway init
-railway up
+docker compose up -d            # local Postgres 16 + seed
+pip install -r requirements-dev.txt
+alembic -c backend/alembic.ini upgrade head
+uvicorn backend.app.main:app --reload --port 8000
 ```
 
-## Локальный запуск (для отладки)
+Open http://localhost:8000, log in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`
+(used once to bootstrap the first admin). The entrypoint is
+`backend/app/main.py:create_app()`.
+
+Frontend dev (proxy to the API):
 
 ```bash
-export DATABASE_URL="postgresql://user:pass@localhost:5432/knewit"
-pip install -r requirements.txt
-uvicorn backend.main:app --reload --port 8000
+cd frontend && npm ci && npm run dev
 ```
 
-Откройте http://localhost:8000
+## Migrations
 
-## Структура БД
+All CRM tables carry the `crm_` prefix and are created only via Alembic.
+The version table is `crm_alembic_version`; `env.py` filters everything
+except `crm_*`, so `knewit_*` and other n8n objects are never touched.
 
-CRM **только читает**, никаких миграций не выполняет — предполагается, что
-схема уже создана вашим n8n воркфлоу (нода `SETUP: применить SQL-схему`).
+```bash
+alembic -c backend/alembic.ini upgrade head
+alembic -c backend/alembic.ini revision -m "what changed"  # then edit upgrade()/downgrade()
+```
 
-Используются таблицы:
+## Environment variables
 
-- `knewit_leads`     — состояние лида
-- `knewit_messages`  — все сообщения (in/out)
-- `knewit_events`    — события воронки
-- `knewit_followups` — очередь напоминаний (только для справки)
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | — | Full DSN (`postgresql://user:pass@host:port/db`), or PG* parts below |
+| `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` / `PGSSL` | localhost… | Used only when `DATABASE_URL` is empty |
+| `SECRET_KEY` | `""` (optional) | Kept for tooling; auth uses opaque random session tokens |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | — | Bootstrap the first admin once (min 10 chars), then ignored |
+| `APP_ENV` / `LOG_LEVEL` | local / INFO | |
+| `COOKIE_SECURE` | true | Set `false` for plain-HTTP local dev |
+| `DEFAULT_TIMEZONE` / `DEFAULT_CURRENCY` | Asia/Almaty / KZT | |
+| `TRUSTED_PROXY_HOPS` | 1 | Trailing X-Forwarded-For entries added by our proxies (Railway = 1) |
+| `SYNC_ENABLED` / `SYNC_INTERVAL_SECONDS` | true / 5 | Bot sync worker (leads → contacts/deals, locks, handover) |
+| `OUTBOX_ENABLED` / `OUTBOX_INTERVAL_SECONDS` | true / 5 | Manager-message delivery worker |
+| `NOTIFICATIONS_ENABLED` | true | Task reminders + automations worker (60s cycle) |
+| `REALTIME_ENABLED` | true | Bot-table poller feeding SSE (2s cycle) |
+| `N8N_SEND_WEBHOOK_URL` / `N8N_WEBHOOK_SECRET` | — | n8n webhook that sends WhatsApp messages (`X-CRM-Secret` header) |
+| `PORT` | 8000 | Set automatically by Railway |
 
-## API (для интеграций)
+## Background workers (in-process asyncio tasks, advisory-locked)
 
-| Method | Endpoint                                  |
-|--------|-------------------------------------------|
-| GET    | `/api/health`                             |
-| GET    | `/api/stats`                              |
-| GET    | `/api/leads?search=&status=&stage=&limit=`|
-| GET    | `/api/leads/{whatsapp_id}`                |
-| GET    | `/api/leads/{whatsapp_id}/messages`       |
-| GET    | `/api/leads/{whatsapp_id}/events`         |
-| GET    | `/api/funnel`                             |
+| Worker | Flag | Every | Does |
+|---|---|---|---|
+| sync (`workers/sync_worker.py`) | `SYNC_ENABLED` | 5s | Backfills bot leads to contacts/deals, bot-driven stage moves, stage locks, unread counts, handover tasks, dialog list cache |
+| outbox (`workers/outbox_worker.py`) | `OUTBOX_ENABLED` | 5s | POSTs queued manager messages to the n8n webhook, mirrors them into `knewit_messages` via `services/bot_bridge.py` (the only writer to `knewit_*`) |
+| notify (`workers/notify_worker.py`) | `NOTIFICATIONS_ENABLED` | 60s | Overdue/due-soon task reminders + automations |
+| realtime poller (`workers/realtime_poller.py`) | `REALTIME_ENABLED` | 2s | Polls `knewit_messages`/`knewit_events` by id, fans out on the event bus → SSE at `GET /api/stream` |
 
-Все эндпоинты возвращают JSON, доступны без авторизации. Если нужно закрыть —
-добавьте Basic Auth middleware в `backend/main.py` или спрячьте сервис за
-Railway Private Network.
+## n8n integration
+
+- **Reads:** bot tables are read-only for the CRM (leads, messages, events).
+- **Writes:** only through `backend/app/services/bot_bridge.py` — manager
+  stage changes (`manual_stage_change` events) and mirrored outgoing
+  messages (`direction='out'`, `message_type='manager'`). No triggers, no
+  schema changes on `knewit_*`, ever.
+- **Sending:** the CRM never stores provider keys. The outbox worker POSTs
+  `{outbox_id, whatsapp_id, text}` to `N8N_SEND_WEBHOOK_URL`; n8n sends via
+  its own provider and dedupes on `outbox_id`. See `docs/DECISIONS.md` (D6).
+
+## Deploy (Railway, single container)
+
+`railway.json` + `Dockerfile` (multi-stage: Node builds the SPA, Python
+serves API + static; non-root user; migrations run on boot; healthcheck
+`GET /api/health`):
+
+1. Deploy the repo, attach the n8n Postgres (or a new one) and reference its
+   `DATABASE_URL`.
+2. Set `ADMIN_EMAIL` / `ADMIN_PASSWORD`, `N8N_SEND_WEBHOOK_URL` /
+   `N8N_WEBHOOK_SECRET`, generate a domain.
+
+## Tests & lint
+
+```bash
+ruff check backend scripts && ruff format --check backend scripts
+pytest -q                                   # needs local Postgres (docker compose up)
+cd frontend && npm run typecheck && npm run lint && npm test && npm run build
+```
+
+Docs: `docs/PROGRESS.md` (step log), `docs/DECISIONS.md` (architecture),
+`docs/db_schema.md` (bot tables reference).

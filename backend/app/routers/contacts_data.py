@@ -91,8 +91,17 @@ async def bulk_update_contacts(
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    if payload.set_owner_id is None and payload.add_tag_id is None and not payload.delete:
+    if (
+        payload.set_owner_id is None
+        and payload.add_tag_id is None
+        and not payload.delete
+        and not payload.unassign_owner
+    ):
         raise ApiError("EMPTY_BULK", "At least one bulk operation is required", 422)
+    if payload.set_owner_id is not None and payload.unassign_owner:
+        raise ApiError(
+            "CONFLICTING_BULK", "set_owner_id and unassign_owner are mutually exclusive", 422
+        )
     if payload.set_owner_id is not None:
         owner = await session.get(CrmUser, payload.set_owner_id)
         if owner is None:
@@ -126,7 +135,9 @@ async def bulk_update_contacts(
                 409,
                 {"ids": [str(contact.id)]},
             )
-        if payload.set_owner_id is not None:
+        if payload.unassign_owner:
+            contact.owner_id = None
+        elif payload.set_owner_id is not None:
             contact.owner_id = payload.set_owner_id
         if add_tag is not None:
             from ..models import CrmEntityTag

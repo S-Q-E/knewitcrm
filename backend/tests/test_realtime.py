@@ -261,15 +261,16 @@ async def test_stream_delivers_notifications_only_to_owner(app, settings, clean_
                 admin_stream = await _open_stream(admin_client)
                 try:
                     async with factory() as session:
-                        from backend.app.services.notifications import notify
+                        from backend.app.services.notifications import notify, publish_pending
 
-                        await notify(
+                        pending = await notify(
                             session,
                             [manager["user"]["id"]],
                             "deal_assigned",
                             {"deal_id": "x", "dedupe_key": "realtime-test-1"},
                         )
                         await session.commit()
+                        publish_pending(pending)
                     event = await asyncio.wait_for(_next_event(mgr_stream.iterator), timeout=15)
                     assert event["name"] == "notification"
                     assert event["data"]["user_id"] == manager["user"]["id"]

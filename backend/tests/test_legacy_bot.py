@@ -121,6 +121,7 @@ async def test_migrate_creates_only_version_table(settings):
                 "crm_activity_log",
                 "crm_outbox",
                 "crm_quick_replies",
+                "crm_imports",
             }
             # Bot data untouched.
             count = await conn.execute(text("SELECT COUNT(*) FROM knewit_leads"))

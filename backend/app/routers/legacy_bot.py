@@ -80,7 +80,13 @@ async def list_leads(
 async def get_lead(whatsapp_id: str, session: AsyncSession = Depends(get_session)):
     row = (
         await session.execute(
-            text("SELECT * FROM knewit_leads WHERE whatsapp_id = :whatsapp_id"),
+            text(
+                "SELECT whatsapp_id, name, current_stage, previous_stage, status,"
+                " direction, goal, experience_level, preferred_format,"
+                " preferred_time, trial_datetime, last_objection,"
+                " created_at, updated_at, last_message_at, confidence_last"
+                " FROM knewit_leads WHERE whatsapp_id = :whatsapp_id"
+            ),
             {"whatsapp_id": whatsapp_id},
         )
     ).one_or_none()

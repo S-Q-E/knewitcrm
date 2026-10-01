@@ -95,25 +95,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         sync_task = asyncio.create_task(
             sync_loop(app.state.session_factory, settings.sync_interval_seconds)
         )
-        app.state.sync_task = sync_task
+    app.state.sync_task = sync_task
     notify_task = None
-    if settings.sync_enabled:
+    if settings.notifications_enabled:
         notify_task = asyncio.create_task(
             notify_loop(app.state.session_factory, NOTIFY_INTERVAL_SECONDS)
         )
-        app.state.notify_task = notify_task
+    app.state.notify_task = notify_task
     outbox_task = None
-    if settings.sync_enabled:
+    if settings.outbox_enabled:
         outbox_task = asyncio.create_task(
             outbox_loop(app.state.session_factory, settings, settings.outbox_interval_seconds)
         )
-        app.state.outbox_task = outbox_task
+    app.state.outbox_task = outbox_task
     realtime_task = None
-    if settings.sync_enabled:
+    if settings.realtime_enabled:
         realtime_task = asyncio.create_task(
             realtime_loop(app.state.session_factory, bus, POLL_INTERVAL_SECONDS)
         )
-        app.state.realtime_task = realtime_task
+    app.state.realtime_task = realtime_task
     try:
         yield
     finally:

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..models import CrmTask
 from ..services.automations import evaluate_automations
-from ..services.notifications import notify
+from ..services.notifications import notify, publish_pending
 
 logger = logging.getLogger(__name__)
 
@@ -29,16 +29,20 @@ async def run_notify_cycle(session_factory: async_sessionmaker[AsyncSession]) ->
             if not got_lock:
                 return {"skipped": True}
             stats: dict[str, int] = {"overdue": 0, "due_soon": 0}
-            stats["overdue"] = await _remind_overdue(session)
-            stats["due_soon"] = await _remind_due_soon(session)
+            overdue, overdue_events = await _remind_overdue(session)
+            due_soon, due_soon_events = await _remind_due_soon(session)
+            stats["overdue"] = overdue
+            stats["due_soon"] = due_soon
             auto = await evaluate_automations(session)
             stats["automations_evaluated"] = auto.evaluated
             stats["automations_fired"] = auto.fired
+            pending = overdue_events + due_soon_events + auto.events
+        publish_pending(pending)
     logger.info("notify cycle done %s", stats)
     return stats
 
 
-async def _remind_overdue(session: AsyncSession) -> int:
+async def _remind_overdue(session: AsyncSession) -> tuple[int, list[dict]]:
     now = datetime.now(UTC)
     rows = (
         await session.execute(
@@ -50,22 +54,24 @@ async def _remind_overdue(session: AsyncSession) -> int:
             )
         )
     ).all()
-    sent = 0
+    pending: list[dict] = []
     for task_id, assignee_id, title in rows:
-        sent += await notify(
-            session,
-            [assignee_id],
-            "task_overdue",
-            {
-                "task_id": str(task_id),
-                "title": title,
-                "dedupe_key": f"task-overdue:{task_id}:{now.date().isoformat()}",
-            },
+        pending.extend(
+            await notify(
+                session,
+                [assignee_id],
+                "task_overdue",
+                {
+                    "task_id": str(task_id),
+                    "title": title,
+                    "dedupe_key": f"task-overdue:{task_id}:{now.date().isoformat()}",
+                },
+            )
         )
-    return sent
+    return len(pending), pending
 
 
-async def _remind_due_soon(session: AsyncSession) -> int:
+async def _remind_due_soon(session: AsyncSession) -> tuple[int, list[dict]]:
     now = datetime.now(UTC)
     rows = (
         await session.execute(
@@ -78,19 +84,21 @@ async def _remind_due_soon(session: AsyncSession) -> int:
             )
         )
     ).all()
-    sent = 0
+    pending: list[dict] = []
     for task_id, assignee_id, title in rows:
-        sent += await notify(
-            session,
-            [assignee_id],
-            "task_due_soon",
-            {
-                "task_id": str(task_id),
-                "title": title,
-                "dedupe_key": f"task-due-soon:{task_id}:{now.date().isoformat()}",
-            },
+        pending.extend(
+            await notify(
+                session,
+                [assignee_id],
+                "task_due_soon",
+                {
+                    "task_id": str(task_id),
+                    "title": title,
+                    "dedupe_key": f"task-due-soon:{task_id}:{now.date().isoformat()}",
+                },
+            )
         )
-    return sent
+    return len(pending), pending
 
 
 async def notify_loop(

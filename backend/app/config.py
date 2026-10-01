@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # Step 3 bot sync worker.
     sync_enabled: bool = Field(default=True, alias="SYNC_ENABLED")
     sync_interval_seconds: int = Field(default=5, ge=1, alias="SYNC_INTERVAL_SECONDS")
+    # Step 9C: every background worker has its own kill switch (all on by default).
+    outbox_enabled: bool = Field(default=True, alias="OUTBOX_ENABLED")
+    notifications_enabled: bool = Field(default=True, alias="NOTIFICATIONS_ENABLED")
+    realtime_enabled: bool = Field(default=True, alias="REALTIME_ENABLED")
 
     # Step 9 manager outbox: n8n webhook that actually sends WhatsApp messages.
     n8n_send_webhook_url: str = Field(default="", alias="N8N_SEND_WEBHOOK_URL")

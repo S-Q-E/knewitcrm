@@ -88,6 +88,18 @@
 - [x] Misc: `ruff check --fix` + `ruff format` green, `SECRET_KEY` optional, Dockerfile non-root user + `--proxy-headers` single process, `railway.json` healthcheck `/api/health`, `.env.example` has `N8N_SEND_WEBHOOK_URL`/`N8N_WEBHOOK_SECRET`, board `sum()` cartesian SAWarning fixed via subquery column
 - [x] Tests: mirror-failure single-send, parallel cycles single-send, read-timeout no-retry, stale reaper, chats scope (404s), retry authorship (403), SSE foreign-event hiding; `ruff check backend scripts` + `ruff format --check` green; manual local run verified
 
+## Step 9C — Audit debt closure [done]
+- [x] Unassign: PATCH deals/contacts/tasks honors explicit `null` via `model_fields_set`; bulk `unassign_owner` flag (422 on conflict with `set_owner_id`); `test_unassign.py` per entity
+- [x] Round-robin: `SELECT ... FOR UPDATE` on pre-seeded `deal_assignment` row (migration `0013_round_robin`); parallel-creation test proves even split
+- [x] Notifications: `dedupe_key` column + partial unique index (migration `0014_notify_dedupe`), `INSERT ... ON CONFLICT DO NOTHING`, bus publish only after commit (callers thread pending events); concurrent-dedupe + no-precommit-publish tests
+- [x] Dialogs: `last_message_at/direction/preview` on conversation state (migrations `0015_dialogs_list` + `0016_dialogs_index` for the ordering, backfilled), refreshed by sync/outbox workers, list orders/paginates/counts in SQL (20k dialogs ~80ms, NULLS LAST)
+- [x] Worker flags: `OUTBOX_ENABLED`/`NOTIFICATIONS_ENABLED`/`REALTIME_ENABLED` (default true) gate each loop; `.env.example`; independence test; tests disable all four
+- [x] Legacy: `GET /api/dialogs/{wa}/messages` (explicit columns, auth, lead-404), frontend switched off `/api/leads/*/messages`, no more `SELECT *`
+- [x] Visibility (D18): dialogs/chats/SSE (`new_message`, `bot_event`, `outbox_status`, `bot_paused`) via managed deal owner; admin/manager matrix tests (REST + live SSE)
+- [x] Frontend: `useStreamStatus()` shared store; message/outbox polling only while SSE disconnected (+ status unit test)
+- [x] README rewritten (entrypoint, migrations, env, workers, n8n, deploy, tests)
+- [ ] `tsc/eslint/vitest` not run locally (no Node); verify in CI
+
 ## Step 10 — Saved views + search filters [todo]
 ## Step 10 — Realtime via SSE + event bus (D4) [done]
 - [x] Brief for this step arrives out of PROGRESS order (same as Step 9 before it); the saved-views/filter step keeps its number above and stays [todo]

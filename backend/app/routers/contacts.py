@@ -219,11 +219,12 @@ async def update_contact(
             "custom": contact.custom,
         }
     )
-    if payload.owner_id is not None:
-        from ..models import CrmUser
+    if "owner_id" in payload.model_fields_set:
+        if payload.owner_id is not None:
+            from ..models import CrmUser
 
-        if await session.get(CrmUser, payload.owner_id) is None:
-            raise ApiError("UNKNOWN_OWNER", "Owner not found", 422)
+            if await session.get(CrmUser, payload.owner_id) is None:
+                raise ApiError("UNKNOWN_OWNER", "Owner not found", 422)
         contact.owner_id = payload.owner_id
     for field in ("name", "phone", "email", "source"):
         value = getattr(payload, field)

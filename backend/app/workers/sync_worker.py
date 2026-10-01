@@ -343,6 +343,7 @@ async def _sync_batch(
     states, fresh_states = await _load_states(session, wa_ids, stats)
     await session.flush()
     unread = await _unread_counts(session, wa_ids)
+    await _refresh_last_messages(session, states, wa_ids)
     for lead in leads:
         whatsapp_id = lead["whatsapp_id"]
         stats.leads_seen += 1
@@ -350,11 +351,13 @@ async def _sync_batch(
         unread_before = 0 if whatsapp_id in fresh_states else state.unread_count
         state.unread_count = unread.get(whatsapp_id, 0)
         if unread_before == 0 and state.unread_count > 0 and state.assigned_to is not None:
-            await notify(
-                session,
-                [state.assigned_to],
-                "dialog_message",
-                {"whatsapp_id": whatsapp_id, "unread": state.unread_count},
+            stats.events.extend(
+                await notify(
+                    session,
+                    [state.assigned_to],
+                    "dialog_message",
+                    {"whatsapp_id": whatsapp_id, "unread": state.unread_count},
+                )
             )
 
     contacts = {
@@ -485,6 +488,7 @@ async def _sync_batch(
                 manager_ids,
                 auto_pause,
                 open_tasks,
+                stats,
             )
 
     for lead in leads:
@@ -532,6 +536,39 @@ async def _load_states(
             state.unread_count = 0
             fresh.add(whatsapp_id)
     return states, fresh
+
+
+async def _refresh_last_messages(
+    session: AsyncSession, states: dict[str, CrmConversationState], wa_ids: list[str]
+) -> None:
+    """Cache the latest message summary on each conversation state.
+
+    The dialog list orders and renders from these columns, so it never
+    touches ``knewit_messages`` (owned by n8n, no new indexes allowed).
+    """
+    if not wa_ids:
+        return
+    rows = (
+        (
+            await session.execute(
+                text(
+                    "SELECT DISTINCT ON (whatsapp_id) whatsapp_id, direction, content,"
+                    " created_at FROM knewit_messages WHERE whatsapp_id = ANY(:ids)"
+                    " ORDER BY whatsapp_id, created_at DESC, id DESC"
+                ),
+                {"ids": wa_ids},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    for row in rows:
+        state = states.get(row["whatsapp_id"])
+        if state is None:
+            continue
+        state.last_message_at = row["created_at"]
+        state.last_message_direction = row["direction"]
+        state.last_message_preview = (row["content"] or "")[:200]
 
 
 async def _unread_counts(session: AsyncSession, wa_ids: list[str]) -> dict[str, int]:
@@ -624,7 +661,9 @@ async def _sync_existing_deal(
     deal.custom = _merge_bot_custom(deal.custom, lead)
     _sync_deal_trial(deal, lead.get("trial_datetime"))
     if deal.stage_id == target_stage.id and deal.status == target_status:
-        await _maybe_handover(session, lead, deal, state, manager_ids, auto_pause, open_tasks)
+        await _maybe_handover(
+            session, lead, deal, state, manager_ids, auto_pause, open_tasks, stats
+        )
         return
     if deal.stage_locked:
         session.add(
@@ -642,8 +681,10 @@ async def _sync_existing_deal(
             )
         )
         stats.blocked += 1
-        await _notify_locked(session, deal, target_stage.id, manager_ids)
-        await _maybe_handover(session, lead, deal, state, manager_ids, auto_pause, open_tasks)
+        await _notify_locked(session, deal, target_stage.id, manager_ids, stats)
+        await _maybe_handover(
+            session, lead, deal, state, manager_ids, auto_pause, open_tasks, stats
+        )
         return
 
     from_stage_id = deal.stage_id
@@ -672,7 +713,7 @@ async def _sync_existing_deal(
         }
     )
     _count_terminal(stats, target_status)
-    await _maybe_handover(session, lead, deal, state, manager_ids, auto_pause, open_tasks)
+    await _maybe_handover(session, lead, deal, state, manager_ids, auto_pause, open_tasks, stats)
 
 
 def _count_terminal(stats: SyncStats, status: str) -> None:
@@ -693,21 +734,24 @@ async def _notify_locked(
     deal: CrmDeal,
     target_stage_id: uuid.UUID,
     manager_ids: list[uuid.UUID],
+    stats: SyncStats,
 ) -> None:
     """Tell the owner (or all managers) that the bot hit a locked deal."""
     if deal.owner_id is not None:
         targets = [deal.owner_id]
     else:
         targets = list(manager_ids)
-    await notify(
-        session,
-        targets,
-        "locked_stage",
-        {
-            "deal_id": str(deal.id),
-            "target_stage_id": str(target_stage_id),
-            "dedupe_key": f"locked-stage:{deal.id}:{target_stage_id}",
-        },
+    stats.events.extend(
+        await notify(
+            session,
+            targets,
+            "locked_stage",
+            {
+                "deal_id": str(deal.id),
+                "target_stage_id": str(target_stage_id),
+                "dedupe_key": f"locked-stage:{deal.id}:{target_stage_id}",
+            },
+        )
     )
 
 
@@ -719,6 +763,7 @@ async def _maybe_handover(
     manager_ids: list[uuid.UUID],
     auto_pause: Any,
     open_tasks: set[uuid.UUID],
+    stats: SyncStats,
 ) -> None:
     """D5: on МЕНЕДЖЕР status create an urgent task + notify; pause only if set."""
     if lead.get("status") != STATUS_MANAGER:
@@ -739,15 +784,17 @@ async def _maybe_handover(
         targets = [deal.owner_id]
     else:
         targets = list(manager_ids)
-    await notify(
-        session,
-        targets,
-        "manager_handover",
-        {
-            "deal_id": str(deal.id),
-            "whatsapp_id": lead["whatsapp_id"],
-            "dedupe_key": f"handover:{deal.id}",
-        },
+    stats.events.extend(
+        await notify(
+            session,
+            targets,
+            "manager_handover",
+            {
+                "deal_id": str(deal.id),
+                "whatsapp_id": lead["whatsapp_id"],
+                "dedupe_key": f"handover:{deal.id}",
+            },
+        )
     )
     if auto_pause is True and not state.bot_paused:
         state.bot_paused = True

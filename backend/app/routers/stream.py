@@ -7,14 +7,12 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth_deps import CurrentUser, require_user
 from ..deps import get_session
-from ..models import CrmContact
 from ..services.event_bus import bus
-from ..services.visibility import is_visible, restrict_managers_to_own
+from ..services.visibility import is_visible, lead_owner, restrict_managers_to_own
 
 logger = logging.getLogger(__name__)
 
@@ -45,21 +43,16 @@ async def whatsapp_visible(
     user: CurrentUser,
     restricted: bool,
 ) -> bool:
-    """Visibility of bot-table events by the linked contact owner.
+    """Visibility of bot-table events by the responsible deal owner.
 
-    Leads without a CRM contact yet count as unassigned (visible to all).
+    Leads without a live deal or contact count as unassigned (visible).
     Results are cached per connection; a scope change applies on reconnect.
     """
     if user.is_admin or not restricted or not whatsapp_id:
         return True
     if whatsapp_id in cache:
         return cache[whatsapp_id]
-    owner_id = (
-        await session.execute(
-            select(CrmContact.owner_id).where(CrmContact.whatsapp_id == whatsapp_id)
-        )
-    ).scalar_one_or_none()
-    visible = is_visible(owner_id, user, restricted)
+    visible = is_visible(await lead_owner(session, whatsapp_id), user, restricted)
     cache[whatsapp_id] = visible
     return visible
 
@@ -93,7 +86,7 @@ async def stream(
                     break
                 if not event_visible(event, user, restricted):
                     continue
-                if event["type"] in ("new_message", "bot_event"):
+                if event["type"] in ("new_message", "bot_event", "outbox_status", "bot_paused"):
                     async with factory() as lookup:
                         if not await whatsapp_visible(
                             lookup,

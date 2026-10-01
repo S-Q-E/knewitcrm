@@ -28,7 +28,14 @@ def settings() -> Settings:
     # Test traffic is plain http://test, so Secure cookies would never be sent
     # back. Production keeps COOKIE_SECURE=true (see .env.example).
     # The sync worker is disabled: sync tests drive run_sync_cycle directly.
-    return Settings(cookie_secure=False, sync_enabled=False)
+    # All background loops stay off so tests observe only what they trigger.
+    return Settings(
+        cookie_secure=False,
+        sync_enabled=False,
+        outbox_enabled=False,
+        notifications_enabled=False,
+        realtime_enabled=False,
+    )
 
 
 @pytest.fixture(scope="session")

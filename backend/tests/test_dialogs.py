@@ -52,8 +52,48 @@ async def _purge_lead(factory, wa: str) -> None:
             .scalars()
             .all()
         )
+        await session.execute(
+            text("DELETE FROM crm_conversation_state WHERE whatsapp_id = :wa"), {"wa": wa}
+        )
+        await session.execute(text("DELETE FROM crm_outbox WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(
+            text("DELETE FROM knewit_messages WHERE whatsapp_id = :wa"), {"wa": wa}
+        )
+        await session.execute(text("DELETE FROM knewit_events WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": wa})
         await session.commit()
     await purge_contacts(factory, [str(c) for c in contacts])
+
+
+async def test_dialog_messages_route_with_auth(client, settings):
+    from backend.tests.crm_helpers import run_sync
+
+    engine, factory = engine_factory(settings)
+    wa = _wa()
+    try:
+        await admin_csrf(client, settings)
+        await _insert_lead(factory, wa)
+        await run_sync(factory)
+
+        response = await client.get(f"/api/dialogs/{wa}/messages?limit=500")
+        assert response.status_code == 200, response.text
+        items = response.json()["items"]
+        assert len(items) == 1
+        assert set(items[0]) == {
+            "id",
+            "direction",
+            "message_type",
+            "content",
+            "stage_at_moment",
+            "created_at",
+        }
+        assert items[0]["content"] == "Hello manager"
+
+        missing = await client.get("/api/dialogs/unknown@c.us/messages")
+        assert missing.status_code == 404
+    finally:
+        await _purge_lead(factory, wa)
+        await engine.dispose()
 
 
 async def test_dialogs_list_read_and_unread(client, settings):

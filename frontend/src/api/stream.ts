@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useMe } from "@/api/auth";
@@ -86,6 +86,41 @@ interface DialogCache {
   assigned_to?: string | null;
 }
 
+export interface StreamStatus {
+  /** Live EventSource frames are flowing (polling hooks must stay quiet). */
+  connected: boolean;
+  /** SSE gave up; the 15s polling fallback is active. */
+  fallback: boolean;
+}
+
+const initialStatus: StreamStatus = { connected: false, fallback: false };
+
+let streamStatus: StreamStatus = initialStatus;
+const statusListeners = new Set<(status: StreamStatus) => void>();
+
+function setStreamStatus(next: StreamStatus) {
+  streamStatus = next;
+  for (const listener of statusListeners) {
+    listener(next);
+  }
+}
+
+function subscribeStatus(listener: (status: StreamStatus) => void) {
+  statusListeners.add(listener);
+  return () => {
+    statusListeners.delete(listener);
+  };
+}
+
+function snapshotStatus(): StreamStatus {
+  return streamStatus;
+}
+
+/** Connection state of the singleton stream (see useEventStream). */
+export function useStreamStatus(): StreamStatus {
+  return useSyncExternalStore(subscribeStatus, snapshotStatus);
+}
+
 /**
  * Single realtime subscription for the whole app. Opens one EventSource to
  * /api/stream, invalidates TanStack Query caches per event, and falls back
@@ -129,6 +164,7 @@ export function useEventStream() {
       if (pollTimer || disposed) {
         return;
       }
+      setStreamStatus({ connected: false, fallback: true });
       pollTimer = setInterval(() => invalidate(FALLBACK_POLL_KEYS), POLL_FALLBACK_MS);
     };
 
@@ -158,12 +194,14 @@ export function useEventStream() {
       }
       next.onopen = () => {
         failures = 0;
+        setStreamStatus({ connected: true, fallback: false });
       };
       next.onerror = () => {
         stopSource();
         if (disposed) {
           return;
         }
+        setStreamStatus({ connected: false, fallback: false });
         failures += 1;
         if (failures > MAX_SSE_FAILURES) {
           startPolling();
@@ -177,6 +215,7 @@ export function useEventStream() {
     return () => {
       disposed = true;
       stopSource();
+      setStreamStatus(initialStatus);
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
       }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -22,6 +22,7 @@ AUTOMATION_FIRED_ACTION = "automation_fired"
 class AutomationStats:
     evaluated: int = 0
     fired: int = 0
+    events: list[dict[str, Any]] = field(default_factory=list)
 
 
 async def evaluate_automations(session: AsyncSession) -> AutomationStats:
@@ -33,19 +34,24 @@ async def evaluate_automations(session: AsyncSession) -> AutomationStats:
     for automation in automations:
         stats.evaluated += 1
         try:
-            stats.fired += await _evaluate(session, automation)
+            fired, events = await _evaluate(session, automation)
+            stats.fired += fired
+            stats.events.extend(events)
         except Exception:
             logger.exception("automation failed id=%s", automation.id)
     return stats
 
 
-async def _evaluate(session: AsyncSession, automation: CrmAutomation) -> int:
+async def _evaluate(
+    session: AsyncSession, automation: CrmAutomation
+) -> tuple[int, list[dict[str, Any]]]:
     deals = await _matching_deals(session, automation)
     fired = 0
+    events: list[dict[str, Any]] = []
     for deal_id in deals:
         if await _already_fired(session, automation.id, deal_id):
             continue
-        await _apply_actions(session, automation, deal_id)
+        events.extend(await _apply_actions(session, automation, deal_id))
         await log_activity(
             session,
             None,
@@ -57,7 +63,7 @@ async def _evaluate(session: AsyncSession, automation: CrmAutomation) -> int:
         fired += 1
     if fired:
         logger.info("automation fired id=%s deals=%d", automation.id, fired)
-    return fired
+    return fired, events
 
 
 async def _matching_deals(session: AsyncSession, automation: CrmAutomation) -> list[uuid.UUID]:
@@ -109,15 +115,16 @@ async def _already_fired(
 
 async def _apply_actions(
     session: AsyncSession, automation: CrmAutomation, deal_id: uuid.UUID
-) -> None:
+) -> list[dict[str, Any]]:
     from ..models import CrmEntityTag, CrmTag, CrmTask
 
+    events: list[dict[str, Any]] = []
     actions = automation.actions or []
     if not isinstance(actions, list):
-        return
+        return events
     deal = await session.get(CrmDeal, deal_id)
     if deal is None:
-        return
+        return events
     for action in actions:
         if not isinstance(action, dict):
             continue
@@ -158,16 +165,19 @@ async def _apply_actions(
         elif kind == "notify":
             text_body = str(action.get("text") or automation.name)
             targets = await _notify_targets(session, action, deal)
-            await notify(
-                session,
-                targets,
-                "automation",
-                {
-                    "text": text_body,
-                    "deal_id": str(deal.id),
-                    "dedupe_key": f"automation:{automation.id}:{deal.id}",
-                },
+            events.extend(
+                await notify(
+                    session,
+                    targets,
+                    "automation",
+                    {
+                        "text": text_body,
+                        "deal_id": str(deal.id),
+                        "dedupe_key": f"automation:{automation.id}:{deal.id}",
+                    },
+                )
             )
+    return events
 
 
 async def _notify_targets(

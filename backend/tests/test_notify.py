@@ -44,6 +44,15 @@ async def _purge_lead(factory, wa: str) -> None:
             .scalars()
             .all()
         )
+        await session.execute(
+            text("DELETE FROM crm_conversation_state WHERE whatsapp_id = :wa"), {"wa": wa}
+        )
+        await session.execute(text("DELETE FROM crm_outbox WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(
+            text("DELETE FROM knewit_messages WHERE whatsapp_id = :wa"), {"wa": wa}
+        )
+        await session.execute(text("DELETE FROM knewit_events WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": wa})
         await session.commit()
     await purge_contacts(factory, [str(c) for c in contacts])
 

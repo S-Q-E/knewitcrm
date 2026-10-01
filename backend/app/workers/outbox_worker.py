@@ -12,10 +12,10 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..config import Settings
-from ..models import CrmOutbox
+from ..models import CrmConversationState, CrmOutbox
 from ..services.bot_bridge import insert_outgoing_message
 from ..services.event_bus import bus
-from ..services.notifications import notify
+from ..services.notifications import notify, publish_pending
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ async def run_outbox_cycle(
                 "skipped": 0,
                 "reaped": 0,
             }
-            stats["reaped"] = await _reap_stale_sending(session)
+            stats["reaped"], reap_pending, reaped_rows = await _reap_stale_sending(session)
             rows = (
                 (
                     await session.execute(
@@ -143,6 +143,14 @@ async def run_outbox_cycle(
                 row.claimed_at = now
                 claimed.append((row.id, row.whatsapp_id, row.body, row.sent_by, row.attempts))
             stats["claimed"] = len(claimed)
+            claim_pending = reap_pending
+    # The claim transaction is committed: reaped failures are durable now.
+    publish_pending(claim_pending)
+    for outbox_id, whatsapp_id in reaped_rows:
+        bus.publish(
+            "outbox_status",
+            {"outbox_id": str(outbox_id), "whatsapp_id": whatsapp_id, "status": "failed"},
+        )
     # HTTP calls run outside the claim transaction; each row already carries
     # status='sending', so a concurrent instance never picks it up again.
     for outbox_id, whatsapp_id, body, sent_by, _attempts in claimed:
@@ -162,11 +170,14 @@ async def run_outbox_cycle(
     return stats
 
 
-async def _reap_stale_sending(session: AsyncSession) -> int:
+async def _reap_stale_sending(
+    session: AsyncSession,
+) -> tuple[int, list[dict], list[tuple[uuid.UUID, str]]]:
     """Fail 'sending' rows whose outcome was lost (worker died mid-flight).
 
     No auto-retry: the payload may have reached n8n, so redelivery could
-    double-send. The author is notified like for any other terminal failure.
+    double-send. Returns (count, pending notifications, reaped rows); the
+    caller publishes everything after the claim transaction commits.
     """
     cutoff = datetime.now(UTC) - timedelta(seconds=OUTBOX_STALE_SENDING_SECONDS)
     rows = (
@@ -180,29 +191,28 @@ async def _reap_stale_sending(session: AsyncSession) -> int:
         .scalars()
         .all()
     )
+    pending: list[dict] = []
     for row in rows:
         row.status = "failed"
         row.error = STALE_SENDING_ERROR
         row.next_attempt_at = None
+        row.claimed_at = None
         if row.sent_by is not None:
-            await notify(
-                session,
-                [row.sent_by],
-                "outbox_failed",
-                {
-                    "outbox_id": str(row.id),
-                    "whatsapp_id": row.whatsapp_id,
-                    "dedupe_key": f"outbox-failed:{row.id}",
-                },
+            pending.extend(
+                await notify(
+                    session,
+                    [row.sent_by],
+                    "outbox_failed",
+                    {
+                        "outbox_id": str(row.id),
+                        "whatsapp_id": row.whatsapp_id,
+                        "dedupe_key": f"outbox-failed:{row.id}",
+                    },
+                )
             )
     if rows:
         logger.warning("outbox reaped %d stale sending rows", len(rows))
-        for row in rows:
-            bus.publish(
-                "outbox_status",
-                {"outbox_id": str(row.id), "whatsapp_id": row.whatsapp_id, "status": "failed"},
-            )
-    return len(rows)
+    return len(rows), pending, [(row.id, row.whatsapp_id) for row in rows]
 
 
 async def _apply_success(
@@ -216,6 +226,7 @@ async def _apply_success(
 ) -> None:
     async with session_factory() as session:
         async with session.begin():
+            sent_at = datetime.now(UTC)
             updated = (
                 await session.execute(
                     text(
@@ -225,7 +236,7 @@ async def _apply_success(
                         " WHERE id = :id AND status = 'sending'"
                     ),
                     {
-                        "now": datetime.now(UTC),
+                        "now": sent_at,
                         "provider_id": payload.get("provider_message_id"),
                         "id": outbox_id,
                     },
@@ -248,6 +259,11 @@ async def _apply_success(
                     text("UPDATE crm_outbox SET knewit_message_id = :mid WHERE id = :id"),
                     {"mid": message_id, "id": outbox_id},
                 )
+            state = await session.get(CrmConversationState, whatsapp_id)
+            if state is not None:
+                state.last_message_at = sent_at
+                state.last_message_direction = "out"
+                state.last_message_preview = body[:200]
             stats["sent"] += 1
     bus.publish(
         "outbox_status",
@@ -278,6 +294,7 @@ async def _apply_failure(
             row.error = str(exc)[:2000]
             row.claimed_at = None
             failed_now = False
+            pending: list[dict] = []
             if is_retryable(exc) and row.attempts < OUTBOX_MAX_ATTEMPTS:
                 row.status = "queued"
                 row.next_attempt_at = datetime.now(UTC) + _retry_delay(row.attempts)
@@ -288,16 +305,19 @@ async def _apply_failure(
                 stats["failed"] += 1
                 failed_now = True
                 if sent_by is not None:
-                    await notify(
-                        session,
-                        [sent_by],
-                        "outbox_failed",
-                        {
-                            "outbox_id": str(outbox_id),
-                            "whatsapp_id": whatsapp_id,
-                            "dedupe_key": f"outbox-failed:{outbox_id}",
-                        },
+                    pending.extend(
+                        await notify(
+                            session,
+                            [sent_by],
+                            "outbox_failed",
+                            {
+                                "outbox_id": str(outbox_id),
+                                "whatsapp_id": whatsapp_id,
+                                "dedupe_key": f"outbox-failed:{outbox_id}",
+                            },
+                        )
                     )
+    publish_pending(pending)
     if failed_now:
         bus.publish(
             "outbox_status",

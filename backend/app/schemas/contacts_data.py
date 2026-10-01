@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 class BulkContactsIn(BaseModel):
     ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
     set_owner_id: uuid.UUID | None = None
+    unassign_owner: bool = False
     add_tag_id: uuid.UUID | None = None
     delete: bool = False
 

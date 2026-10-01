@@ -29,20 +29,26 @@ async def get_assignment_mode(session: AsyncSession) -> str:
 
 
 async def pick_assignee(session: AsyncSession) -> uuid.UUID | None:
-    """Round-robin pick among active managers; None when disabled or empty."""
-    if await get_assignment_mode(session) != MODE_ROUND_ROBIN:
+    """Round-robin pick among active managers; None when disabled or empty.
+
+    The settings row is locked (SELECT ... FOR UPDATE, seeded by migration
+    ``0013_round_robin``) so concurrent picks serialize: read, rotate and
+    store happen atomically within the caller's transaction. No commit here.
+    """
+    row = (
+        await session.execute(
+            text("SELECT value FROM crm_settings WHERE key = :key FOR UPDATE"),
+            {"key": SETTING_ASSIGNMENT},
+        )
+    ).scalar_one_or_none()
+    if not (isinstance(row, dict) and row.get("mode") == MODE_ROUND_ROBIN):
         return None
     managers = await active_managers(session)
     if not managers:
         return None
-    row = (
-        await session.execute(
-            text("SELECT value FROM crm_settings WHERE key = :key"), {"key": SETTING_ASSIGNMENT}
-        )
-    ).scalar_one_or_none()
-    last_index = -1
-    if isinstance(row, dict) and isinstance(row.get("last_index"), int):
-        last_index = row["last_index"]
+    last_index = row.get("last_index")
+    if not isinstance(last_index, int):
+        last_index = -1
     # The roster may change; rotate by position, not by stored user.
     next_index = (last_index + 1) % len(managers)
     picked = managers[next_index][0]

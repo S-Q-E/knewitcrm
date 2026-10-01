@@ -251,3 +251,53 @@ Why: protects against accidental data loss, keeps audit trail.
   `/contacts/:id` (deals, timeline, custom fields, tags). Saved views with
   `entity=contact` are supported. `src/api/types.ts` was not regenerated
   (no Node locally); the new API module uses hand-written types.
+## D18. Step 9C visibility rule for dialogs, chats and SSE
+- The brief asked for D15, but D15 is taken (tasks/notifications); this lands as D18.
+- Decision: dialogs (`/api/dialogs*`), `/api/chats/*` and SSE event kinds
+  `new_message`, `bot_event`, `outbox_status`, `bot_paused` obey
+  `restrict_managers_to_own` through the *deal* owner, not the contact
+  owner: the responsible user is the owner of the most recently updated
+  live deal of the linked contact (`services/visibility.py::lead_owner`).
+  Without a live deal the contact owner applies; without a contact the lead
+  counts as unassigned (visible to all).
+- Why the deal owner: the deal is the working object (round-robin assigns
+  deal owners, handover notifies deal owners); a reassigned deal must move
+  visibility with it. The dialogs list filters in SQL (LATERAL managed-deal
+  subquery + CASE fallback, paginated), single-object endpoints and the
+  per-connection SSE cache use the same helper, so REST and stream agree.
+
+## D19. Step 9C debt-closure notes
+- Unassign: PATCH distinguishes "field absent" from explicit `null` via
+  `payload.model_fields_set` (deals `owner_id`, contacts `owner_id`, tasks
+  `assignee_id`); bulk unassign is an explicit `unassign_owner: true` flag
+  (mutually exclusive with `set_owner_id`, else 422), because JSON PATCH
+  cannot tell "don't touch" from "clear" otherwise.
+- Round-robin: `pick_assignee` locks the pre-seeded `deal_assignment` settings
+  row (`SELECT ... FOR UPDATE`, migration `0013_round_robin`), so concurrent
+  deal creations serialize instead of duplicating picks.
+- Notifications: `dedupe_key` is a real column with a partial unique index
+  `(user_id, type, dedupe_key) WHERE read_at IS NULL` (migration
+  `0014_notify_dedupe`, pre-existing dupes collapsed keeping latest);
+  `notify()` inserts with `ON CONFLICT DO NOTHING` and returns pending bus
+  events that callers publish only AFTER commit (sync batch flush,
+  notify/outbox cycles, deal create). Pre-commit ghosts are gone by
+  construction; `test_realtime` publishes explicitly like production code.
+- Dialogs list: `crm_conversation_state` carries `last_message_at`,
+  `last_message_direction`, `last_message_preview` (migration `0015`,
+  backfilled), refreshed by the sync worker per batch and by the outbox
+  worker on send. The list orders/filters/paginates purely in SQL
+  (20k dialogs < 200ms); no new indexes on `knewit_*` (rule 1).
+- Worker flags: `OUTBOX_ENABLED`, `NOTIFICATIONS_ENABLED`,
+  `REALTIME_ENABLED` (default true) gate each loop independently in
+  lifespan; tests disable all four.
+- Legacy: `GET /api/dialogs/{wa}/messages` (explicit columns, auth,
+  lead-404) replaces the frontend's `/api/leads/*/messages` call;
+  `legacy_bot.get_lead` no longer uses `SELECT *`.
+- Frontend polling: `useStreamStatus()` (shared `useSyncExternalStore`)
+  exposes the singleton SSE state; message/outbox queries poll only while
+  disconnected and go quiet on `connected`.
+- `SECRET_KEY` is optional: nothing signs with it (opaque session tokens),
+  so requiring it only broke local setups; kept for tooling/future use.
+- Board `sum()` cartesian SAWarning: aggregates now read the subquery's own
+  columns instead of pulling `crm_deals` into the outer FROM.
+

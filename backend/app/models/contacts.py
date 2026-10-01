@@ -67,3 +67,6 @@ class CrmConversationState(Base):
     )
     unread_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     last_read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_message_direction: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_message_preview: Mapped[str | None] = mapped_column(Text, nullable=True)

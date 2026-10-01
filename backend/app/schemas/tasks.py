@@ -48,6 +48,7 @@ class TaskListOut(BaseModel):
 class TaskBulkIn(BaseModel):
     ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
     due_at: datetime | None = None
+    unassign_owner: bool = False
 
 
 class TaskBulkOut(BaseModel):

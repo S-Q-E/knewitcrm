@@ -87,6 +87,7 @@ class BoardOut(BaseModel):
 class BulkDealsIn(BaseModel):
     ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
     set_owner_id: uuid.UUID | None = None
+    unassign_owner: bool = False
     set_stage_id: uuid.UUID | None = None
     set_position: float | None = None
     add_tag_id: uuid.UUID | None = None

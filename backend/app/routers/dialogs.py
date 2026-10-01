@@ -5,14 +5,18 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import or_, select, text
+from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth_deps import CurrentUser, require_user
 from ..deps import get_session, pagination
 from ..errors import ApiError
-from ..models import CrmContact, CrmConversationState, CrmUser
+from ..models import CrmContact, CrmConversationState, CrmDeal, CrmUser
 from ..services.activity import log_activity
+from ..services.visibility import (
+    ensure_lead_visible,
+    restrict_managers_to_own,
+)
 
 router = APIRouter(prefix="/api/dialogs", tags=["dialogs"])
 
@@ -31,8 +35,26 @@ async def list_dialogs(
     session: AsyncSession = Depends(get_session),
     page: dict = Depends(pagination),
 ):
-    """Conversation list with last message, unread counts, and assignment."""
-    stmt = (
+    """Conversation list with last message, unread counts, and assignment.
+
+    Pagination and ordering live in SQL: rows come pre-sorted by the cached
+    ``last_message_at`` (maintained by the sync and outbox workers), and the
+    total comes from a separate COUNT query. Under scoped access managers see
+    only their own and unassigned dialogs (responsible = managed deal owner,
+    contact owner as fallback).
+    """
+    managed = (
+        select(
+            CrmDeal.contact_id.label("contact_id"),
+            CrmDeal.id.label("deal_id"),
+            CrmDeal.owner_id.label("deal_owner_id"),
+        )
+        .where(CrmDeal.deleted_at.is_(None))
+        .distinct(CrmDeal.contact_id)
+        .order_by(CrmDeal.contact_id, CrmDeal.updated_at.desc(), CrmDeal.id)
+        .subquery("md")
+    )
+    base = (
         select(
             CrmConversationState,
             CrmContact.id.label("contact_id"),
@@ -43,40 +65,53 @@ async def list_dialogs(
         .outerjoin(CrmContact, CrmContact.whatsapp_id == CrmConversationState.whatsapp_id)
         .outerjoin(CrmUser, CrmUser.id == CrmConversationState.assigned_to)
     )
+    restricted = await restrict_managers_to_own(session)
+    if not user.is_admin and restricted:
+        # One aggregate lookup per contact beats a lateral subquery per row;
+        # skipped entirely for admins/open access (nothing to filter by).
+        base = base.outerjoin(managed, managed.c.contact_id == CrmContact.id)
+        effective = case(
+            (managed.c.deal_id.is_not(None), managed.c.deal_owner_id),
+            else_=CrmContact.owner_id,
+        )
+        base = base.where(or_(effective.is_(None), effective == user.id))
     if assigned == "mine":
-        stmt = stmt.where(CrmConversationState.assigned_to == user.id)
+        base = base.where(CrmConversationState.assigned_to == user.id)
     elif assigned == "unassigned":
-        stmt = stmt.where(CrmConversationState.assigned_to.is_(None))
+        base = base.where(CrmConversationState.assigned_to.is_(None))
     if unread:
-        stmt = stmt.where(CrmConversationState.unread_count > 0)
+        base = base.where(CrmConversationState.unread_count > 0)
     if search:
         term = f"%{search.strip()}%"
-        stmt = stmt.where(
+        base = base.where(
             or_(
                 CrmContact.name.ilike(term),
                 CrmContact.phone.ilike(term),
                 CrmConversationState.whatsapp_id.ilike(term),
             )
         )
-    rows = (await session.execute(stmt)).all()
-    whatsapp_ids = [row[0].whatsapp_id for row in rows]
-    last_messages: dict[str, dict] = {}
-    if whatsapp_ids:
-        msgs = (
-            await session.execute(
-                text(
-                    "SELECT DISTINCT ON (whatsapp_id) whatsapp_id, direction, content,"
-                    " created_at FROM knewit_messages WHERE whatsapp_id = ANY(:ids)"
-                    " ORDER BY whatsapp_id, created_at DESC, id DESC"
-                ),
-                {"ids": whatsapp_ids},
+    total = (await session.execute(select(func.count()).select_from(base.subquery()))).scalar() or 0
+    rows = (
+        await session.execute(
+            base.order_by(
+                CrmConversationState.last_message_at.desc().nulls_last(),
+                CrmConversationState.whatsapp_id,
             )
-        ).mappings()
-        last_messages = {row["whatsapp_id"]: dict(row) for row in msgs}
+            .limit(page["limit"])
+            .offset(page["offset"])
+        )
+    ).all()
 
     items = []
     for state, contact_id, contact_name, contact_phone, assignee_name in rows:
-        last = last_messages.get(state.whatsapp_id)
+        if state.last_message_at is not None:
+            last_message: dict[str, str | None] | None = {
+                "direction": state.last_message_direction,
+                "content": state.last_message_preview,
+                "created_at": state.last_message_at.isoformat(),
+            }
+        else:
+            last_message = None
         items.append(
             {
                 "whatsapp_id": state.whatsapp_id,
@@ -88,18 +123,52 @@ async def list_dialogs(
                 "assignee_name": assignee_name,
                 "unread_count": state.unread_count,
                 "last_read_at": state.last_read_at.isoformat() if state.last_read_at else None,
-                "last_message": {
-                    "direction": last["direction"],
-                    "content": last["content"],
-                    "created_at": last["created_at"].isoformat(),
-                }
-                if last
-                else None,
+                "last_message": last_message,
             }
         )
-    items.sort(key=lambda item: (item["last_message"] or {}).get("created_at") or "", reverse=True)
-    total = len(items)
-    return {"items": items[page["offset"] : page["offset"] + page["limit"]], "total": total}
+    return {"items": items, "total": total}
+
+
+@router.get("/{whatsapp_id:path}/messages")
+async def get_dialog_messages(
+    whatsapp_id: str,
+    limit: int = Query(500, ge=1, le=2000),
+    user: CurrentUser = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Bot message history with an explicit column list (replaces /api/leads/*/messages)."""
+    lead_exists = (
+        await session.execute(
+            text("SELECT 1 FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": whatsapp_id}
+        )
+    ).scalar_one_or_none()
+    if lead_exists is None:
+        raise ApiError("LEAD_NOT_FOUND", "Dialog not found", 404)
+    await ensure_lead_visible(session, whatsapp_id, user)
+    rows = (
+        await session.execute(
+            text(
+                "SELECT id, direction, message_type, content, stage_at_moment,"
+                " created_at FROM knewit_messages"
+                " WHERE whatsapp_id = :whatsapp_id"
+                " ORDER BY created_at ASC, id ASC LIMIT :limit"
+            ),
+            {"whatsapp_id": whatsapp_id, "limit": limit},
+        )
+    ).mappings()
+    return {
+        "items": [
+            {
+                "id": row["id"],
+                "direction": row["direction"],
+                "message_type": row["message_type"],
+                "content": row["content"],
+                "stage_at_moment": row["stage_at_moment"],
+                "created_at": row["created_at"].isoformat(),
+            }
+            for row in rows
+        ]
+    }
 
 
 @router.get("/{whatsapp_id:path}")
@@ -108,7 +177,7 @@ async def get_dialog(
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    del user
+    await ensure_lead_visible(session, whatsapp_id, user)
     state = await session.get(CrmConversationState, whatsapp_id)
     contact = (
         await session.execute(select(CrmContact).where(CrmContact.whatsapp_id == whatsapp_id))
@@ -138,7 +207,7 @@ async def mark_dialog_read(
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    del user
+    await ensure_lead_visible(session, whatsapp_id, user)
     state = await session.get(CrmConversationState, whatsapp_id)
     if state is None:
         state = CrmConversationState(whatsapp_id=whatsapp_id)
@@ -156,6 +225,7 @@ async def update_dialog(
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
+    await ensure_lead_visible(session, whatsapp_id, user)
     state = await session.get(CrmConversationState, whatsapp_id)
     if state is None:
         state = CrmConversationState(whatsapp_id=whatsapp_id)

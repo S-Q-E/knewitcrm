@@ -18,6 +18,7 @@ from ..services.event_bus import bus
 from ..services.visibility import (
     ensure_visible,
     is_visible,
+    lead_owner,
     restrict_managers_to_own,
 )
 
@@ -65,12 +66,7 @@ async def _ensure_lead_visible(session: AsyncSession, whatsapp_id: str, user: Cu
     if not await _lead_exists(session, whatsapp_id):
         raise ApiError("LEAD_NOT_FOUND", "Dialog not found", 404)
     restricted = await restrict_managers_to_own(session)
-    owner_id = (
-        await session.execute(
-            select(CrmContact.owner_id).where(CrmContact.whatsapp_id == whatsapp_id)
-        )
-    ).scalar_one_or_none()
-    ensure_visible(is_visible(owner_id, user, restricted))
+    ensure_visible(is_visible(await lead_owner(session, whatsapp_id), user, restricted))
 
 
 async def _log_pause_event(

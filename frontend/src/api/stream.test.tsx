@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { backoffDelay, invalidationFor, useEventStream } from "@/api/stream";
+import { backoffDelay, invalidationFor, useEventStream, useStreamStatus } from "@/api/stream";
 import { Toaster, ToastProvider } from "@/components/toast";
 import { playPing } from "@/lib/sound";
 
@@ -58,6 +58,23 @@ function renderHook(queryClient: QueryClient) {
 function Probe() {
   useEventStream();
   return null;
+}
+
+function StatusProbe() {
+  useEventStream();
+  const { connected, fallback } = useStreamStatus();
+  return <p>{connected ? "online" : fallback ? "polling" : "offline"}</p>;
+}
+
+function renderStatus(queryClient: QueryClient) {
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>
+        <Toaster />
+        <StatusProbe />
+      </ToastProvider>
+    </QueryClientProvider>,
+  );
 }
 
 beforeEach(() => {
@@ -157,5 +174,23 @@ describe("useEventStream", () => {
     vi.advanceTimersByTime(15000);
     expect(spy).toHaveBeenCalledWith({ queryKey: ["dialogs"] });
     expect(spy).toHaveBeenCalledWith({ queryKey: ["notifications"] });
+  });
+
+  it("exposes connection status for polling hooks", () => {
+    vi.useFakeTimers();
+    renderStatus(new QueryClient());
+
+    expect(screen.getByText("offline")).toBeTruthy();
+    act(() => {
+      FakeEventSource.instances[0].onopen?.();
+    });
+    expect(screen.getByText("online")).toBeTruthy();
+    act(() => {
+      for (let i = 0; i < 6; i++) {
+        FakeEventSource.instances[FakeEventSource.instances.length - 1].fail();
+        vi.runOnlyPendingTimers();
+      }
+    });
+    expect(screen.getByText("polling")).toBeTruthy();
   });
 });

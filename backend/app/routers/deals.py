@@ -47,7 +47,7 @@ from ..services.assignment import pick_assignee
 from ..services.custom_fields import load_definitions, validate_custom_values
 from ..services.deal_flow import apply_deal_stage
 from ..services.event_bus import bus
-from ..services.notifications import notify
+from ..services.notifications import notify, publish_pending
 from ..services.tags import detach_entity_tags, entity_tags_map, replace_entity_tags
 from ..services.timeline import get_deal_timeline, parse_cursor, parse_types
 from ..services.visibility import (
@@ -342,12 +342,15 @@ async def create_deal(
     )
     session.add(deal)
     await session.flush()
+    pending: list[dict] = []
     if owner_id is not None and owner_id != user.id:
-        await notify(
-            session,
-            [owner_id],
-            "deal_assigned",
-            {"deal_id": str(deal.id), "title": deal.title, "by": user.name},
+        pending.extend(
+            await notify(
+                session,
+                [owner_id],
+                "deal_assigned",
+                {"deal_id": str(deal.id), "title": deal.title, "by": user.name},
+            )
         )
     session.add(
         CrmDealStageHistory(
@@ -368,6 +371,7 @@ async def create_deal(
     )
     await session.commit()
     await session.refresh(deal)
+    publish_pending(pending)
     bus.publish(
         "deal_updated",
         {
@@ -407,15 +411,15 @@ async def update_deal(
             "custom": deal.custom,
         }
     )
-    if payload.owner_id is not None and await session.get(CrmUser, payload.owner_id) is None:
-        raise ApiError("UNKNOWN_OWNER", "Owner not found", 422)
     if payload.title is not None:
         deal.title = payload.title.strip()
     if payload.amount is not None:
         deal.amount = payload.amount
     if payload.currency is not None:
         deal.currency = payload.currency.upper()
-    if payload.owner_id is not None:
+    if "owner_id" in payload.model_fields_set:
+        if payload.owner_id is not None and await session.get(CrmUser, payload.owner_id) is None:
+            raise ApiError("UNKNOWN_OWNER", "Owner not found", 422)
         deal.owner_id = payload.owner_id
     if payload.trial_at is not None:
         deal.trial_at = payload.trial_at
@@ -611,8 +615,13 @@ async def bulk_update_deals(
         and payload.set_stage_id is None
         and payload.add_tag_id is None
         and payload.close_lost_reason_id is None
+        and not payload.unassign_owner
     ):
         raise ApiError("EMPTY_BULK", "At least one bulk operation is required", 422)
+    if payload.set_owner_id is not None and payload.unassign_owner:
+        raise ApiError(
+            "CONFLICTING_BULK", "set_owner_id and unassign_owner are mutually exclusive", 422
+        )
     target_stage = None
     if payload.set_stage_id is not None:
         target_stage = await session.get(CrmStage, payload.set_stage_id)
@@ -658,7 +667,9 @@ async def bulk_update_deals(
     }
     for deal in by_id.values():
         ensure_visible(is_visible(deal.owner_id, user, restricted))
-        if payload.set_owner_id is not None:
+        if payload.unassign_owner:
+            deal.owner_id = None
+        elif payload.set_owner_id is not None:
             deal.owner_id = payload.set_owner_id
         if target_stage is not None:
             contact = contacts.get(deal.contact_id)

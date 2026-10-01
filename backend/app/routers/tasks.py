@@ -169,7 +169,7 @@ async def update_task(
         task.title = payload.title.strip()
     if payload.type is not None:
         task.type = payload.type
-    if payload.assignee_id is not None:
+    if "assignee_id" in payload.model_fields_set:
         await _check_assignee(session, payload.assignee_id)
         task.assignee_id = payload.assignee_id
     if payload.due_at is not None:
@@ -247,6 +247,8 @@ async def bulk_reschedule_tasks(
     for task in by_id.values():
         ensure_visible(is_visible(task.assignee_id, user, restricted))
         task.due_at = payload.due_at
+        if payload.unassign_owner:
+            task.assignee_id = None
     await session.flush()
     for task in by_id.values():
         await log_activity(session, user.id, "task", task.id, "task_bulk_updated", {})

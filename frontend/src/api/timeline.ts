@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import { useStreamStatus } from "@/api/stream";
 import type { components } from "@/api/types";
 
 export type TimelineItem = components["schemas"]["TimelineItemOut"];
@@ -116,6 +117,7 @@ export function useUpdateDialog() {
 }
 
 export function useLeadMessages(whatsappId: string | null) {
+  const { connected } = useStreamStatus();
   return useQuery({
     queryKey: ["lead-messages", whatsappId],
     queryFn: () =>
@@ -128,9 +130,10 @@ export function useLeadMessages(whatsappId: string | null) {
           stage_at_moment: string | null;
           created_at: string;
         }[];
-      }>(`/api/leads/${encodeURIComponent(whatsappId as string)}/messages?limit=500`),
+      }>(`/api/dialogs/${encodeURIComponent(whatsappId as string)}/messages?limit=500`),
     enabled: whatsappId !== null,
-    refetchInterval: 5000,
+    // Live updates arrive over SSE; poll only as a fallback while offline.
+    refetchInterval: connected ? false : 5000,
   });
 }
 
@@ -156,6 +159,7 @@ export interface QuickReply {
 }
 
 export function useOutbox(whatsappId: string | null) {
+  const { connected } = useStreamStatus();
   return useQuery({
     queryKey: ["outbox", whatsappId],
     queryFn: () =>
@@ -163,7 +167,8 @@ export function useOutbox(whatsappId: string | null) {
         `/api/chats/${encodeURIComponent(whatsappId as string)}/outbox?limit=100`,
       ),
     enabled: whatsappId !== null,
-    refetchInterval: 3000,
+    // Live updates arrive over SSE; poll only as a fallback while offline.
+    refetchInterval: connected ? false : 3000,
   });
 }
 
