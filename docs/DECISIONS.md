@@ -266,8 +266,7 @@ Why: protects against accidental data loss, keeps audit trail.
   subquery + CASE fallback, paginated), single-object endpoints and the
   per-connection SSE cache use the same helper, so REST and stream agree.
 
-## D19. Step 9C debt-closure notes
-- Unassign: PATCH distinguishes "field absent" from explicit `null` via
+## D19. Step 9C debt-closure notes- Unassign: PATCH distinguishes "field absent" from explicit `null` via
   `payload.model_fields_set` (deals `owner_id`, contacts `owner_id`, tasks
   `assignee_id`); bulk unassign is an explicit `unassign_owner: true` flag
   (mutually exclusive with `set_owner_id`, else 422), because JSON PATCH
@@ -300,4 +299,63 @@ Why: protects against accidental data loss, keeps audit trail.
   so requiring it only broke local setups; kept for tooling/future use.
 - Board `sum()` cartesian SAWarning: aggregates now read the subquery's own
   columns instead of pulling `crm_deals` into the outer FROM.
+
+## D20. Step 12 analytics notes
+- Endpoints: `GET /api/analytics/overview` (funnel + summary + dynamics +
+  managers + bot + sources + tags in one call) and `GET /api/analytics/export`
+  (`section=funnel|dynamics|managers|objections|abandoned|sources|tags|lost_reasons`,
+  CSV with UTF-8 BOM via the shared `csv_stream`). Both require auth, both
+  roles; validation errors are `INVALID_PERIOD` / `PERIOD_TOO_LARGE` (422),
+  unknown pipeline is 404, unknown owner is 422.
+- Period params are calendar dates (`date_from`/`date_to`, default last 30 days
+  incl. today, max 366 days) interpreted as day boundaries in
+  `settings.default_timezone` (default Asia/Almaty) and converted to UTC for
+  comparisons; DB stores UTC. Daily/weekly buckets are grouped in SQL with
+  `DATE(col AT TIME ZONE :tz)`.
+- Funnel is cohort-based: deals created in the period in the selected pipeline
+  (default pipeline when omitted). `reached` = distinct deals with a
+  `crm_deal_stage_history.to_stage_id` row (any time, so late moves still count)
+  UNION bot `knewit_events.to_stage` mapped via `bot_stage_key`, with the
+  current stage as fallback for deals without history. Step conversion =
+  reached[i]/reached[i-1]; overall = cohort `won` deals / first-stage reached;
+  `total_finished` = cohort won deals (not last-stage reach, because won/lost
+  deals keep their open stage). Average time on stage uses completed stays only
+  (closed by a later move); bottleneck = reached stage with the lowest step
+  conversion.
+- Summary: `new_leads` from `knewit_leads.created_at`; `trials_booked` from
+  `deals.trial_at`; won/lost by `closed_at`; lost breakdown by reason (NULL
+  reason reads as "Без причины").
+- First response (managers) = first `in` message -> first later `out` message
+  (bot or manager) for the linked `whatsapp_id`, averaged in hours; dialogs
+  without an outgoing reply are excluded.
+- Bot: in/out counts + `AVG(response_time_ms)` over outgoing messages,
+  `SUM(tokens_used)` total and per day; handover = leads created in the period
+  with current status `МЕНЕДЖЕР` or any `transferred_to_manager` event;
+  closed-without-manager = the rest; `last_objection` top 10; abandoned =
+  cohort grouped by `current_stage`.
+- Sources group contacts created in the period by current `source` value
+  (empty -> `unknown`); won counts/sums join deals created in the period.
+  Tags use deal tags (`crm_entity_tags` entity `deal`): `deals` created in the
+  period, `won`/`won_sum` closed in the period.
+- Visibility: deal/lead-derived aggregates honor `restrict_managers_to_own`
+  (restricted managers are forced onto their own scope; a foreign `owner_id`
+  reads as 404 like the deals endpoints). The managers roster itself always
+  lists active users (per-owner by construction). Aggregates are bounded
+  (stages/users/tags), so no pagination: drill-down reuses the paginated
+  `GET /api/deals` list (`stage_id` + created bounds) in a modal.
+- No index was created on `knewit_*` (rule 1). Migration
+  `0017_analytics_indexes` adds `IF NOT EXISTS` indexes on `crm_*` hotspot
+  columns only (deals created/closed/trial/status/pipeline, history
+  deal+at/to-stage, contacts created/source, tasks done/due, entity-tags
+  composite). Analytics reads `knewit_*` directly; volumes are hundreds of
+  rows, so no materialization worker is needed (revisit if traffic grows 100x).
+- Frontend `/analytics` (recharts 2.x): period presets + custom range, funnel
+  and owner filters, day/week toggle, KPI cards, funnel bar (click = drill-down
+  modal), dynamics lines, sortable funnel/manager tables, CSV buttons. API
+  module uses hand-written types (same precedent as D17); `src/api/types.ts`
+  untouched.
+- Drive-by fixes required by the gates (all pre-existing, behavior-neutral):
+  `contacts.tsx` toast variant `"destructive"` -> `"error"` (typecheck was red),
+  one intentional `set-state-in-effect` documented with an inline disable
+  comment, prettier-only reformat of 4 contacts files.
 

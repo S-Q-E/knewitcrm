@@ -122,6 +122,27 @@
 - [ ] Frontend tsc/eslint/vitest/build не запускались локально (нет Node); проверить в CI
 ## Step 11 — Settings (locale, timezone Asia/Almaty, currency KZT) [todo]
 ## Step 12 — Roles hardening + admin panel [todo]
+## Step 12 — Аналитика (страница /analytics) [done]
+- [x] Backend: `services/analytics.py` (SQL-агрегаты, см. D20), `schemas/analytics.py`,
+  `routers/analytics.py` (`GET /api/analytics/overview`, `GET /api/analytics/export`),
+  миграция `0017_analytics_indexes` (только `crm_*`, `IF NOT EXISTS`)
+- [x] Воронка когортная (history + `knewit_events` через `bot_stage_key` + fallback текущей
+  стадии), конверсии, среднее время, узкое место; drill-down — модалка со списком сделок
+  через пагинированный `GET /api/deals`
+- [x] Итоги (лиды/пробные/won+сумма+средний чек/потери по причинам), динамика день/неделя,
+  менеджеры (в работе, won/lost, конверсия, сумма, первый ответ, задачи),
+  бот (in/out, response_time, токены по дням, handover, возражения, заброшенные стадии),
+  источники и теги; экспорт 8 секций в CSV
+- [x] `backend/tests/test_analytics.py`: 4 теста на фиксированном наборе (ручной пересчёт,
+  пустой период, сделки без истории, фильтр owner, недели, валидация, экспорт, скоуп
+  `restrict_managers_to_own`); полный backend-сьют зелёный (161 тест: 157 старых + 4 новых;
+  по ходу найденный мусор от упавших прогонов в dev-БД вычищен); ручной прогон (overview +
+  CSV + 422) на локальном сервере
+- [x] Frontend: `recharts@^2.15.4`, `api/analytics.ts` + `pages/analytics.tsx` (пресеты
+  периода, фильтры, KPI, графики, сортируемые таблицы, CSV, drill-down), роут `/analytics`
+  вместо заглушки; `tsc/eslint/prettier/vitest/build` зелёные (Node 20 найден в
+  `/tmp/opencode/node`); drive-by фиксы красных гейтов (см. D20)
+- [ ] `docker build` не запускался локально; проверить в CI
 ## Step 13 — Production deploy (Railway, Dockerfile, migrations) [todo]
 ## Step 14 — Load test + polling/SSE tuning [todo]
 ## Step 15 — Docs + handover [todo]

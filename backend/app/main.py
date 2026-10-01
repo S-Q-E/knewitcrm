@@ -18,6 +18,7 @@ from .errors import ApiError, api_error_handler, error_payload
 from .logging_utils import setup_logging
 from .middleware import RequestIdMiddleware
 from .routers import (
+    analytics,
     auth,
     automations,
     chats,
@@ -141,6 +142,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(auth.router)
+    app.include_router(analytics.router)
     app.include_router(automations.router)
     app.include_router(users.router)
     app.include_router(pipelines.router)

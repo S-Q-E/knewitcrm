@@ -93,7 +93,9 @@ export function ContactsPage() {
               onClick={() => setTab(id)}
               className={cn(
                 "rounded-md px-2 py-1",
-                tab === id ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800",
+                tab === id
+                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                  : "hover:bg-slate-100 dark:hover:bg-slate-800",
               )}
             >
               {label}
@@ -165,7 +167,10 @@ function ContactsList() {
         delete: del,
       });
       setSelected(new Set());
-      push({ title: del ? `В корзину: ${selected.size}` : `Обновлено: ${selected.size}`, variant: "default" });
+      push({
+        title: del ? `В корзину: ${selected.size}` : `Обновлено: ${selected.size}`,
+        variant: "default",
+      });
     } catch (error) {
       toastError(push, error);
     }
@@ -206,7 +211,9 @@ function ContactsList() {
         >
           <option value="">Все ответственные</option>
           {users.data?.items.map((u) => (
-            <option key={u.id} value={u.id}>{u.name}</option>
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
           ))}
         </select>
         <select
@@ -220,10 +227,16 @@ function ContactsList() {
           <option value="manual">Вручную</option>
           <option value="import">Импорт</option>
         </select>
-        <a className="text-sm text-blue-600 hover:underline" href={exportUrl("contacts", "csv", qs)}>
+        <a
+          className="text-sm text-blue-600 hover:underline"
+          href={exportUrl("contacts", "csv", qs)}
+        >
           CSV
         </a>
-        <a className="text-sm text-blue-600 hover:underline" href={exportUrl("contacts", "xlsx", qs)}>
+        <a
+          className="text-sm text-blue-600 hover:underline"
+          href={exportUrl("contacts", "xlsx", qs)}
+        >
           XLSX
         </a>
       </div>
@@ -231,7 +244,10 @@ function ContactsList() {
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="font-medium">Виды:</span>
         {savedViews.data?.items.map((v) => (
-          <span key={v.id} className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-0.5 dark:border-slate-700">
+          <span
+            key={v.id}
+            className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-0.5 dark:border-slate-700"
+          >
             <button
               type="button"
               className="hover:underline"
@@ -264,14 +280,20 @@ function ContactsList() {
           onChange={(e) => setViewName(e.target.value)}
           className="h-8 w-40 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
         />
-        <Button size="sm" variant="secondary" onClick={() => void saveView()}>Сохранить вид</Button>
+        <Button size="sm" variant="secondary" onClick={() => void saveView()}>
+          Сохранить вид
+        </Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <span className="font-medium">Колонки:</span>
         {ALL_COLUMNS.map((col) => (
           <label key={col.id} className="flex items-center gap-1">
-            <input type="checkbox" checked={columns.includes(col.id)} onChange={() => toggleColumn(col.id)} />
+            <input
+              type="checkbox"
+              checked={columns.includes(col.id)}
+              onChange={() => toggleColumn(col.id)}
+            />
             {col.label}
           </label>
         ))}
@@ -288,7 +310,9 @@ function ContactsList() {
           >
             <option value="">Ответственный…</option>
             {users.data?.items.map((u) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
             ))}
           </select>
           <select
@@ -299,10 +323,14 @@ function ContactsList() {
           >
             <option value="">Тег…</option>
             {tags.data?.items.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
             ))}
           </select>
-          <Button size="sm" onClick={() => void runBulk(false)} disabled={bulk.isPending}>Применить</Button>
+          <Button size="sm" onClick={() => void runBulk(false)} disabled={bulk.isPending}>
+            Применить
+          </Button>
           <Button
             size="sm"
             variant="secondary"
@@ -335,7 +363,19 @@ function ContactsList() {
                   <button
                     type="button"
                     onClick={() =>
-                      toggleSort(col === "whatsapp" ? "created_at" : col === "tags" ? "created_at" : col === "owner" ? "created_at" : col === "phone" ? "created_at" : col === "email" ? "created_at" : col)
+                      toggleSort(
+                        col === "whatsapp"
+                          ? "created_at"
+                          : col === "tags"
+                            ? "created_at"
+                            : col === "owner"
+                              ? "created_at"
+                              : col === "phone"
+                                ? "created_at"
+                                : col === "email"
+                                  ? "created_at"
+                                  : col,
+                      )
                     }
                     className="font-medium hover:underline"
                   >
@@ -349,7 +389,10 @@ function ContactsList() {
           </thead>
           <tbody>
             {items.map((c) => (
-              <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50">
+              <tr
+                key={c.id}
+                className="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50"
+              >
                 <td className="p-2">
                   <input
                     type="checkbox"
@@ -368,17 +411,20 @@ function ContactsList() {
                 {columns.map((col) => (
                   <td key={col} className="max-w-60 truncate p-2">
                     {col === "name" ? (
-                      <Link className="font-medium text-blue-600 hover:underline" to={`/contacts/${c.id}`}>
+                      <Link
+                        className="font-medium text-blue-600 hover:underline"
+                        to={`/contacts/${c.id}`}
+                      >
                         {c.name ?? "—"}
                       </Link>
                     ) : col === "phone" ? (
-                      c.phone ?? "—"
+                      (c.phone ?? "—")
                     ) : col === "email" ? (
-                      c.email ?? "—"
+                      (c.email ?? "—")
                     ) : col === "whatsapp" ? (
-                      c.whatsapp_id ?? "—"
+                      (c.whatsapp_id ?? "—")
                     ) : col === "owner" ? (
-                      users.data?.items.find((u) => u.id === c.owner_id)?.name ?? "—"
+                      (users.data?.items.find((u) => u.id === c.owner_id)?.name ?? "—")
                     ) : (
                       c.tags.map((t) => t.name).join(", ") || "—"
                     )}
@@ -409,11 +455,23 @@ function ContactsList() {
       </div>
 
       <div className="flex items-center gap-2 text-sm">
-        <Button variant="secondary" size="sm" disabled={offset === 0} onClick={() => setOffset((v) => Math.max(0, v - limit))}>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={offset === 0}
+          onClick={() => setOffset((v) => Math.max(0, v - limit))}
+        >
           Назад
         </Button>
-        <span>{offset + 1}–{Math.min(offset + limit, total)} из {total}</span>
-        <Button variant="secondary" size="sm" disabled={offset + limit >= total} onClick={() => setOffset((v) => v + limit)}>
+        <span>
+          {offset + 1}–{Math.min(offset + limit, total)} из {total}
+        </span>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={offset + limit >= total}
+          onClick={() => setOffset((v) => v + limit)}
+        >
           Далее
         </Button>
       </div>
@@ -432,9 +490,15 @@ function DuplicatesView() {
   if (groups.length === 0) return <p className="text-sm text-slate-500">Дубликатов не найдено.</p>;
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-slate-500">Групп: {groups.length}. Объединение переносит сделки, заметки, задачи и теги; источник остаётся в корзине.</p>
+      <p className="text-sm text-slate-500">
+        Групп: {groups.length}. Объединение переносит сделки, заметки, задачи и теги; источник
+        остаётся в корзине.
+      </p>
       {groups.map((g) => (
-        <div key={g.key} className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+        <div
+          key={g.key}
+          className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"
+        >
           <p className="text-sm font-medium">
             {g.kind === "phone" ? "Телефон" : "Email"}: {g.value}
           </p>
@@ -447,7 +511,9 @@ function DuplicatesView() {
                   checked={winners[g.key] === id}
                   onChange={() => setWinners((prev) => ({ ...prev, [g.key]: id }))}
                 />
-                <Link className="text-blue-600 hover:underline" to={`/contacts/${id}`}>{id.slice(0, 8)}</Link>
+                <Link className="text-blue-600 hover:underline" to={`/contacts/${id}`}>
+                  {id.slice(0, 8)}
+                </Link>
                 <span className="text-slate-500">оставить как основной</span>
               </label>
             ))}
@@ -493,7 +559,10 @@ function ImportView() {
   const readHeader = async (f: File) => {
     const text = await f.text();
     const first = text.split(/\r?\n/)[0] ?? "";
-    const cols = first.split(/[,;]/).map((c) => c.trim()).filter(Boolean);
+    const cols = first
+      .split(/[,;]/)
+      .map((c) => c.trim())
+      .filter(Boolean);
     setHeader(cols);
     setMapping(autoMapping(cols));
   };
@@ -512,7 +581,7 @@ function ImportView() {
     });
     if (!resp.ok) {
       const body = (await resp.json().catch(() => null)) as { error?: { message?: string } } | null;
-      push({ title: body?.error?.message ?? "Ошибка предпросмотра", variant: "destructive" });
+      push({ title: body?.error?.message ?? "Ошибка предпросмотра", variant: "error" });
       return;
     }
     const data = (await resp.json()) as ImportPreview;
@@ -532,7 +601,7 @@ function ImportView() {
       headers: token ? { "X-CSRF-Token": decodeURIComponent(token) } : {},
     });
     if (!resp.ok) {
-      push({ title: "Ошибка импорта", variant: "destructive" });
+      push({ title: "Ошибка импорта", variant: "error" });
       return;
     }
     const data = (await resp.json()) as { id: string };
@@ -542,6 +611,8 @@ function ImportView() {
 
   const finished = job.data?.status === "done" || job.data?.status === "failed";
   useEffect(() => {
+    // Intentional sync: stop polling once the polled import reaches a terminal state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (finished && running) setRunning(false);
   }, [finished, running]);
 
@@ -571,7 +642,9 @@ function ImportView() {
                 className="h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
               >
                 {IMPORT_FIELDS.map((f) => (
-                  <option key={f} value={f}>{f}</option>
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
                 ))}
               </select>
             </label>
@@ -579,7 +652,12 @@ function ImportView() {
         </div>
       )}
       <div className="flex gap-2">
-        <Button size="sm" variant="secondary" disabled={!file} onClick={() => void doPreviewFetch()}>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={!file}
+          onClick={() => void doPreviewFetch()}
+        >
           Предпросмотр
         </Button>
         <Button size="sm" disabled={!file} onClick={() => void doImport()}>
@@ -588,11 +666,15 @@ function ImportView() {
       </div>
       {preview && (
         <div className="text-sm">
-          <p>Всего строк: {preview.total}, валидных: {preview.valid}, с ошибками: {preview.invalid}</p>
+          <p>
+            Всего строк: {preview.total}, валидных: {preview.valid}, с ошибками: {preview.invalid}
+          </p>
           {preview.errors.length > 0 && (
             <ul className="mt-1 max-h-32 overflow-auto text-red-600">
               {preview.errors.map((e, i) => (
-                <li key={i}>Строка {e.row}: {e.error}</li>
+                <li key={i}>
+                  Строка {e.row}: {e.error}
+                </li>
               ))}
             </ul>
           )}
@@ -600,11 +682,16 @@ function ImportView() {
       )}
       {job.data && (
         <div className="text-sm">
-          <p>Задача {job.data.id}: {job.data.status}, ок: {job.data.ok_count}, ошибок: {job.data.error_count}</p>
+          <p>
+            Задача {job.data.id}: {job.data.status}, ок: {job.data.ok_count}, ошибок:{" "}
+            {job.data.error_count}
+          </p>
           {job.data.errors.length > 0 && (
             <ul className="mt-1 max-h-32 overflow-auto text-red-600">
               {job.data.errors.map((e, i) => (
-                <li key={i}>Строка {e.row}: {e.error}</li>
+                <li key={i}>
+                  Строка {e.row}: {e.error}
+                </li>
               ))}
             </ul>
           )}
@@ -623,7 +710,8 @@ function TrashView() {
     return <p className="text-sm text-slate-500">Корзина доступна только администраторам.</p>;
   }
   if (trash.isPending) return <p className="text-sm text-slate-500">Загрузка корзины…</p>;
-  if (trash.isError) return <p className="text-sm text-red-600">Нет доступа или ошибка загрузки.</p>;
+  if (trash.isError)
+    return <p className="text-sm text-red-600">Нет доступа или ошибка загрузки.</p>;
   const items = trash.data?.items ?? [];
   if (items.length === 0) return <p className="text-sm text-slate-500">Корзина пуста.</p>;
   return (
@@ -639,9 +727,10 @@ function TrashView() {
             type="button"
             className="ml-auto text-blue-600 hover:underline"
             onClick={() => {
-              const doRestore = item.kind === "contact"
-                ? restoreContact.mutateAsync(item.id)
-                : api.post(`/api/deals/${item.id}/restore`).then(() => undefined);
+              const doRestore =
+                item.kind === "contact"
+                  ? restoreContact.mutateAsync(item.id)
+                  : api.post(`/api/deals/${item.id}/restore`).then(() => undefined);
               void doRestore
                 .then(() => push({ title: "Восстановлено", variant: "default" }))
                 .catch((e: unknown) => toastError(push, e));

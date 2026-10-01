@@ -20,10 +20,6 @@ export function DealsPage() {
   return <StubPage title="Сделки (legacy)" hint="Старая заглушка, заменена канбаном." />;
 }
 
-export function AnalyticsPage() {
-  return <StubPage title="Аналитика" hint="Воронка и отчёты появятся здесь на следующем шаге." />;
-}
-
 export function SettingsPage() {
   return (
     <StubPage title="Настройки" hint="Настройки CRM, воронка и пользователи (только для админа)." />

@@ -28,9 +28,7 @@ export interface ContactFilters {
   created_to?: string;
 }
 
-export function contactQueryString(
-  params: Record<string, string | string[] | undefined>,
-): string {
+export function contactQueryString(params: Record<string, string | string[] | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === "") {
@@ -267,6 +265,10 @@ export function useDeleteContactSavedView() {
   });
 }
 
-export function exportUrl(entity: "contacts" | "deals", format: "csv" | "xlsx", qs: string): string {
+export function exportUrl(
+  entity: "contacts" | "deals",
+  format: "csv" | "xlsx",
+  qs: string,
+): string {
   return `/api/${entity}/export?format=${format}${qs ? `&${qs.slice(1)}` : ""}`;
 }

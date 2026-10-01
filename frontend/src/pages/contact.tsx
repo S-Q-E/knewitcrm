@@ -66,7 +66,9 @@ export function ContactPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Link className="text-sm text-blue-600 hover:underline" to="/contacts">← К контактам</Link>
+      <Link className="text-sm text-blue-600 hover:underline" to="/contacts">
+        ← К контактам
+      </Link>
       <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <h1 className="text-xl font-bold">{c.name ?? "Без имени"}</h1>
         <p className="mt-1 text-sm text-slate-500">
@@ -92,7 +94,9 @@ export function ContactPage() {
             >
               <option value="">—</option>
               {users.data?.items.map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
               ))}
             </select>
           </label>
@@ -104,7 +108,9 @@ export function ContactPage() {
                 <span className="text-xs text-slate-500">{def.label}</span>
                 <input
                   defaultValue={String(c.custom[def.key] ?? "")}
-                  onChange={(e) => setCustomForm((prev) => ({ ...prev, [def.key]: e.target.value }))}
+                  onChange={(e) =>
+                    setCustomForm((prev) => ({ ...prev, [def.key]: e.target.value }))
+                  }
                   className="h-9 rounded-md border border-slate-200 bg-white px-2 dark:border-slate-700 dark:bg-slate-900"
                 />
               </label>
@@ -112,7 +118,9 @@ export function ContactPage() {
           </div>
         )}
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => void save()} disabled={update.isPending}>Сохранить</Button>
+          <Button size="sm" onClick={() => void save()} disabled={update.isPending}>
+            Сохранить
+          </Button>
           <Button
             size="sm"
             variant="secondary"
@@ -159,8 +167,12 @@ export function ContactPage() {
         <ul className="mt-2 flex flex-col gap-1 text-sm">
           {(deals.data?.items ?? []).map((d) => (
             <li key={d.id}>
-              <Link className="text-blue-600 hover:underline" to={`/deals/${d.id}`}>{d.title}</Link>
-              <span className="ml-2 text-slate-500">{d.status} · {d.amount ?? "—"} {d.currency}</span>
+              <Link className="text-blue-600 hover:underline" to={`/deals/${d.id}`}>
+                {d.title}
+              </Link>
+              <span className="ml-2 text-slate-500">
+                {d.status} · {d.amount ?? "—"} {d.currency}
+              </span>
             </li>
           ))}
         </ul>
@@ -200,10 +212,17 @@ export function ContactPage() {
         {timeline.data && (
           <ul className="mt-2 flex flex-col gap-1 text-sm">
             {timeline.data.items.map((item) => (
-              <li key={item.key} className="rounded border border-slate-100 p-2 dark:border-slate-800">
-                <span className="mr-2 rounded bg-slate-100 px-1 text-xs dark:bg-slate-800">{item.kind}</span>
+              <li
+                key={item.key}
+                className="rounded border border-slate-100 p-2 dark:border-slate-800"
+              >
+                <span className="mr-2 rounded bg-slate-100 px-1 text-xs dark:bg-slate-800">
+                  {item.kind}
+                </span>
                 <span className="text-slate-500">{new Date(item.at).toLocaleString("ru-RU")}</span>
-                <pre className="mt-1 max-h-24 overflow-auto text-xs">{JSON.stringify(item.data, null, 1)}</pre>
+                <pre className="mt-1 max-h-24 overflow-auto text-xs">
+                  {JSON.stringify(item.data, null, 1)}
+                </pre>
               </li>
             ))}
             {timeline.data.items.length === 0 && <li className="text-slate-500">Пока пусто.</li>}

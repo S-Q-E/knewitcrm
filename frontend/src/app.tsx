@@ -2,8 +2,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { useMe } from "@/api/auth";
 import { Layout } from "@/components/layout";
+import { AnalyticsPage } from "@/pages/analytics";
 import { LoginPage } from "@/pages/login";
-import { AnalyticsPage, ForbiddenPage, SettingsPage } from "@/pages/stubs";
+import { ForbiddenPage, SettingsPage } from "@/pages/stubs";
 import { ContactPage } from "@/pages/contact";
 import { ContactsPage } from "@/pages/contacts";
 import { DealPage } from "@/pages/deal";

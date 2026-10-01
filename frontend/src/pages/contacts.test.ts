@@ -18,7 +18,9 @@ describe("contacts helpers", () => {
   });
 
   it("builds export urls with current filters", () => {
-    expect(exportUrl("contacts", "csv", "?search=x")).toBe("/api/contacts/export?format=csv&search=x");
+    expect(exportUrl("contacts", "csv", "?search=x")).toBe(
+      "/api/contacts/export?format=csv&search=x",
+    );
     expect(exportUrl("deals", "xlsx", "")).toBe("/api/deals/export?format=xlsx");
   });
 });
