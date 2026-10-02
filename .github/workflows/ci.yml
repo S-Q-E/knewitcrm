@@ -3,6 +3,7 @@ name: lint-tests
 on:
   push:
   pull_request:
+  workflow_dispatch: # manual production deploy (pick the tag in the UI)
 
 jobs:
   lint-tests:
@@ -129,3 +130,57 @@ jobs:
       - name: Run Playwright
         run: npm run e2e
         working-directory: frontend
+
+  docker-build:
+    # Catches a broken Dockerfile before Railway does. No push: Railway
+    # builds from source on deploy; this is a pure build check.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t knewitcrm:${{ github.sha }} .
+
+  deploy-staging:
+    # Auto-deploy on every push to develop, after all gates are green.
+    needs: [lint-tests, frontend, e2e, docker-build]
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Railway staging
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_SERVICE: ${{ vars.RAILWAY_SERVICE_STAGING }}
+        run: |
+          npm i -g @railway/cli
+          railway up --project "$RAILWAY_PROJECT_ID" --environment staging --service "$RAILWAY_SERVICE"
+      - name: Staging smoke
+        if: ${{ secrets.SMOKE_STAGING_PASSWORD != '' }}
+        env:
+          BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          SMOKE_EMAIL: ${{ secrets.SMOKE_STAGING_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_STAGING_PASSWORD }}
+        run: scripts/smoke.sh
+
+  deploy-production:
+    # Release by tag (git tag v1.2.0 && git push origin v1.2.0) or manually
+    # via workflow_dispatch. The `production` environment should require
+    # reviewers (manual approval) — see docs/DEPLOY.md.
+    needs: [lint-tests, frontend, e2e, docker-build]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Railway production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_SERVICE: ${{ vars.RAILWAY_SERVICE_PRODUCTION }}
+        run: |
+          npm i -g @railway/cli
+          railway up --project "$RAILWAY_PROJECT_ID" --environment production --service "$RAILWAY_SERVICE"
+      - name: Next step
+        run: echo "Run scripts/smoke.sh against the production domain manually (see docs/DEPLOY.md)."

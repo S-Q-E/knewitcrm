@@ -167,7 +167,9 @@
   вместо заглушки; `tsc/eslint/prettier/vitest/build` зелёные (Node 20 найден в
   `/tmp/opencode/node`); drive-by фиксы красных гейтов (см. D20)
 - [ ] `docker build` не запускался локально; проверить в CI
-## Step 13 — Production deploy (Railway, Dockerfile, migrations) [todo]
+## Step 13 — Production deploy (Railway, Dockerfile, migrations) [done]
+- Covered by Step 15 below (separate environments, entrypoint, DEPLOY.md,
+  smoke script, CI deploy jobs). The placeholder stays for numbering only.
 ## Step 13b — Раздел «Настройки» [done]
 - Note: brief numbering collides with the old `Step 13 — Production deploy` placeholder
   above; this step keeps the `13b` suffix like earlier out-of-order briefs, deploy stays [todo].
@@ -212,7 +214,36 @@
 - [x] Старый плейсхолдер «Load test + polling/SSE tuning» поглощён шагом: perf-анализ
   и скрипт `scripts/perf_seed_100k.sql` + `scripts/stream_load_test.py` (шаг 10) закрывают тему
 - [ ] `docker build` не запускался локально; проверить в CI
-## Step 15 — Docs + handover [todo]
+## Step 15 — Production prep on Railway [done]
+- Note: brief numbering collides with the old `Step 15 — Docs + handover`
+  placeholder below; this step implements the production-readiness brief.
+- Handover scope is production readiness (brief Step 15); the remaining
+  handover polish (if any) moves with Step 16.
+- [x] `Dockerfile`: multi-stage (node build → python runtime), digest-pinned
+  bases (`python:3.12.14-slim`, `node:20.19.0-slim`), non-root `appuser`,
+  `.dockerignore` (no secrets, fixtures, or build outputs in context),
+  dependency-first layers for npm/pip cache reuse
+- [x] Start: `scripts/docker-entrypoint.sh` (executable) — `alembic upgrade
+  head`, then `uvicorn backend.app.main:app --workers 2 --proxy-headers
+  --forwarded-allow-ips="*" --timeout-graceful-shutdown 20`; concurrent
+  boots serialize via `pg_advisory_lock(91030000)` in `backend/alembic/env.py`
+- [x] `railway.json`: already had builder DOCKERFILE + healthcheckPath +
+  healthcheckTimeout + restartPolicyType (verified by test, no change needed)
+- [x] `docs/DEPLOY.md` (in Russian): staging vs production, full env table,
+  n8n-DB attach + least-privilege `crm_app` SQL with negative GRANT checks,
+  domain/HTTPS, first-run order (migrate → admin → backfill → workers →
+  smoke → backups → n8n), backups pointer, rollback + expand→migrate→contract
+  rule, CI/CD secrets
+- [x] `scripts/smoke.sh` (executable): health → login → deals → SSE prologue,
+  opt-in `SEND_TEST_MESSAGE=1` send path (202); secrets from env only
+- [x] CI (`.github/workflows/ci.yml`): `docker-build` (no push),
+  `deploy-staging` (auto from `develop`, staging smoke when secrets exist),
+  `deploy-production` (`v*` tags, `environment: production` approval gate);
+  `workflow_dispatch` for manual runs
+- [x] Tests: `backend/tests/test_deploy.py` (8 tests: Dockerfile shape,
+  entrypoint, .dockerignore, railway.json, smoke.sh shape/secrets, DEPLOY.md
+  checklist, lock-key uniqueness, concurrent `upgrade head` x2 green)
+- [x] D24 in `docs/DECISIONS.md` (what was decided and why)
 ## Step 16 — Final audit [todo]
 
 ## Deferred

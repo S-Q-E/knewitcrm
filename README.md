@@ -57,6 +57,14 @@ alembic -c backend/alembic.ini revision -m "what changed"  # then edit upgrade()
 | `NOTIFICATIONS_ENABLED` | true | Task reminders + automations worker (60s cycle) |
 | `REALTIME_ENABLED` | true | Bot-table poller feeding SSE (2s cycle) |
 | `N8N_SEND_WEBHOOK_URL` / `N8N_WEBHOOK_SECRET` | — | n8n webhook that sends WhatsApp messages (`X-CRM-Secret` header) |
+| `ALLOWED_ORIGINS` | empty (same-origin only) | Extra origins allowed for CORS (credentials on) |
+| `RATE_LIMIT_ENABLED` / `RATE_LIMIT_PER_MINUTE` | true / 600 | Per-IP sliding window over all `/api` traffic (429 + `Retry-After`) |
+| `RATE_LIMIT_SEND_PER_MINUTE` | 30 | Per-user cap on manager message sends |
+| `MAX_REQUEST_BODY_BYTES` | 10485760 | Bodies above this are rejected with 413 |
+| `METRICS_TOKEN` | — (endpoint 404s) | Bearer token for Prometheus metrics at `/api/metrics` |
+| `SENTRY_DSN` / `SENTRY_ENVIRONMENT` | — (disabled) | Optional error reporting; frontend uses `VITE_SENTRY_DSN` at build time |
+| `SHUTDOWN_TIMEOUT_SECONDS` | 10 | Bound on worker drain during graceful shutdown |
+| `DB_POOL_SIZE` / `DB_POOL_MAX_OVERFLOW` / `DB_POOL_TIMEOUT` | 5 / 5 / 30 | asyncpg pool limits |
 | `PORT` | 8000 | Set automatically by Railway |
 
 ## Background workers (in-process asyncio tasks, advisory-locked)
@@ -81,14 +89,19 @@ alembic -c backend/alembic.ini revision -m "what changed"  # then edit upgrade()
 
 ## Deploy (Railway, single container)
 
+Full production guide: `docs/DEPLOY.md` (staging vs production, env table,
+least-privilege `crm_app` role for the n8n database, domain/HTTPS,
+first-run order, backups, rollback, CI/CD). Short version:
+
 `railway.json` + `Dockerfile` (multi-stage: Node builds the SPA, Python
-serves API + static; non-root user; migrations run on boot; healthcheck
-`GET /api/health`):
+serves API + static; pinned bases; non-root user; entrypoint migrates
+first, then serves with 2 workers; healthcheck `GET /api/health`):
 
 1. Deploy the repo, attach the n8n Postgres (or a new one) and reference its
-   `DATABASE_URL`.
+   `DATABASE_URL` (production uses the `crm_app` role, see DEPLOY.md §3).
 2. Set `ADMIN_EMAIL` / `ADMIN_PASSWORD`, `N8N_SEND_WEBHOOK_URL` /
    `N8N_WEBHOOK_SECRET`, generate a domain.
+3. Verify with `scripts/smoke.sh` (see DEPLOY.md §7).
 
 ## Tests & lint
 

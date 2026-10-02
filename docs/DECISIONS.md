@@ -486,3 +486,43 @@ Why: protects against accidental data loss, keeps audit trail.
   bodies or `whatsapp_id` phones (also scrubbed from `bot_bridge` and
   `deal_flow` logs; `last_message_preview` stays functional, not logged).
 
+## D24. Step 15 production deploy notes
+- One container serves API + SPA + all four in-process workers. The
+  entrypoint (`scripts/docker-entrypoint.sh`) runs
+  `alembic upgrade head` first, then `uvicorn backend.app.main:app
+  --workers 2 --proxy-headers --forwarded-allow-ips="*"`. (The brief wrote
+  `app.main:app`; the repo layout is `backend.app.main`, so the real
+  module path is used.)
+- Two uvicorn workers each run lifespan loops, but every loop is
+  advisory-locked (sync 91030001, notify 91030002, outbox xact-lock,
+  realtime poller cursors converge), so at most one worker — or one
+  container, when Railway scales horizontally — does each job. No worker
+  changes were needed for `--workers 2`.
+- Concurrent boots serialize migrations in `alembic/env.py` with a
+  session-level `pg_advisory_lock(91030000)` (same numeric namespace as
+  the worker keys, otherwise unused): the holder migrates, the rest block
+  and then no-op. Lock + unlock wrap the run on a dedicated connection.
+- Single DB role `crm_app` for both migrate and serve (single container,
+  single `DATABASE_URL`): `CONNECT` + `CREATE` on schema public (so
+  migrations own new `crm_*` tables outright), `SELECT` on `knewit_*`,
+  column-level `UPDATE (current_stage, previous_stage, updated_at)` on
+  `knewit_leads`, `INSERT` on `knewit_events`/`knewit_messages`, `USAGE`
+  on their id sequences. Negative GRANT checks in `docs/DEPLOY.md` prove
+  the app cannot alter bot schema even on a bug. A separate migrate-only
+  role was rejected as pointless complexity for one container.
+- Staging gets its own Postgres seeded from `tests/fixtures/` and never
+  touches the prod n8n database: staging backfill and `bot_bridge` writes
+  would otherwise reach live clients.
+- Base images pinned by digest (`python:3.12.14-slim`,
+  `node:20.19.0-slim`); refresh via `docker buildx imagetools inspect`.
+  `VITE_SENTRY_DSN` is baked at build time, which is another reason
+  staging and production are separate services (separate builds).
+- Migrations must stay backward-compatible (expand → migrate → contract)
+  so a code rollback never meets an unreadable schema; `downgrade` is a
+  last resort (service stopped, one step, tested locally).
+- CI builds the image on every push (no push to a registry — Railway
+  builds from source), auto-deploys `develop` to staging, and deploys
+  `v*` tags to production behind a GitHub Environment approval, via
+  `railway up` with `RAILWAY_TOKEN`. `scripts/smoke.sh` is the
+  post-deploy gate (health → login → deals → SSE prologue, opt-in send).
+
