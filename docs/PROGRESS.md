@@ -249,3 +249,4 @@
 ## Deferred
 - Live `DATABASE_URL` dump: `docs/db_schema.md` is reconstructed from code; overwrite via `scripts/dump_schema.py` against real n8n DB when available.
 - Staging Railway HTTPS login check: needs Railway project access (unavailable locally); Dockerfile + migrate-on-boot CMD are ready for it.
+- Frontend task-delete 404 storm (seen 2026-10-02 in Railway logs, staging): after one `DELETE /api/tasks/{id} → 200`, the same id is re-DELETEd dozens of times (→ 404) over ~1 min, interleaved with tasks-list polling. Backend behaves correctly (idempotent 404), but the client should not hammer a dead id — suspected missing debounce/stale-row retry in the tasks UI. Reproduce locally and fix (debounce + drop row on first 200).
