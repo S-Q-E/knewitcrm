@@ -53,6 +53,14 @@ async def _seed_bulk(factory) -> None:
             )
         )
         await session.commit()
+    # Explicit VACUUM ANALYZE: without it the autovacuum daemon may fire
+    # mid-measurement (20k fresh inserts always cross its threshold) and blow
+    # the 200ms budget with background I/O. Manual vacuum also settles stats.
+    engine = factory.kw["bind"]
+    async with engine.connect() as conn:
+        await conn.execution_options(isolation_level="AUTOCOMMIT")
+        for table in ("crm_conversation_state", "knewit_messages", "knewit_leads"):
+            await conn.execute(text(f"VACUUM ANALYZE {table}"))
 
 
 async def _purge_bulk(factory) -> None:

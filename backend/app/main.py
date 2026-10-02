@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -16,7 +17,13 @@ from .db import create_engine, create_session_factory
 from .deps import get_settings
 from .errors import ApiError, api_error_handler, error_payload
 from .logging_utils import setup_logging
-from .middleware import RequestIdMiddleware
+from .middleware import (
+    BodyLimitMiddleware,
+    MetricsMiddleware,
+    RateLimitMiddleware,
+    RequestIdMiddleware,
+    SecurityHeadersMiddleware,
+)
 from .routers import (
     activity,
     analytics,
@@ -32,6 +39,7 @@ from .routers import (
     health,
     legacy_bot,
     lost_reasons,
+    metrics,
     notes,
     notifications,
     pipelines,
@@ -45,6 +53,7 @@ from .routers import (
 from .routers.settings import router as settings_router
 from .services.bootstrap import try_bootstrap
 from .services.event_bus import bus
+from .services.sentry import init_sentry
 from .session_middleware import SessionAuthMiddleware
 from .workers.notify_worker import NOTIFY_INTERVAL_SECONDS, notify_loop
 from .workers.outbox_worker import outbox_loop
@@ -120,11 +129,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        for task in (sync_task, notify_task, outbox_task, realtime_task):
-            if task is not None:
-                task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
-        await engine.dispose()
+        # Cancel loops, then wait bounded so a stuck worker cannot hang
+        # the deploy forever; the pool is disposed no matter what.
+        tasks = [t for t in (sync_task, notify_task, outbox_task, realtime_task) if t is not None]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*tasks, return_exceptions=True),
+                    timeout=settings.shutdown_timeout_seconds,
+                )
+            except TimeoutError:
+                logger.warning(
+                    "worker shutdown timed out after %ss", settings.shutdown_timeout_seconds
+                )
+        try:
+            await engine.dispose()
+        except Exception:
+            logger.exception("engine dispose failed")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -133,9 +156,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="KnewIT CRM", version="1.0.0", lifespan=lifespan)
     app.state.settings = settings
+    init_sentry(settings)
 
     app.add_middleware(SessionAuthMiddleware)
+    app.add_middleware(BodyLimitMiddleware)
+    app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(MetricsMiddleware)
     app.add_middleware(RequestIdMiddleware)
+    if settings.allowed_origins:
+        # Outermost so CORS preflights short-circuit before session auth.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.allowed_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Content-Type", "X-CSRF-Token", "X-Request-ID"],
+            max_age=600,
+        )
 
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
@@ -143,6 +181,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(Exception, unhandled_error_handler)
 
     app.include_router(health.router)
+    app.include_router(metrics.router)
     app.include_router(auth.router)
     app.include_router(activity.router)
     app.include_router(analytics.router)

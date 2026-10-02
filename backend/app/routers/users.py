@@ -22,6 +22,7 @@ from ..schemas.users import (
     UserUpdate,
 )
 from ..security import hash_password, normalize_email
+from ..services.activity import diff_payload, log_activity, slim
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,15 @@ async def create_user(
         raise ApiError("EMAIL_TAKEN", "A user with this email already exists", 409) from exc
     await session.refresh(user)
     logger.info("user created email=%s role=%s by=%s", user.email, user.role, admin.email)
+    await log_activity(
+        session,
+        admin.id,
+        "user",
+        user.id,
+        "user_created",
+        diff_payload(None, slim({"email": user.email, "role": user.role})),
+    )
+    await session.commit()
     return user
 
 
@@ -102,10 +112,12 @@ async def update_user(
     user = await session.get(CrmUser, user_id)
     if user is None:
         raise ApiError("NOT_FOUND", "User not found", 404)
+    before = slim({"name": user.name, "role": user.role, "is_active": user.is_active})
 
     if payload.name is not None:
         user.name = payload.name.strip()
-    if payload.password is not None:
+    password_reset = payload.password is not None
+    if password_reset:
         user.password_hash = hash_password(payload.password)
     if payload.role is not None and payload.role != user.role:
         if user.role == ROLE_ADMIN and not await _another_active_admin(session, user.id):
@@ -122,6 +134,13 @@ async def update_user(
     await session.commit()
     await session.refresh(user)
     logger.info("user updated email=%s by=%s", user.email, admin.email)
+    after = slim({"name": user.name, "role": user.role, "is_active": user.is_active})
+    if password_reset:
+        after["password"] = "reset"
+    await log_activity(
+        session, admin.id, "user", user.id, "user_updated", diff_payload(before, after)
+    )
+    await session.commit()
     return user
 
 

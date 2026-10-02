@@ -19,6 +19,7 @@ Conventions (see D20):
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -539,27 +540,12 @@ async def dynamics_buckets(session: AsyncSession, filters: AnalyticsFilters) -> 
     ]
 
 
-async def _avg_first_response_hours(session: AsyncSession, whatsapp_ids: list[str]) -> float | None:
-    if not whatsapp_ids:
-        return None
-    value = (
-        await session.execute(
-            text(
-                "WITH first_in AS ("
-                " SELECT whatsapp_id, MIN(created_at) AS t FROM knewit_messages"
-                " WHERE whatsapp_id = ANY(:was) AND direction = 'in' GROUP BY 1"
-                ") SELECT AVG(EXTRACT(EPOCH FROM (o.t - f.t)) / 3600) FROM first_in f"
-                " JOIN LATERAL (SELECT MIN(created_at) AS t FROM knewit_messages"
-                " WHERE whatsapp_id = f.whatsapp_id AND direction = 'out'"
-                " AND created_at >= f.t) o ON TRUE"
-            ),
-            {"was": whatsapp_ids},
-        )
-    ).scalar_one_or_none()
-    return round(float(value), 2) if value is not None else None
-
-
 async def managers_section(session: AsyncSession, filters: AnalyticsFilters) -> list[dict]:
+    """Per-manager aggregates in a fixed handful of GROUP BY queries.
+
+    The previous per-user loop issued 5+ queries per manager (thousands of
+    round trips with a big roster); latency must not depend on roster size.
+    """
     users = (
         (
             await session.execute(
@@ -574,96 +560,163 @@ async def managers_section(session: AsyncSession, filters: AnalyticsFilters) -> 
         .mappings()
         .all()
     )
+    uids = [str(row["id"]) for row in users]
+    if not uids:
+        return []
     now = datetime.now(UTC)
+    deal_params: dict = {
+        "pipeline_id": str(filters.pipeline_id),
+        "uids": uids,
+        "start": filters.start_utc,
+        "end": filters.end_utc,
+        "now": now,
+    }
+    in_work_rows = (
+        (
+            await session.execute(
+                text(
+                    "SELECT d.owner_id, COUNT(*) FROM crm_deals d"
+                    " JOIN crm_contacts c ON c.id = d.contact_id AND c.deleted_at IS NULL"
+                    " WHERE d.deleted_at IS NULL AND d.pipeline_id = :pipeline_id"
+                    " AND d.status = 'open' AND d.owner_id = ANY(:uids)"
+                    " GROUP BY d.owner_id"
+                ),
+                deal_params,
+            )
+        )
+        .mappings()
+        .all()
+    )
+    in_work = {str(r["owner_id"]): int(r["count"]) for r in in_work_rows}
+    closed_rows = (
+        (
+            await session.execute(
+                text(
+                    "SELECT d.owner_id, d.status, COUNT(*), COALESCE(SUM(d.amount), 0)"
+                    " FROM crm_deals d"
+                    " JOIN crm_contacts c ON c.id = d.contact_id AND c.deleted_at IS NULL"
+                    " WHERE d.deleted_at IS NULL AND d.pipeline_id = :pipeline_id"
+                    " AND d.owner_id = ANY(:uids)"
+                    " AND d.closed_at >= :start AND d.closed_at < :end"
+                    " GROUP BY d.owner_id, d.status"
+                ),
+                deal_params,
+            )
+        )
+        .mappings()
+        .all()
+    )
+    closed: dict[str, dict[str, dict]] = {}
+    for r in closed_rows:
+        closed.setdefault(str(r["owner_id"]), {})[r["status"]] = r
+    done_rows = (
+        (
+            await session.execute(
+                text(
+                    "SELECT assignee_id, COUNT(*) FROM crm_tasks"
+                    " WHERE assignee_id = ANY(:uids)"
+                    " AND done_at >= :start AND done_at < :end"
+                    " GROUP BY assignee_id"
+                ),
+                deal_params,
+            )
+        )
+        .mappings()
+        .all()
+    )
+    tasks_done = {str(r["assignee_id"]): int(r["count"]) for r in done_rows}
+    overdue_rows = (
+        (
+            await session.execute(
+                text(
+                    "SELECT assignee_id, COUNT(*) FROM crm_tasks"
+                    " WHERE assignee_id = ANY(:uids) AND done_at IS NULL"
+                    " AND due_at IS NOT NULL AND due_at < :now"
+                    " GROUP BY assignee_id"
+                ),
+                deal_params,
+            )
+        )
+        .mappings()
+        .all()
+    )
+    tasks_overdue = {str(r["assignee_id"]): int(r["count"]) for r in overdue_rows}
+    wa_rows = (
+        (
+            await session.execute(
+                text(
+                    "SELECT d.owner_id, c.whatsapp_id FROM crm_deals d"
+                    " JOIN crm_contacts c ON c.id = d.contact_id AND c.deleted_at IS NULL"
+                    " WHERE d.deleted_at IS NULL AND d.pipeline_id = :pipeline_id"
+                    " AND d.owner_id = ANY(:uids) AND c.whatsapp_id IS NOT NULL"
+                ),
+                deal_params,
+            )
+        )
+        .mappings()
+        .all()
+    )
+    owner_was: dict[str, list[str]] = {}
+    for r in wa_rows:
+        owner_was.setdefault(str(r["owner_id"]), []).append(str(r["whatsapp_id"]))
+    first_response = await _avg_first_response_by_owner(session, owner_was)
+
     items = []
     for row in users:
         uid = str(row["id"])
-        in_work = (
-            await session.execute(
-                text(
-                    "SELECT COUNT(*) FROM crm_deals d"
-                    " JOIN crm_contacts c ON c.id = d.contact_id AND c.deleted_at IS NULL"
-                    " WHERE d.deleted_at IS NULL AND d.pipeline_id = :pipeline_id"
-                    " AND d.status = 'open' AND d.owner_id = :uid"
-                ),
-                {"pipeline_id": str(filters.pipeline_id), "uid": uid},
-            )
-        ).scalar() or 0
-        closed = (
-            (
-                await session.execute(
-                    text(
-                        "SELECT d.status, COUNT(*), COALESCE(SUM(d.amount), 0) FROM crm_deals d"
-                        " JOIN crm_contacts c ON c.id = d.contact_id AND c.deleted_at IS NULL"
-                        " WHERE d.deleted_at IS NULL AND d.pipeline_id = :pipeline_id"
-                        " AND d.owner_id = :uid AND d.closed_at >= :start AND d.closed_at < :end"
-                        " GROUP BY d.status"
-                    ),
-                    {
-                        "pipeline_id": str(filters.pipeline_id),
-                        "uid": uid,
-                        "start": filters.start_utc,
-                        "end": filters.end_utc,
-                    },
-                )
-            )
-            .mappings()
-            .all()
-        )
-        by_status = {r["status"]: r for r in closed}
+        by_status = closed.get(uid, {})
         won = int(by_status.get("won", {}).get("count", 0) or 0)
         lost = int(by_status.get("lost", {}).get("count", 0) or 0)
         total_closed = won + lost
-        tasks_done = (
-            await session.execute(
-                text(
-                    "SELECT COUNT(*) FROM crm_tasks"
-                    " WHERE assignee_id = :uid AND done_at >= :start AND done_at < :end"
-                ),
-                {"uid": uid, "start": filters.start_utc, "end": filters.end_utc},
-            )
-        ).scalar() or 0
-        tasks_overdue = (
-            await session.execute(
-                text(
-                    "SELECT COUNT(*) FROM crm_tasks"
-                    " WHERE assignee_id = :uid AND done_at IS NULL"
-                    " AND due_at IS NOT NULL AND due_at < :now"
-                ),
-                {"uid": uid, "now": now},
-            )
-        ).scalar() or 0
-        deal_rows = (
-            (
-                await session.execute(
-                    text(
-                        "SELECT c.whatsapp_id FROM crm_deals d"
-                        " JOIN crm_contacts c ON c.id = d.contact_id AND c.deleted_at IS NULL"
-                        " WHERE d.deleted_at IS NULL AND d.pipeline_id = :pipeline_id"
-                        " AND d.owner_id = :uid AND c.whatsapp_id IS NOT NULL"
-                    ),
-                    {"pipeline_id": str(filters.pipeline_id), "uid": uid},
-                )
-            )
-            .scalars()
-            .all()
-        )
-        first_response = await _avg_first_response_hours(session, [str(w) for w in deal_rows])
         items.append(
             {
                 "user_id": uid,
                 "name": row["name"],
-                "deals_in_work": int(in_work),
+                "deals_in_work": in_work.get(uid, 0),
                 "won": won,
                 "lost": lost,
                 "conversion": round(won / total_closed, 4) if total_closed else None,
                 "won_sum": round(float(by_status.get("won", {}).get("coalesce", 0) or 0), 2),
-                "avg_first_response_hours": first_response,
-                "tasks_done": int(tasks_done),
-                "tasks_overdue": int(tasks_overdue),
+                "avg_first_response_hours": first_response.get(uid),
+                "tasks_done": tasks_done.get(uid, 0),
+                "tasks_overdue": tasks_overdue.get(uid, 0),
             }
         )
     return items
+
+
+async def _avg_first_response_by_owner(
+    session: AsyncSession, owner_was: dict[str, list[str]]
+) -> dict[str, float | None]:
+    """First incoming -> first later outgoing per dialog, averaged per owner."""
+    all_was = sorted({wa for was in owner_was.values() for wa in was})
+    if not all_was:
+        return {}
+    rows = (
+        (
+            await session.execute(
+                text(
+                    "WITH first_in AS ("
+                    " SELECT whatsapp_id, MIN(created_at) AS t FROM knewit_messages"
+                    " WHERE whatsapp_id = ANY(:was) AND direction = 'in' GROUP BY 1"
+                    ") SELECT f.whatsapp_id,"
+                    " EXTRACT(EPOCH FROM (o.t - f.t)) / 3600 AS h FROM first_in f"
+                    " JOIN LATERAL (SELECT MIN(created_at) AS t FROM knewit_messages"
+                    " WHERE whatsapp_id = f.whatsapp_id AND direction = 'out'"
+                    " AND created_at >= f.t) o ON TRUE"
+                ),
+                {"was": all_was},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    wa_hours = {str(r["whatsapp_id"]): float(r["h"]) for r in rows if r["h"] is not None}
+    out: dict[str, float | None] = {}
+    for owner, was in owner_was.items():
+        hours = [wa_hours[wa] for wa in was if wa in wa_hours]
+        out[owner] = round(sum(hours) / len(hours), 2) if hours else None
+    return out
 
 
 async def bot_section(session: AsyncSession, filters: AnalyticsFilters) -> dict:
@@ -682,11 +735,13 @@ async def bot_section(session: AsyncSession, filters: AnalyticsFilters) -> dict:
         (
             await session.execute(
                 text(
-                    "SELECT m.direction, COUNT(*), AVG(m.response_time_ms),"
-                    " COALESCE(SUM(m.tokens_used), 0) FROM knewit_messages m"
+                    "SELECT DATE((m.created_at AT TIME ZONE :tz)) AS d, m.direction,"
+                    " COUNT(*), COALESCE(SUM(m.tokens_used), 0) AS tokens,"
+                    " COALESCE(SUM(m.response_time_ms), 0) AS rt_sum,"
+                    " COUNT(m.response_time_ms) AS rt_n FROM knewit_messages m"
                     f"{restriction_join}"
                     " WHERE m.created_at >= :start AND m.created_at < :end"
-                    f"{restriction_where} GROUP BY m.direction"
+                    f"{restriction_where} GROUP BY 1, 2 ORDER BY 1"
                 ),
                 params,
             )
@@ -694,24 +749,24 @@ async def bot_section(session: AsyncSession, filters: AnalyticsFilters) -> dict:
         .mappings()
         .all()
     )
-    by_direction = {r["direction"]: r for r in msg_rows}
-    tokens_rows = (
-        (
-            await session.execute(
-                text(
-                    "SELECT DATE((m.created_at AT TIME ZONE :tz)) AS d,"
-                    " COALESCE(SUM(m.tokens_used), 0) AS tokens FROM knewit_messages m"
-                    f"{restriction_join}"
-                    " WHERE m.created_at >= :start AND m.created_at < :end"
-                    f"{restriction_where} GROUP BY 1 ORDER BY 1"
-                ),
-                params,
-            )
-        )
-        .mappings()
-        .all()
-    )
-    tokens_by_day = {r["d"].isoformat(): int(r["tokens"] or 0) for r in tokens_rows}
+    messages_in = 0
+    messages_out = 0
+    tokens_total = 0
+    rt_sum = 0
+    rt_n = 0
+    tokens_by_day: dict[str, int] = {}
+    for r in msg_rows:
+        day = r["d"].isoformat()
+        count = int(r["count"] or 0)
+        tokens_by_day[day] = tokens_by_day.get(day, 0) + int(r["tokens"] or 0)
+        tokens_total += int(r["tokens"] or 0)
+        if r["direction"] == "in":
+            messages_in += count
+        else:
+            messages_out += count
+            rt_sum += int(r["rt_sum"] or 0)
+            rt_n += int(r["rt_n"] or 0)
+    avg_response = (rt_sum / rt_n) if rt_n else None
 
     lead_filter = ""
     if filters.owner_id is not None:
@@ -788,15 +843,11 @@ async def bot_section(session: AsyncSession, filters: AnalyticsFilters) -> dict:
         .mappings()
         .all()
     )
-    messages_in = int(by_direction.get("in", {}).get("count", 0) or 0)
-    messages_out = int(by_direction.get("out", {}).get("count", 0) or 0)
-    avg_response = by_direction.get("out", {}).get("avg")
     return {
         "messages_in": messages_in,
         "messages_out": messages_out,
         "avg_response_time_ms": round(float(avg_response), 1) if avg_response is not None else None,
-        "tokens_total": int(by_direction.get("in", {}).get("coalesce", 0) or 0)
-        + int(by_direction.get("out", {}).get("coalesce", 0) or 0),
+        "tokens_total": tokens_total,
         "tokens_by_day": [
             {"bucket": start.isoformat(), "tokens": tokens_by_day.get(start.isoformat(), 0)}
             for start in _bucket_starts(filters)
@@ -925,12 +976,25 @@ async def sources_tags_section(session: AsyncSession, filters: AnalyticsFilters)
     }
 
 
-async def overview(session: AsyncSession, filters: AnalyticsFilters) -> dict:
-    funnel = await funnel_section(session, filters)
-    summary = await summary_section(session, filters)
-    managers = await managers_section(session, filters)
-    bot = await bot_section(session, filters)
-    sources_tags = await sources_tags_section(session, filters)
+async def overview(factory, filters: AnalyticsFilters) -> dict:
+    """Run the five read-only sections concurrently on separate connections.
+
+    Sections share nothing, so wall time is the slowest section instead of
+    the sum. Five connections per overview fit the default pool (5 + 5
+    overflow); raise DB_POOL_SIZE if many managers open analytics at once.
+    """
+
+    async def run(section_fn):
+        async with factory() as session:
+            return await section_fn(session, filters)
+
+    funnel, summary, managers, bot, sources_tags = await asyncio.gather(
+        run(funnel_section),
+        run(summary_section),
+        run(managers_section),
+        run(bot_section),
+        run(sources_tags_section),
+    )
     return {
         "meta": {
             "date_from": filters.date_from.isoformat(),

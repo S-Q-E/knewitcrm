@@ -20,7 +20,7 @@ from backend.app.config import Settings  # noqa: E402
 from backend.app.deps import get_settings  # noqa: E402
 from backend.app.main import create_app  # noqa: E402
 from backend.app.security import CSRF_HEADER  # noqa: E402
-from backend.app.services.ratelimit import login_limiter  # noqa: E402
+from backend.app.services.ratelimit import clear_all_limiters  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -35,6 +35,10 @@ def settings() -> Settings:
         outbox_enabled=False,
         notifications_enabled=False,
         realtime_enabled=False,
+        # The API-wide per-IP limiter is covered by dedicated tests with custom
+        # apps (test_hardening.py); the rest of the suite runs unthrottled so
+        # high-volume tests (round-robin rotation, 20k dialogs) stay stable.
+        rate_limit_enabled=False,
     )
 
 
@@ -65,9 +69,9 @@ async def migrated(db_available):
 
 @pytest.fixture(autouse=True)
 def clean_rate_limiter():
-    login_limiter.clear()
+    clear_all_limiters()
     yield
-    login_limiter.clear()
+    clear_all_limiters()
 
 
 @pytest.fixture()

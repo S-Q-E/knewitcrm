@@ -228,8 +228,55 @@ async def deal_board(
             .order_by(CrmStage.sort, CrmStage.name)
         )
     ).scalars()
+    stage_list = list(stages)
+    # One grouped query for every column total (was: count+sum per stage).
+    total_stmt = (
+        select(
+            CrmDeal.stage_id,
+            func.count().label("total"),
+            func.coalesce(func.sum(CrmDeal.amount), 0).label("amount_total"),
+        )
+        .where(
+            CrmDeal.pipeline_id == pipeline.id,
+            CrmDeal.deleted_at.is_(None),
+        )
+        .group_by(CrmDeal.stage_id)
+    )
+    if scope is not None:
+        total_stmt = total_stmt.where(scope)
+    if owner_id is not None:
+        total_stmt = total_stmt.where(CrmDeal.owner_id == owner_id)
+    if unassigned:
+        total_stmt = total_stmt.where(CrmDeal.owner_id.is_(None))
+    if tag:
+        total_stmt = total_stmt.where(
+            select(CrmEntityTag.entity_id)
+            .where(CrmEntityTag.entity == ENTITY_DEAL, CrmEntityTag.tag_id.in_(tag))
+            .correlate(CrmDeal)
+            .where(CrmEntityTag.entity_id == CrmDeal.id)
+            .exists()
+        )
+    if search:
+        total_stmt = total_stmt.where(CrmDeal.title.ilike(f"%{search.strip()}%"))
+    if created_from is not None:
+        total_stmt = total_stmt.where(CrmDeal.created_at >= created_from)
+    if created_to is not None:
+        total_stmt = total_stmt.where(CrmDeal.created_at <= created_to)
+    total_contact_conditions = [
+        CrmContact.id == CrmDeal.contact_id,
+        CrmContact.deleted_at.is_(None),
+    ]
+    if contact_source is not None:
+        total_contact_conditions.append(CrmContact.source == contact_source)
+    total_stmt = total_stmt.where(
+        select(CrmContact.id).where(*total_contact_conditions).correlate(CrmDeal).exists()
+    )
+    totals = {
+        row.stage_id: (row.total, float(row.amount_total))
+        for row in (await session.execute(total_stmt)).mappings()
+    }
     columns = []
-    for stage in stages:
+    for stage in stage_list:
         filters = [
             CrmDeal.pipeline_id == pipeline.id,
             CrmDeal.stage_id == stage.id,
@@ -263,11 +310,7 @@ async def deal_board(
             contact_conditions.append(CrmContact.source == contact_source)
         contact_scope = select(CrmContact.id).where(*contact_conditions).correlate(CrmDeal)
         base = select(CrmDeal).where(*filters, contact_scope.exists())
-        column = base.subquery()
-        total = (await session.execute(select(func.count()).select_from(column))).scalar() or 0
-        amount_total = (
-            await session.execute(select(func.coalesce(func.sum(column.c.amount), 0)))
-        ).scalar() or 0
+        column_total, column_amount = totals.get(stage.id, (0, 0.0))
 
         page_stmt = base.order_by(*BOARD_ORDER)
         if str(stage.id) in cursor_map:
@@ -287,8 +330,8 @@ async def deal_board(
                 stage_id=stage.id,
                 name=stage.name,
                 kind=stage.kind,
-                total=total,
-                amount_total=float(amount_total),
+                total=column_total,
+                amount_total=float(column_amount),
                 items=[await _deal_out(session, d, tags.get(d.id, [])) for d in items],
                 next_cursor=next_cursor,
             )

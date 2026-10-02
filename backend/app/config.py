@@ -20,6 +20,23 @@ class Settings(BaseSettings):
     default_currency: str = Field(default="KZT", alias="DEFAULT_CURRENCY")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
+    # Step 14 hardening: HTTP protections.
+    rate_limit_enabled: bool = Field(default=True, alias="RATE_LIMIT_ENABLED")
+    rate_limit_per_minute: int = Field(default=600, ge=1, alias="RATE_LIMIT_PER_MINUTE")
+    rate_limit_send_per_minute: int = Field(default=30, ge=1, alias="RATE_LIMIT_SEND_PER_MINUTE")
+    max_request_body_bytes: int = Field(
+        default=10 * 1024 * 1024, ge=1024, alias="MAX_REQUEST_BODY_BYTES"
+    )
+    metrics_token: str = Field(default="", alias="METRICS_TOKEN")
+    sentry_dsn: str = Field(default="", alias="SENTRY_DSN")
+    sentry_environment: str = Field(default="", alias="SENTRY_ENVIRONMENT")
+    shutdown_timeout_seconds: int = Field(default=10, ge=1, alias="SHUTDOWN_TIMEOUT_SECONDS")
+
+    # Step 14 hardening: asyncpg pool limits.
+    db_pool_size: int = Field(default=5, ge=1, alias="DB_POOL_SIZE")
+    db_pool_max_overflow: int = Field(default=5, ge=0, alias="DB_POOL_MAX_OVERFLOW")
+    db_pool_timeout: int = Field(default=30, ge=1, alias="DB_POOL_TIMEOUT")
+
     # Step 2 bootstrap: used once to create the first admin, then ignored.
     admin_email: str = Field(default="", alias="ADMIN_EMAIL")
     admin_password: str = Field(default="", alias="ADMIN_PASSWORD")

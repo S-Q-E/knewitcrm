@@ -16,6 +16,15 @@ const queryClient = new QueryClient({
   },
 });
 
+// Optional error reporting: only loads @sentry/react when a DSN is baked in
+// at build time (VITE_SENTRY_DSN). No DSN means zero Sentry code runs.
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+if (sentryDsn) {
+  void import("@sentry/react").then((sentry) => {
+    sentry.init({ dsn: sentryDsn });
+  });
+}
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>

@@ -107,7 +107,14 @@ class RealtimePoller:
         return {"last_message_id": self._last_message_id, "last_event_id": self._last_event_id}
 
 
+# Table names cannot be bound parameters; restrict to the two bot tables
+# this poller is allowed to read (callers pass literals, never user input).
+_READABLE_TABLES = frozenset({"knewit_messages", "knewit_events"})
+
+
 async def _max_id(session: AsyncSession, table: str) -> int:
+    if table not in _READABLE_TABLES:
+        raise ValueError(f"unexpected table: {table}")
     return (await session.execute(text(f"SELECT COALESCE(MAX(id), 0) FROM {table}"))).scalar() or 0
 
 

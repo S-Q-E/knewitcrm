@@ -4,19 +4,21 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth_deps import CurrentUser, require_role, require_user
 from ..deps import get_session, pagination
-from ..errors import ApiError
+from ..errors import ApiError, error_payload
 from ..models import CrmContact, CrmConversationState, CrmOutbox, CrmQuickReply, CrmUser
 from ..schemas.chats import ChatMessageIn, OutboxOut, QuickReplyOut
 from ..schemas.settings import QuickReplyCreate, QuickReplyUpdate
 from ..services.activity import diff_payload, log_activity, slim
 from ..services.event_bus import bus
+from ..services.ratelimit import send_limiter
 from ..services.visibility import (
     ensure_visible,
     is_visible,
@@ -273,9 +275,19 @@ async def retry_outbox(
 async def queue_message(
     whatsapp_id: str,
     payload: ChatMessageIn,
+    request: Request,
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
+    settings = request.app.state.settings
+    if not send_limiter.check(
+        str(user.id), max_hits=settings.rate_limit_send_per_minute, window=60
+    ):
+        return JSONResponse(
+            status_code=429,
+            content=error_payload("RATE_LIMITED", "Too many messages, slow down"),
+            headers={"Retry-After": str(send_limiter.retry_after(str(user.id)))},
+        )
     body = payload.body.strip()
     if not body:
         raise ApiError("EMPTY_BODY", "Message body must not be empty", 422)

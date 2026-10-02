@@ -27,6 +27,7 @@ from ..security import (
     token_hash,
     verify_password,
 )
+from ..services.activity import log_activity
 from ..services.ratelimit import login_limiter
 from ..session_middleware import client_ip
 
@@ -78,6 +79,8 @@ async def login(
     await session.commit()
 
     login_limiter.record_success(ip, email)
+    await log_activity(session, user.id, "user", user.id, "auth_login", {"ip": ip})
+    await session.commit()
     set_session_cookies(
         response, request.app.state.settings, token_cookie_value(raw_token), csrf_token
     )
@@ -118,6 +121,7 @@ async def me(
 async def change_password(
     payload: ChangePasswordIn,
     request: Request,
+    response: Response,
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -130,17 +134,30 @@ async def change_password(
         raise ApiError("INVALID_CREDENTIALS", "Current password is incorrect", 400)
 
     row.password_hash = hash_password(payload.new_password)
-    # Revoke every other session; the current one stays alive.
-    session_id = getattr(request.state, "crm_session_id", None)
+    # Full rotation: every session (including this one) dies, then a fresh
+    # session is issued transparently so the caller stays logged in.
     await session.execute(
         update(CrmSession)
-        .where(
-            CrmSession.user_id == row.id,
-            CrmSession.revoked_at.is_(None),
-            CrmSession.id != session_id,
-        )
+        .where(CrmSession.user_id == row.id, CrmSession.revoked_at.is_(None))
         .values(revoked_at=datetime.now(UTC))
     )
+    raw_token = new_session_token()
+    csrf_token = new_csrf_token()
+    session.add(
+        CrmSession(
+            user_id=row.id,
+            token_hash=token_hash(raw_token),
+            csrf_hash=csrf_hash(csrf_token),
+            expires_at=session_expiry(),
+            ip=client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    )
+    await session.commit()
+    set_session_cookies(
+        response, request.app.state.settings, token_cookie_value(raw_token), csrf_token
+    )
+    await log_activity(session, row.id, "user", row.id, "password_changed", None)
     await session.commit()
     return {"ok": True}
 

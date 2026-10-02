@@ -33,3 +33,16 @@ async def test_frontend_prefers_dist_build():
 
     resolved = resolve_frontend_dir()
     assert resolved.name in ("dist", "frontend")
+
+
+async def test_frontend_renders_no_raw_html():
+    """Client content must never reach dangerouslySetInnerHTML (XSS surface)."""
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parent.parent.parent / "frontend" / "src"
+    offenders = [
+        str(path)
+        for path in src.rglob("*.tsx")
+        if "dangerouslySetInnerHTML" in path.read_text(encoding="utf-8")
+    ]
+    assert offenders == []
