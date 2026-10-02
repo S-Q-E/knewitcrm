@@ -6,6 +6,7 @@ export interface InstanceSettings {
   restrict_managers_to_own: boolean;
   auto_pause_on_manager: boolean;
   auto_pause_on_manual_reply: boolean;
+  analytics_managers_visible: boolean;
   deal_assignment_mode: "unassigned" | "round_robin";
 }
 

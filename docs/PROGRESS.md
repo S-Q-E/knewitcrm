@@ -38,8 +38,8 @@
 - [x] Pipelines/stages CRUD (admin), reorder, delete-with-recipient; contacts CRUD + ILIKE/phone search + filters + soft/hard delete + restore; deals CRUD + board (grouped sums, per-column cursors) + move (lock/history/bridge) + unlock + bulk (200, atomic)
 - [x] Notes/tags/fields/reasons CRUD with role split; custom type validation; `restrict_managers_to_own` scope (404 on violation); activity log on every mutation
 - [x] 80 tests + ruff clean + manual Swagger/curl lifecycle verified
-## Step 5 — Chat: SSE realtime + outbox + n8n webhook [partially done]
-- [x] Outbox half done in Step 9 below (queue, worker, webhook, mirror); SSE realtime polling still [todo]
+## Step 5 — Chat: SSE realtime + outbox + n8n webhook [done]
+- Outbox half shipped in Step 9/9B below (queue, worker, webhook, mirror); realtime shipped in Step 10 (SSE + event bus).
 ## Step 5b — Frontend scaffold [done]
 - [x] Brief arrived out of PROGRESS order; covers the new `frontend/` shell
 - [x] Vite + React 18 + TS strict + Tailwind + shadcn-style ui + Query + Router + lucide; API client (cookies, auto CSRF, 401->/login, toasts); openapi-typescript types + `gen:api` script
@@ -62,14 +62,12 @@
 - [x] `/dialogs`: list (last message, unread, assignee, pause badge, filters), open dialog with messages, mark-read, assign/pause, send + quick-reply stubs
 - [x] Sync worker counts unread from incoming messages; removed `/api/stats`, `/api/funnel`, `frontend-legacy/`
 - [x] 90 backend tests + tsc/eslint/vitest green; E2E (card shows messages+events) green; manual timeline/dialogs curl verified
-## Step 8 — Funnel analytics + reports [todo]
 ## Step 8b — Tasks and notifications [done]
 - [x] Brief arrived out of PROGRESS order; covers tasks page + notifications + assignment + automations
 - [x] Migrations `0007` (notifications, automations) + `0008` (standalone tasks); tasks API gaps (`/complete`, `mine`/date filters, bulk reschedule); notifications list/read/read-all; automations CRUD (admin)
 - [x] Workers: 60s notify loop (overdue/due-soon deduped) + automations; sync handover (urgent task + notify, opt-in autopause), locked-stage and unread-transition notifies; round-robin assignment
 - [x] Frontend: /tasks (groups, week view, RHF+zod modal, checkbox, bulk links), bell with count + dropdown + deep links
 - [x] 99 backend tests + tsc/eslint/vitest green; 3 E2E green; manual handover/task/bell curl verified
-## Step 9 — Notifications + activity log [todo]
 ## Step 9 — Manager messaging via outbox + n8n webhook (D6) [done]
 - [x] Brief for this step implements the outbox half of Step 5 (SSE realtime stays [todo]); old "Step 9 — Notifications + activity log" placeholder is superseded (notifications shipped in Step 8b, activity log in Step 4b)
 - [x] Migration `0010_outbox`: `crm_outbox` (body/sent_by/status/attempts/next_attempt_at/error/provider_message_id/knewit_message_id/sent_at + due index) + `crm_quick_replies` (unique title, 3 seeded templates)
@@ -107,7 +105,28 @@
 - [x] `tsc/eslint/vitest` run locally (Node 20 at `/tmp/opencode/node`): typecheck, eslint,
   prettier, 29 vitest, all green
 
-## Step 10 — Saved views + search filters [todo]
+## Step 9D — n8n send workflow + targeted hardening (part B) [done]
+- [x] `docs/n8n/README.md` + `docs/n8n/crm-send-message.workflow.json`: «CRM Send Message» (Webhook POST + `X-CRM-Secret` 401 → дедуп по `outbox_id` через static data → отправка тем же WhatsApp-провайдером, что в основном воркфлоу → Respond `{ok, provider_message_id}` / `{ok:false, error}`; SQL для multi-instance дедупа на своей таблице `n8n_processed_outbox`)
+- [x] Инструкция по правке основного воркфлоу бота и Cron follow-up: Postgres-нода `SELECT bot_paused FROM crm_conversation_state WHERE whatsapp_id = $1` (нет записи = false) → IF true завершает выполнение до AI-агента; пошаговая проверка на тестовом чате
+- [x] CSV/XLSX-экспорт: `_cell` экранирует значения с `= + - @ TAB CR LF` апострофом (тест обоих форматов)
+- [x] Импорт: лимит файла 2 МБ (413) с чтением частями по 64 КБ; остальные эндпоинты под `BodyLimitMiddleware` (10 МБ, тест)
+- [x] Outbox: `error` только `ClassName: первая строка` до 200 символов (SQL-параметры отброшены); логи без текстов сообщений и телефонов (`bot_bridge`, `deal_flow` тоже чистые)
+- [x] `analytics_managers_visible` (default true) в `GET/PATCH /api/settings`; скрытая аналитика для менеджеров 403, админы всегда проходят (D23)
+- [x] PROGRESS: устаревшие `[todo]`-заголовки удалены и нумерация приведена к плану —
+  поглощены выполненными шагами: «Step 8 funnel» → Step 12 (аналитика),
+  «Step 9 notifications» → Steps 4b (activity log) + 8b (notifications),
+  «Step 10 saved views» → Step 6b (kanban + saved views),
+  «Step 11 settings» → Step 13b (настройки), «Step 12 roles» → Step 14
+  (authz-матрица), «Step 14 load test» → Step 14 (perf на 100k + stream load test).
+  Остались genuine todo: Step 13 (deploy), Step 15 (docs), Step 16 (audit).
+- [x] Тесты: `test_9d_partb.py` (8 тестов: экранирование CSV+XLSX, лимит 2 МБ
+  на preview+import, `format_outbox_error`, короткие ошибки worker/mirror,
+  видимость аналитики, наличие n8n-файлов) + обновлённый `test_settings.py`;
+  `ruff check` + `ruff format` чистые; смежные сьюты зелёные (settings,
+  outbox, contacts_data, analytics, hardening, authz_matrix); фронт
+  `tsc/eslint/vitest(29)/prettier/build` зелёные; ручной прогон локального
+  сервера (health, login, settings с новым ключом, CSV-экспорт)
+
 ## Step 10 — Realtime via SSE + event bus (D4) [done]
 - [x] Brief for this step arrives out of PROGRESS order (same as Step 9 before it); the saved-views/filter step keeps its number above and stays [todo]
 - [x] `services/event_bus.py`: process-local fan-out hub (bounded queues, drop-oldest, publishers never block, subscriber stats, test reset)
@@ -127,8 +146,6 @@
 - [x] Корзина (`GET /api/trash`, admin): просмотр и восстановление мягко удалённых контактов/сделок
 - [x] Тесты: `test_contacts_data.py` (нормализация, дубли+слияние, bulk, экспорт csv/xlsx, импорт с ошибками в фоне, корзина, таймлайн) + `contacts.test.ts` (query/mapping/export-url); ruff clean; ручной прогон API локально
 - [ ] Frontend tsc/eslint/vitest/build не запускались локально (нет Node); проверить в CI
-## Step 11 — Settings (locale, timezone Asia/Almaty, currency KZT) [todo]
-## Step 12 — Roles hardening + admin panel [todo]
 ## Step 12 — Аналитика (страница /analytics) [done]
 - [x] Backend: `services/analytics.py` (SQL-агрегаты, см. D20), `schemas/analytics.py`,
   `routers/analytics.py` (`GET /api/analytics/overview`, `GET /api/analytics/export`),
@@ -171,7 +188,30 @@
   `settings.test.ts` (prefs + часовой пояс); tsc/eslint/prettier/vitest/build зелёные;
   ручной прогон всех новых эндпоинтов и SPA `/settings` на локальном сервере
 - [ ] `docker build` не запускался локально; проверить в CI
-## Step 14 — Load test + polling/SSE tuning [todo]
+## Step 14 — Hardening [done]
+- [x] Заголовки (CSP без unsafe-inline для скриптов, DENY, Referrer-Policy, HSTS,
+  nosniff) + CORS только из `ALLOWED_ORIGINS`; лимиты (per-IP 600/мин, отправка
+  30/мин, логин отдельно), лимит тела 10МБ (413); всё покрыто `test_hardening.py`
+- [x] Автотест `test_authz_matrix.py`: sweep всех роутов OpenAPI (401 без сессии;
+  403 менеджерам ровно на `ADMIN_ONLY`; drift-контроль по коду) — разрывов нет
+- [x] SQLi/XSS: параметризация везде (allowlist в poller), innerHTML-тест, round-trip
+  вредоносного контента как текст; ротация сессии при смене пароля (тест);
+  аудит входов/ролей/удалений/экспорта/импорта (тесты через activity log)
+- [x] Sentry backend+frontend (опционально по DSN), `/api/metrics` за токеном (тесты);
+  graceful shutdown с таймаутом, пул с лимитами, healthcheck с БД + Dockerfile
+  HEALTHCHECK; `pip-audit` чист (fastapi→0.134.0, starlette==1.7.0, multipart→0.0.32),
+  `npm audit` чист, версии закреплены
+- [x] Perf на 100k сообщений: EXPLAIN-анализ, board GROUP BY, managers GROUP BY,
+  параллельные секции overview; замер: диалоги ~100мс, сообщения ~60мс, board ~250мс,
+  аналитика 120–350мс; миграция `0018_perf_indexes` (только `crm_*`);
+  `docs/DB_RECOMMENDATIONS.md` (knewit_* — применять осознанно, не нами)
+- [x] `scripts/backup.sh` + `docs/BACKUP.md`: pg_dump nightly, ротация, restore
+  smoke-тест пройден (dump → scratch restore → counts → drop)
+- [x] Полный backend-сьют зелёный; ruff + tsc/eslint/prettier/vitest/build зелёные;
+  ручной прогон (заголовки, лимиты, метрики, журнал, бэкап) на локальном сервере
+- [x] Старый плейсхолдер «Load test + polling/SSE tuning» поглощён шагом: perf-анализ
+  и скрипт `scripts/perf_seed_100k.sql` + `scripts/stream_load_test.py` (шаг 10) закрывают тему
+- [ ] `docker build` не запускался локально; проверить в CI
 ## Step 15 — Docs + handover [todo]
 ## Step 16 — Final audit [todo]
 

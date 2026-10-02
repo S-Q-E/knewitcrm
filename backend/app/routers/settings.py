@@ -35,6 +35,7 @@ require_admin = require_role("admin")
 SETTING_RESTRICT = "restrict_managers_to_own"
 SETTING_AUTOPAUSE_MANAGER = "auto_pause_on_manager"
 SETTING_AUTOPAUSE_REPLY = "auto_pause_on_manual_reply"
+SETTING_ANALYTICS_MANAGERS = "analytics_managers_visible"
 
 
 async def _read_bool(session: AsyncSession, key: str, default: bool) -> bool:
@@ -61,6 +62,7 @@ async def current_settings(session: AsyncSession) -> SettingsOut:
         restrict_managers_to_own=await _read_bool(session, SETTING_RESTRICT, False),
         auto_pause_on_manager=await _read_bool(session, SETTING_AUTOPAUSE_MANAGER, False),
         auto_pause_on_manual_reply=await _read_bool(session, SETTING_AUTOPAUSE_REPLY, True),
+        analytics_managers_visible=await _read_bool(session, SETTING_ANALYTICS_MANAGERS, True),
         deal_assignment_mode=await get_assignment_mode(session),
     )
 
@@ -87,6 +89,10 @@ async def update_settings(
         await _write_setting(session, SETTING_AUTOPAUSE_MANAGER, payload.auto_pause_on_manager)
     if payload.auto_pause_on_manual_reply is not None:
         await _write_setting(session, SETTING_AUTOPAUSE_REPLY, payload.auto_pause_on_manual_reply)
+    if payload.analytics_managers_visible is not None:
+        await _write_setting(
+            session, SETTING_ANALYTICS_MANAGERS, payload.analytics_managers_visible
+        )
     if payload.deal_assignment_mode is not None:
         mode = payload.deal_assignment_mode
         if mode not in (MODE_UNASSIGNED, MODE_ROUND_ROBIN):

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth_deps import CurrentUser, require_user
 from ..deps import get_session, get_settings
+from ..errors import ApiError
 from ..schemas.analytics import AnalyticsOverviewOut
 from ..services.analytics import overview, resolve_filters
 from ..services.export import csv_stream
@@ -59,8 +60,28 @@ EXPORT_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 
+async def _ensure_analytics_visible(session: AsyncSession, user: CurrentUser) -> None:
+    """Managers see analytics only when the setting allows (default true).
+
+    Admins always pass. Hidden analytics read as 403 (not 404): the
+    section exists, it is just disabled for the manager role.
+    """
+    from sqlalchemy import text
+
+    if user.is_admin:
+        return
+    value = (
+        await session.execute(
+            text("SELECT value FROM crm_settings WHERE key = 'analytics_managers_visible'")
+        )
+    ).scalar_one_or_none()
+    if value is False:
+        raise ApiError("FORBIDDEN", "Analytics is disabled for managers", 403)
+
+
 @router.get("/overview", response_model=AnalyticsOverviewOut)
 async def analytics_overview(
+    request: Request,
     date_from: str | None = Query(default=None, max_length=10),
     date_to: str | None = Query(default=None, max_length=10),
     pipeline_id: str | None = Query(default=None, max_length=36),
@@ -69,6 +90,7 @@ async def analytics_overview(
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
+    await _ensure_analytics_visible(session, user)
     settings = get_settings()
     filters = await resolve_filters(
         session,
@@ -80,11 +102,12 @@ async def analytics_overview(
         granularity=granularity,
         tz_name=settings.default_timezone,
     )
-    return await overview(session, filters)
+    return await overview(request.app.state.session_factory, filters)
 
 
 @router.get("/export")
 async def analytics_export(
+    request: Request,
     section: str = Query(
         pattern="^(funnel|dynamics|managers|objections|abandoned|sources|tags|lost_reasons)$"
     ),
@@ -96,6 +119,7 @@ async def analytics_export(
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
+    await _ensure_analytics_visible(session, user)
     settings = get_settings()
     filters = await resolve_filters(
         session,
@@ -107,7 +131,7 @@ async def analytics_export(
         granularity=granularity,
         tz_name=settings.default_timezone,
     )
-    data = await overview(session, filters)
+    data = await overview(request.app.state.session_factory, filters)
     if section == "funnel":
         rows = data["funnel"]["stages"]
     elif section == "dynamics":

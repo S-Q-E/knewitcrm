@@ -30,6 +30,24 @@ OUTBOX_HTTP_TIMEOUT_SECONDS = 10.0
 OUTBOX_STALE_SENDING_SECONDS = 120
 STALE_SENDING_ERROR = "delivery state unknown, check WhatsApp"
 
+# Maximum characters stored in crm_outbox.error: class name + short message.
+OUTBOX_ERROR_MAX_CHARS = 200
+
+
+def format_outbox_error(exc: BaseException) -> str:
+    """Short, PII-free error for the outbox journal.
+
+    Only the exception class and the first line of its message are kept
+    (SQLAlchemy errors embed statement params in later lines — those are
+    dropped). Never pass message bodies or phone numbers here.
+    """
+    name = type(exc).__name__
+    raw = str(exc).splitlines()
+    first = raw[0].strip() if raw and raw[0].strip() else ""
+    full = f"{name}: {first}" if first else name
+    return full[:OUTBOX_ERROR_MAX_CHARS]
+
+
 N8N_SECRET_HEADER = "X-CRM-Secret"
 
 # sender(outbox_id=..., whatsapp_id=..., text=...) -> n8n response payload.
@@ -249,10 +267,11 @@ async def _apply_success(
                 async with session.begin_nested():
                     message_id = await insert_outgoing_message(session, whatsapp_id, body)
             except Exception as exc:  # noqa: BLE001 - mirror must not undo the send
-                logger.error("outbox %s mirror failed: %s", outbox_id, exc)
+                # Log only the error class: messages and phones never go to logs.
+                logger.error("outbox %s mirror failed: %s", outbox_id, type(exc).__name__)
                 await session.execute(
                     text("UPDATE crm_outbox SET error = :error WHERE id = :id"),
-                    {"error": f"mirror_failed: {exc}"[:2000], "id": outbox_id},
+                    {"error": f"mirror_failed: {format_outbox_error(exc)}", "id": outbox_id},
                 )
             else:
                 await session.execute(
@@ -269,7 +288,8 @@ async def _apply_success(
         "outbox_status",
         {"outbox_id": str(outbox_id), "whatsapp_id": whatsapp_id, "status": "sent"},
     )
-    logger.info("outbox sent id=%s whatsapp_id=%s", outbox_id, whatsapp_id)
+    # Never log message bodies or phone numbers (whatsapp_id).
+    logger.info("outbox sent id=%s", outbox_id)
 
 
 async def _apply_failure(
@@ -291,7 +311,7 @@ async def _apply_failure(
                 stats["skipped"] += 1
                 return
             row.attempts += 1
-            row.error = str(exc)[:2000]
+            row.error = format_outbox_error(exc)
             row.claimed_at = None
             failed_now = False
             pending: list[dict] = []
@@ -323,7 +343,8 @@ async def _apply_failure(
             "outbox_status",
             {"outbox_id": str(outbox_id), "whatsapp_id": whatsapp_id, "status": "failed"},
         )
-    logger.warning("outbox %s attempt failed: %s", outbox_id, exc)
+    # Error class only: full messages may carry SQL params or PII.
+    logger.warning("outbox %s attempt failed: %s", outbox_id, type(exc).__name__)
 
 
 async def outbox_loop(

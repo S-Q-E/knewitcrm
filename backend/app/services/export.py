@@ -50,7 +50,12 @@ def csv_stream(rows: Iterable[dict], fields: tuple[str, ...]) -> AsyncIterator[b
 def _cell(value: object) -> str:
     if value is None:
         return ""
-    return str(value)
+    text = str(value)
+    # CSV/XLSX formula injection: prefix values starting with a trigger
+    # character so Excel/Sheets treat them as plain text.
+    if text[:1] in ("=", "+", "-", "@", "\t", "\r", "\n"):
+        return "'" + text
+    return text
 
 
 def xlsx_bytes(rows: list[dict], fields: tuple[str, ...]) -> bytes:

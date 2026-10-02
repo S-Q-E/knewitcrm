@@ -1,0 +1,241 @@
+{
+  "name": "CRM Send Message",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "crm-send-message",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "CRM Send Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "crm-send-message"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-secret",
+              "leftValue": "={{ $json.headers[\"x-crm-secret\"] }}",
+              "rightValue": "={{ $env.N8N_WEBHOOK_SECRET }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "22222222-2222-4222-8222-222222222222",
+      "name": "Check Secret",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\": false, \"error\": \"unauthorized\"}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "33333333-3333-4333-8333-333333333333",
+      "name": "Respond 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Dedupe by CRM outbox_id (Step 9D).\n// Repeat calls with the same outbox_id must not send twice.\n// Workflow static data survives across executions on one n8n instance.\n// For multi-instance n8n use the Postgres variant from docs/n8n/README.md\n// (table n8n_processed_outbox) instead of this in-memory map.\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.sentOutbox) staticData.sentOutbox = {};\nconst outboxId = String($json.body?.outbox_id || '');\nconst whatsappId = String($json.body?.whatsapp_id || '');\nconst text = String($json.body?.text || '');\nif (!outboxId || !whatsappId || !text) {\n  return [{ json: { badRequest: true, outbox_id: outboxId } }];\n}\nif (staticData.sentOutbox[outboxId]) {\n  return [{ json: {\n    duplicate: true,\n    outbox_id: outboxId,\n    whatsapp_id: whatsappId,\n    provider_message_id: staticData.sentOutbox[outboxId]\n  } }];\n}\nreturn [{ json: { duplicate: false, outbox_id: outboxId, whatsapp_id: whatsappId, text } }];"
+      },
+      "id": "44444444-4444-4444-8444-444444444444",
+      "name": "Check Duplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-dupe",
+              "leftValue": "={{ $json.duplicate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "55555555-5555-4555-8555-555555555555",
+      "name": "Is Duplicate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\": true, \"deduped\": true, \"provider_message_id\": \"{{ $json.provider_message_id }}\"}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "66666666-6666-4666-8666-666666666666",
+      "name": "Respond Duplicate",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://whatsapp-provider.example.local/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $json.whatsapp_id }}\",\n  \"text\": \"{{ $json.text }}\",\n  \"client_reference\": \"{{ $json.outbox_id }}\"\n}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "77777777-7777-4777-8777-777777777777",
+      "name": "Send via WhatsApp (REPLACE)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300],
+      "onError": "continueErrorOutput",
+      "notes": "REPLACE this node with the same WhatsApp provider node used in the main bot workflow (same credentials, same API). Keep the input fields whatsapp_id/text/outbox_id and return provider_message_id."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Remember the successful delivery so redeliveries dedupe.\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.sentOutbox) staticData.sentOutbox = {};\nconst outboxId = $('Check Duplicate').first().json.outbox_id;\nconst body = $json;\nconst providerId = String(body.provider_message_id || body.message_id || body.id || '');\nstaticData.sentOutbox[outboxId] = providerId;\nreturn [{ json: { outbox_id: outboxId, provider_message_id: providerId } }];"
+      },
+      "id": "88888888-8888-4888-8888-888888888888",
+      "name": "Mark Sent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 260]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\": true, \"provider_message_id\": \"{{ $json.provider_message_id }}\"}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "99999999-9999-4999-8999-999999999999",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1560, 260]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\": false, \"error\": \"provider send failed\"}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 440]
+    },
+    {
+      "parameters": {
+        "content": "## CRM Send Message (Step 9D)\n1. Импортируйте этот файл в n8n (Workflows → Import from file).\n2. Замените ноду `Send via WhatsApp (REPLACE)` тем же провайдером, что в основном воркфлоу бота (те же credentials).\n3. Задайте env `N8N_WEBHOOK_SECRET` в n8n (совпадает с CRM `N8N_WEBHOOK_SECRET`).\n4. Активируйте воркфлоу; URL вида `https://<n8n>/webhook/crm-send-message` → CRM `N8N_SEND_WEBHOOK_URL`.",
+        "height": 320,
+        "width": 420,
+        "color": 4
+      },
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [120, 80]
+    }
+  ],
+  "connections": {
+    "CRM Send Webhook": {
+      "main": [[{ "node": "Check Secret", "type": "main", "index": 0 }]]
+    },
+    "Check Secret": {
+      "main": [
+        [{ "node": "Check Duplicate", "type": "main", "index": 0 }],
+        [{ "node": "Respond 401", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Duplicate": {
+      "main": [[{ "node": "Is Duplicate", "type": "main", "index": 0 }]]
+    },
+    "Is Duplicate": {
+      "main": [
+        [{ "node": "Send via WhatsApp (REPLACE)", "type": "main", "index": 0 }],
+        [{ "node": "Respond Duplicate", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send via WhatsApp (REPLACE)": {
+      "main": [
+        [{ "node": "Mark Sent", "type": "main", "index": 0 }],
+        [{ "node": "Respond Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Mark Sent": {
+      "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {},
+  "versionId": "9d-crm-send-message-1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

@@ -13,6 +13,7 @@ class SettingsOut(BaseModel):
     restrict_managers_to_own: bool = False
     auto_pause_on_manager: bool = False
     auto_pause_on_manual_reply: bool = True
+    analytics_managers_visible: bool = True
     deal_assignment_mode: AssignmentMode = "unassigned"
 
 
@@ -20,6 +21,7 @@ class SettingsUpdate(BaseModel):
     restrict_managers_to_own: bool | None = None
     auto_pause_on_manager: bool | None = None
     auto_pause_on_manual_reply: bool | None = None
+    analytics_managers_visible: bool | None = None
     deal_assignment_mode: AssignmentMode | None = None
 
 

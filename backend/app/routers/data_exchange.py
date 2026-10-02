@@ -28,6 +28,11 @@ router = APIRouter(tags=["data-exchange"])
 
 EXPORT_LIMIT = 10000
 
+# Import uploads are small CSVs: reject anything above 2 MiB with 413.
+# Other endpoints are covered by the global BodyLimitMiddleware (10 MiB).
+IMPORT_MAX_BYTES = 2 * 1024 * 1024
+IMPORT_CHUNK_SIZE = 64 * 1024
+
 
 def _contact_row(c: CrmContact) -> dict:
     return {
@@ -87,6 +92,15 @@ async def export_contacts(
     stmt = stmt.order_by(CrmContact.created_at.desc()).limit(EXPORT_LIMIT)
     rows = (await session.execute(stmt)).scalars().all()
     dicts = [_contact_row(c) for c in rows]
+    await log_activity(
+        session,
+        user.id,
+        "export",
+        None,
+        "contacts_export",
+        {"format": format, "search": search, "source": source, "rows": len(dicts)},
+    )
+    await session.commit()
     if format == "csv":
         return StreamingResponse(
             csv_stream(dicts, CONTACT_EXPORT_FIELDS),
@@ -120,6 +134,21 @@ async def export_deals(
     stmt = stmt.order_by(CrmDeal.created_at.desc()).limit(EXPORT_LIMIT)
     rows = (await session.execute(stmt)).scalars().all()
     dicts = [_deal_row(d) for d in rows]
+    await log_activity(
+        session,
+        user.id,
+        "export",
+        None,
+        "deals_export",
+        {
+            "format": format,
+            "pipeline_id": str(pipeline_id) if pipeline_id else None,
+            "status": status,
+            "search": search,
+            "rows": len(dicts),
+        },
+    )
+    await session.commit()
     if format == "csv":
         return StreamingResponse(
             csv_stream(dicts, DEAL_EXPORT_FIELDS),
@@ -143,6 +172,21 @@ def _decode_upload(raw: bytes) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
+async def _read_import_upload(file: UploadFile) -> bytes:
+    """Read an import file in chunks, enforcing the 2 MiB limit (413)."""
+    parts: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(IMPORT_CHUNK_SIZE)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > IMPORT_MAX_BYTES:
+            raise ApiError("REQUEST_TOO_LARGE", "Import file is too large (max 2 MiB)", 413)
+        parts.append(chunk)
+    return b"".join(parts)
+
+
 @router.post("/api/contacts/import/preview", response_model=ImportPreviewOut)
 async def import_preview(
     file: UploadFile = File(...),
@@ -155,7 +199,7 @@ async def import_preview(
         raise ApiError("INVALID_MAPPING", "mapping must be JSON object", 422) from None
     if not isinstance(mapping_dict, dict):
         raise ApiError("INVALID_MAPPING", "mapping must be JSON object", 422)
-    raw = await file.read()
+    raw = await _read_import_upload(file)
     try:
         header, data = parse_csv_text(_decode_upload(raw))
     except ValueError as exc:
@@ -183,7 +227,7 @@ async def import_start(
         mapping_dict = json.loads(mapping or "{}")
     except ValueError:
         raise ApiError("INVALID_MAPPING", "mapping must be JSON object", 422) from None
-    raw = await file.read()
+    raw = await _read_import_upload(file)
     try:
         header, data = parse_csv_text(_decode_upload(raw))
     except ValueError as exc:
@@ -258,4 +302,12 @@ async def _run_import_job(job_id: str, factory) -> None:
         job.errors = errors[:200]
         job.status = "done"
         job.finished_at = datetime.now(UTC)
+        await log_activity(
+            session,
+            job.created_by,
+            "import",
+            job.id,
+            "import_finished",
+            {"ok": ok, "errors": len(errors)},
+        )
         await session.commit()

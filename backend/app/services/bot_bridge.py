@@ -72,9 +72,7 @@ async def update_bot_stage(
             "now": now,
         },
     )
-    logger.info(
-        "bot stage updated whatsapp_id=%s from=%s to=%s", whatsapp_id, from_stage, stage_key
-    )
+    logger.info("bot stage updated from=%s to=%s", from_stage, stage_key)
     return True
 
 
@@ -114,7 +112,8 @@ async def insert_outgoing_message(session: AsyncSession, whatsapp_id: str, body:
             },
         )
     ).scalar_one()
-    logger.info("manager message mirrored whatsapp_id=%s message_id=%s", whatsapp_id, message_id)
+    # Never log message bodies or phone numbers (whatsapp_id).
+    logger.info("manager message mirrored message_id=%s", message_id)
     return int(message_id)
 
 

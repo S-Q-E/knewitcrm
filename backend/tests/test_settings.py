@@ -39,6 +39,7 @@ async def test_settings_get_update_roundtrip(client, settings):
         "restrict_managers_to_own": False,
         "auto_pause_on_manager": False,
         "auto_pause_on_manual_reply": True,
+        "analytics_managers_visible": True,
         "deal_assignment_mode": "unassigned",
     }
 
@@ -48,6 +49,7 @@ async def test_settings_get_update_roundtrip(client, settings):
             "restrict_managers_to_own": True,
             "auto_pause_on_manager": True,
             "auto_pause_on_manual_reply": False,
+            "analytics_managers_visible": False,
             "deal_assignment_mode": "round_robin",
         },
         headers=headers,
@@ -96,6 +98,7 @@ async def test_settings_get_update_roundtrip(client, settings):
                 "restrict_managers_to_own": False,
                 "auto_pause_on_manager": False,
                 "auto_pause_on_manual_reply": True,
+                "analytics_managers_visible": True,
                 "deal_assignment_mode": "unassigned",
             },
             headers=headers,

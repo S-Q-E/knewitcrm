@@ -85,7 +85,8 @@ async def apply_deal_stage(
                 session, contact_whatsapp, target.bot_stage_key, actor_id
             )
         except BotLeadNotFoundError:
-            logger.warning("bot lead gone, manager move kept whatsapp_id=%s", contact_whatsapp)
+            # Phone numbers never go to logs.
+            logger.warning("bot lead gone, manager move kept")
     return {"moved": True, "bridged": bridged}
 
 

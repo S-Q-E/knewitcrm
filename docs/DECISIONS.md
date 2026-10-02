@@ -392,3 +392,97 @@ Why: protects against accidental data loss, keeps audit trail.
   gated inside the page (`ForbiddenPage` for managers) while `Профиль` is
   available to everyone, so the nav entry is no longer admin-only.
 
+## D22. Step 14 hardening notes
+- Middleware order (execution, outermost first): CORS (only when
+  `ALLOWED_ORIGINS` is set, so preflights short-circuit before auth) →
+  RequestId → Metrics → SecurityHeaders → RateLimit → BodyLimit → SessionAuth.
+  `CORSMiddleware` uses explicit origins + credentials; empty list means
+  same-origin only (the SPA is served by the same container).
+- Security headers on every response: strict CSP (`script-src 'self'`, no
+  `unsafe-inline`; inline `style` stays allowed because React writes it via
+  CSSOM and blocking style attributes breaks UI libs silently), `X-Frame-
+  Options: DENY` (+ `frame-ancestors 'none'`), nosniff, strict referrer,
+  HSTS (always sent; browsers ignore it over plain HTTP), minimal
+  Permissions-Policy.
+- Rate limiting is two-tier: per-IP sliding window over all `/api` (600/min,
+  429 + `Retry-After`) plus per-user cap on message sends (30/min). Login
+  keeps its own failed-attempt rules (D9). Limits come from Settings per
+  request; hit counters are process-local (single container, D9). The shared
+  test settings disable the API-wide limiter (`rate_limit_enabled=False`)
+  because high-volume tests (round-robin over the whole roster, 20k dialogs)
+  are legitimate bursts; the limiter itself is covered by dedicated tests.
+- Request bodies are capped (`MAX_REQUEST_BODY_BYTES`, 10MB) by a pure-ASGI
+  middleware covering both `Content-Length` and chunked uploads (413).
+- `test_authz_matrix.py` sweeps every OpenAPI route: anonymous must 401
+  everywhere except health/ready/login; managers must 403 exactly on the
+  `ADMIN_ONLY` allowlist and never 401/403 elsewhere. New admin routes must
+  extend the allowlist deliberately; a drift test compares its size against
+  `Depends(require_admin)` occurrences in source.
+- SQLi audit: all queries are parameterized; the single `text(f"...")` in
+  `realtime_poller._max_id` now allowlists its two literal table names.
+  XSS: no `dangerouslySetInnerHTML` anywhere (backend test scans `frontend/
+  src`); client messages render as React text and round-trip verbatim as JSON.
+- Password change now rotates fully: all sessions die (including current) and
+  a fresh one is issued transparently via Set-Cookie. Login always mints a
+  new token (fixation-safe). Deactivation already revoked everything (D9).
+- Audit: successful logins, user create/update (role/active/password-reset
+  marker, never the hash), exports (filters + row count) and import completion
+  go to `crm_activity_log`. Failed logins stay in server logs only (DB flood
+  protection); logout is not logged (low value, high volume).
+- Sentry is optional on both sides via `SENTRY_DSN` / `VITE_SENTRY_DSN`;
+  backend `sentry-sdk` is a pinned prod dep but init is DSN-gated, frontend
+  lazy-imports `@sentry/react` only when the build-time DSN exists.
+- `/api/metrics` (Prometheus text) needs `Authorization: Bearer $METRICS_TOKEN`;
+  unconfigured reads as 404, wrong token as 403. Session cookies are
+  deliberately not accepted (token URLs leak into browser history). Counters
+  are in-process with route-template labels (bounded cardinality).
+- Shutdown: worker cancel is bounded by `SHUTDOWN_TIMEOUT_SECONDS` (uvicorn
+  gets `--timeout-graceful-shutdown 20` in Docker too); pool always disposed.
+  Pool sizes/timeouts/recycle are env-configurable (`DB_POOL_*`).
+- Perf (100k messages, EXPLAIN-driven): board totals went from 32 point
+  queries to one `GROUP BY`; `managers_section` from 5×N queries to 6 grouped
+  ones; bot message stats merged into one scan; `overview()` runs the five
+  read-only sections concurrently on separate connections (5 per overview —
+  fits the default 5+5 pool; raise `DB_POOL_SIZE` if many managers open
+  analytics at once). Measured wall time: dialogs ~100ms, messages ~60ms,
+  board ~250ms, analytics 120–350ms depending on period/roster. `knewit_*`
+  index proposals live in `docs/DB_RECOMMENDATIONS.md` (never applied by us).
+- Deps: `pip-audit` clean after `fastapi 0.115.6 -> 0.134.0` (+ explicit
+  `starlette==1.7.0`), `python-multipart 0.0.20 -> 0.0.32`, new
+  `sentry-sdk==2.71.0`; `npm audit` clean. Chose the oldest fastapi permitting
+  starlette>=1.3.1 to minimize API drift; full suite green, OpenAPI shapes
+  unchanged (no frontend type churn).
+
+## D23. Step 9D part B notes (n8n send workflow + targeted hardening)
+- `docs/n8n/crm-send-message.workflow.json` is the «CRM Send Message»
+  workflow: Webhook POST (responseNode) → IF `X-CRM-Secret` vs
+  `$env.N8N_WEBHOOK_SECRET` (401 `{ok:false}` on mismatch) → Code dedupe
+  by `outbox_id` via workflow static data (repeat = 200 without resend)
+  → HTTP send through the same WhatsApp provider node as the main bot
+  workflow (operator replaces the placeholder, same credentials) →
+  Respond `{ok:true, provider_message_id}` or `{ok:false, error}`.
+  Multi-instance n8n replaces the Code pair with a Postgres check on its
+  own `n8n_processed_outbox` table (SQL in `docs/n8n/README.md`); bot
+  schema is never touched.
+- Main bot + cron follow-up patch (same README): after the incoming write
+  to `knewit_messages`, a read-only Postgres node
+  `SELECT bot_paused FROM crm_conversation_state WHERE whatsapp_id = $1`
+  (missing row = false) gates the AI agent: `true` ends the execution,
+  `false` continues. Only SELECT, no triggers/writes to `knewit_*`.
+- Analytics visibility: `analytics_managers_visible` in `crm_settings`
+  (default true), exposed via `GET/PATCH /api/settings`. When false,
+  non-admin `GET /api/analytics/overview|export` answer 403; admins always
+  pass. Default true keeps current behavior (managers see analytics);
+  hiding is explicit, not a scope leak (unlike 404-hiding in deals).
+- Export hardening: `services/export._cell` prefixes values starting with
+  `= + - @ TAB CR LF` with `'` (CSV and XLSX share the helper), so
+  exported cells can never become spreadsheet formulas.
+- Import hardening: 2 MiB per-file cap (`IMPORT_MAX_BYTES`) enforced while
+  streaming the upload in 64 KiB chunks (413 `REQUEST_TOO_LARGE`); other
+  endpoints stay under the global `BodyLimitMiddleware` (10 MiB).
+- Outbox PII: `crm_outbox.error` stores only `format_outbox_error(exc)`
+  (`ClassName: first line`, max 200 chars, SQL params dropped with later
+  lines); logs carry only outbox ids and error class names, never message
+  bodies or `whatsapp_id` phones (also scrubbed from `bot_bridge` and
+  `deal_flow` logs; `last_message_preview` stays functional, not logged).
+

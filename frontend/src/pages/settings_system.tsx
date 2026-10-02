@@ -461,6 +461,12 @@ export function AutomationTab() {
               checked={data.restrict_managers_to_own}
               onChange={(value) => set({ restrict_managers_to_own: value })}
             />
+            <Toggle
+              label="Аналитика видна менеджерам"
+              hint="Выключите, чтобы раздел «Аналитика» был доступен только администраторам"
+              checked={data.analytics_managers_visible}
+              onChange={(value) => set({ analytics_managers_visible: value })}
+            />
           </div>
         )}
       </Card>
