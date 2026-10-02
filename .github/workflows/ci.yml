@@ -140,6 +140,17 @@ jobs:
       - name: Build image
         run: docker build -t knewitcrm:${{ github.sha }} .
 
+  actionlint:
+    # Lints this workflow file itself (Step 16a audit finding: secrets must
+    # not gate steps via `if:` conditions).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint
+        run: |
+          bash <(curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+
   deploy-staging:
     # Auto-deploy on every push to develop, after all gates are green.
     needs: [lint-tests, frontend, e2e, docker-build]
@@ -157,7 +168,8 @@ jobs:
           npm i -g @railway/cli
           railway up --project "$RAILWAY_PROJECT_ID" --environment staging --service "$RAILWAY_SERVICE"
       - name: Staging smoke
-        if: ${{ secrets.SMOKE_STAGING_PASSWORD != '' }}
+        # No `if:` on secrets here: an empty password is passed through and
+        # smoke.sh skips the authenticated checks itself (exit 0).
         env:
           BASE_URL: ${{ vars.STAGING_BASE_URL }}
           SMOKE_EMAIL: ${{ secrets.SMOKE_STAGING_EMAIL }}

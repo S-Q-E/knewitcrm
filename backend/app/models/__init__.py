@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .auth import ROLE_ADMIN, ROLE_MANAGER, VALID_ROLES, CrmSession, CrmUser
+from .auth import ROLE_ADMIN, ROLE_MANAGER, VALID_ROLES, CrmLoginAttempt, CrmSession, CrmUser
 from .base import Base
 from .common import (
     ENTITY_CONTACT,
@@ -78,6 +78,7 @@ __all__ = [
     "CrmImport",
     "CrmNote",
     "CrmNotification",
+    "CrmLoginAttempt",
     "CrmOutbox",
     "CrmPipeline",
     "CrmQuickReply",

@@ -12,8 +12,11 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8000}"
-SMOKE_EMAIL="${SMOKE_EMAIL:?set SMOKE_EMAIL (admin or manager login)}"
-SMOKE_PASSWORD="${SMOKE_PASSWORD:?set SMOKE_PASSWORD}"
+# Empty credentials are allowed: the script then checks only the public
+# health probe and skips the authenticated steps (exit 0). This keeps
+# secrets out of CI `if:` conditions (Step 16a).
+SMOKE_EMAIL="${SMOKE_EMAIL:-}"
+SMOKE_PASSWORD="${SMOKE_PASSWORD:-}"
 SEND_TEST_MESSAGE="${SEND_TEST_MESSAGE:-0}"
 TEST_WHATSAPP_ID="${TEST_WHATSAPP_ID:-}"
 
@@ -38,6 +41,11 @@ code="$(curl -s -o "$BODY" -w '%{http_code}' "$BASE_URL/api/health")"
 [ "$code" = "200" ] || fail "/api/health -> HTTP $code: $(head -c 200 "$BODY")"
 grep -q '"ok":true' "$BODY" || fail "/api/health body: $(head -c 200 "$BODY")"
 pass "/api/health 200 (DB up)"
+
+if [ -z "$SMOKE_PASSWORD" ]; then
+  echo "skip: SMOKE_PASSWORD is empty, authenticated checks skipped"
+  exit 0
+fi
 
 # 2. Login (session + CSRF cookies; passwords travel in a temp file only).
 SMOKE_EMAIL="$SMOKE_EMAIL" SMOKE_PASSWORD="$SMOKE_PASSWORD" python3 -c \

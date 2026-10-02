@@ -244,6 +244,28 @@
   entrypoint, .dockerignore, railway.json, smoke.sh shape/secrets, DEPLOY.md
   checklist, lock-key uniqueness, concurrent `upgrade head` x2 green)
 - [x] D24 in `docs/DECISIONS.md` (what was decided and why)
+## Step 16a — Закрытие находок аудита безопасности [done]
+- [x] CI: убран secrets из `if:` smoke-шага (пустой пароль проходит в env,
+  smoke.sh скипает auth-проверки сам); добавлен job `actionlint`
+  (локально проверен скачанным бинарником — чисто)
+- [x] `main.py`: при `APP_ENV=production` выключены docs/redoc/openapi,
+  SPA-fallback отдаёт 404 на `/docs`, `/redoc`, `/openapi.json`; тест
+  (production 404 + локально 200)
+- [x] Логин: dummy-verify по предвычисленному хэшу для несуществующих
+  и неактивных; тест разброса средних ≤30%
+- [x] Лимит входа в БД (`crm_login_attempts`, миграция `0019`, индексы,
+  чистка старше часа); мягкая email-блокировка с исключением IP
+  владельца + `Retry-After`; тест на двух воркерах (`--workers 2`,
+  отдельные OS-процессы, общий бюджет доказан)
+- [x] 422 без `input` (только loc/type/msg); тест
+- [x] Sentry `before_send`: чистка тел запросов и SQL-params (бэк +
+  фронт `main.tsx`); unit-тест scrub + тест wiring
+- [x] n8n: Postgres-дедуп основной (`ON CONFLICT DO NOTHING`,
+  `COUNT(*)`-проверка), static data — запасной; секрет: отказ при
+  пустом + case-sensitive; тест 9D обновлён
+- [x] DEPLOY.md: усилен пункт про удаление `ADMIN_PASSWORD` + проверка
+  лимита входа на staging с поддельным X-Forwarded-For
+- [x] D25 в `docs/DECISIONS.md`
 ## Step 16 — Final audit [todo]
 
 ## Deferred

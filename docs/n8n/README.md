@@ -61,14 +61,24 @@ Webhook POST /webhook/crm-send-message
    # повтор первого вызова с тем же outbox_id → 200 без второй отправки
    ```
 
-### Дедупликация
+### Проверка секрета
 
-По умолчанию — Code-нода `Check Duplicate` + `Mark Sent` через
-`$getWorkflowStaticData('global')`: пара `outbox_id → provider_message_id`
-живёт в памяти одного инстанса n8n. Этого достаточно для одиночного n8n.
+Нода `Check Secret` пропускает дальше только при двух условиях сразу
+(комбинатор AND):
 
-Для нескольких инстансов n8n за балансировщиком замените пару нод на
-Postgres (своя таблица n8n, схему бота не трогаем):
+1. заголовок `X-CRM-Secret` **не пуст** (`notEmpty`) — пустой секрет
+   отклоняется, даже если `$env.N8N_WEBHOOK_SECRET` тоже пуст (защита
+   от незаполненного env с обеих сторон);
+2. заголовок **строго равен** `$env.N8N_WEBHOOK_SECRET`
+   (case-sensitive сравнение; регистрозависимость отключена быть
+   не должна — секрет сравнивается побайтово).
+
+Иначе → `Respond 401` (`{ok:false}`, HTTP 401).
+
+### Дедупликация (основной вариант — Postgres)
+
+Повторный вызов с тем же `outbox_id` не отправляет сообщение второй раз.
+Основной механизм — таблица n8n (схему бота не трогаем) + две Postgres-ноды:
 
 ```sql
 CREATE TABLE IF NOT EXISTS n8n_processed_outbox (
@@ -76,13 +86,63 @@ CREATE TABLE IF NOT EXISTS n8n_processed_outbox (
   provider_message_id text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
--- Check: SELECT provider_message_id FROM n8n_processed_outbox WHERE outbox_id = $1
--- Mark:  INSERT INTO n8n_processed_outbox (outbox_id, provider_message_id)
---        VALUES ($1, $2) ON CONFLICT (outbox_id) DO NOTHING
 ```
 
-Порядок в воркфлоу: Webhook → Check Secret → Check (Postgres)
-→ IF found → Respond deduped → ELSE Send → Mark (Postgres) → Respond OK.
+- `Check Duplicate` (Postgres, `executeQuery`):
+  ```sql
+  SELECT COUNT(*) AS seen, MAX(provider_message_id) AS provider_message_id
+  FROM n8n_processed_outbox WHERE outbox_id = '{{ $json.outbox_id }}'::uuid
+  ```
+  Агрегат `COUNT` всегда возвращает ровно одну строку, поэтому нода
+  `Is Duplicate` срабатывает всегда (пустой SELECT без строк остановил
+  бы ветку — классическая ловушка n8n). Каст `::uuid`: CRM всегда
+  присылает uuid; мусор вместо uuid роняет запрос в ошибку, а не в
+  отправку.
+- `Is Duplicate` (IF): `{{ $json.seen }}` > 0 → `Respond Duplicate`
+  (`{ok:true, deduped:true, ...}`), иначе → отправка.
+- `Mark Sent` (Postgres, `executeQuery`) после успешной отправки:
+  ```sql
+  INSERT INTO n8n_processed_outbox (outbox_id, provider_message_id) VALUES
+    ('{{ $('Check Duplicate').first().json.outbox_id }}'::uuid,
+     '{{ $json.provider_message_id }}')
+  ON CONFLICT (outbox_id) DO NOTHING
+  ```
+  `ON CONFLICT DO NOTHING` делает запись идемпотентной при гонках.
+  Имя поля с ID провайдера (`provider_message_id`) зависит от вашего
+  провайдера — поправьте выражение под ответ вашей ноды отправки.
+
+Порядок в воркфлоу: Webhook → Check Secret → Check Duplicate (Postgres)
+→ Is Duplicate → (да) Respond Duplicate / (нет) Send → Mark Sent
+(Postgres) → Respond OK. Работает на любом числе инстансов n8n за
+балансировщиком — состояние в Postgres, а не в памяти.
+
+### Дедупликация (запасной вариант — static data)
+
+Если у n8n нет доступа к Postgres, замените пару Postgres-нод Code-нодами
+на `$getWorkflowStaticData('global')` (пара `outbox_id → provider_message_id`
+в памяти одного инстанса). Достаточно для одиночного n8n, но теряется
+при рестарте и не делится между инстансами:
+
+```js
+// Check Duplicate (Run Once for All Items)
+const staticData = $getWorkflowStaticData('global');
+if (!staticData.sentOutbox) staticData.sentOutbox = {};
+const outboxId = String($json.body?.outbox_id || '');
+if (staticData.sentOutbox[outboxId]) {
+  return [{ json: { duplicate: true, outbox_id: outboxId,
+    provider_message_id: staticData.sentOutbox[outboxId] } }];
+}
+return [{ json: { duplicate: false, outbox_id: outboxId,
+  whatsapp_id: String($json.body?.whatsapp_id || ''),
+  text: String($json.body?.text || '') } }];
+
+// Mark Sent (Run Once for Each Item)
+const staticData = $getWorkflowStaticData('global');
+const outboxId = $('Check Duplicate').first().json.outbox_id;
+const providerId = String($json.provider_message_id || '');
+staticData.sentOutbox[outboxId] = providerId;
+return [{ json: { outbox_id: outboxId, provider_message_id: providerId } }];
+```
 
 ## 2. Правка основного воркфлоу бота: пауза (`bot_paused`)
 

@@ -102,6 +102,7 @@ async def test_migrate_creates_only_version_table(settings):
             assert set(crm_tables) == {
                 "crm_users",
                 "crm_sessions",
+                "crm_login_attempts",
                 "crm_pipelines",
                 "crm_stages",
                 "crm_contacts",

@@ -29,6 +29,13 @@ def verify_password(password_hash: str, password: str) -> bool:
         return False
 
 
+# Precomputed once at import: verifying against it burns the same argon2
+# cost as a real check, so unknown/inactive accounts take as long as real
+# ones (no user-enumeration via timing). The password is random and
+# discarded — verification always fails.
+DUMMY_PASSWORD_HASH: str = _password_hasher.hash(secrets.token_urlsafe(32))
+
+
 def needs_rehash(password_hash: str) -> bool:
     return _password_hasher.check_needs_rehash(password_hash)
 

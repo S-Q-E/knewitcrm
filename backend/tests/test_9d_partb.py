@@ -268,7 +268,19 @@ def test_n8n_workflow_and_readme_present():
     assert "N8N_WEBHOOK_SECRET" in text_blob
     assert "401" in text_blob
     assert "outbox_id" in text_blob
+    # Step 16a: Postgres dedupe is primary, static data is the fallback.
+    by_name = {node["name"]: node for node in data["nodes"]}
+    assert by_name["Check Duplicate"]["type"] == "n8n-nodes-base.postgres"
+    assert by_name["Mark Sent"]["type"] == "n8n-nodes-base.postgres"
+    assert "ON CONFLICT (outbox_id) DO NOTHING" in text_blob
+    assert "n8n_processed_outbox" in text_blob
+    assert "SELECT COUNT(*)" in text_blob
+    secret_params = json.dumps(by_name["Check Secret"]["parameters"])
+    assert "notEmpty" in secret_params
+    assert '"caseSensitive":true' in secret_params.replace(" ", "")
     readme_text = readme.read_text()
     assert "bot_paused" in readme_text
     assert "crm_conversation_state" in readme_text
     assert "AI" in readme_text
+    assert "запасной вариант" in readme_text
+    assert "static data" in readme_text or "staticData" in readme_text

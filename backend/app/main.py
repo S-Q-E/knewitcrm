@@ -78,6 +78,9 @@ FRONTEND_DIR = resolve_frontend_dir()
 NO_CACHE = {"Cache-Control": "no-cache"}
 IMMUTABLE_CACHE = {"Cache-Control": "public, max-age=31536000, immutable"}
 
+# Served as 404 (never the SPA) when interactive docs are disabled.
+HIDDEN_DOCS_PATHS = frozenset({"docs", "redoc", "openapi.json"})
+
 
 def frontend_response(path: str) -> FileResponse:
     """SPA fallback: existing files as-is, everything else serves index.html.
@@ -154,7 +157,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     setup_logging(settings.log_level)
 
-    app = FastAPI(title="KnewIT CRM", version="1.0.0", lifespan=lifespan)
+    # Step 16a: interactive docs and the raw schema are disabled in
+    # production (smaller attack surface, no internal shape leakage).
+    docs_enabled = settings.app_env != "production"
+    app = FastAPI(
+        title="KnewIT CRM",
+        version="1.0.0",
+        lifespan=lifespan,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
+    )
     app.state.settings = settings
     init_sentry(settings)
 
@@ -213,6 +226,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/{full_path:path}")
     async def spa_fallback(full_path: str):
+        # Disabled docs must 404 in production instead of serving the SPA.
+        if not docs_enabled and full_path.removesuffix("/") in HIDDEN_DOCS_PATHS:
+            raise StarletteHTTPException(status_code=404, detail="Not found")
         return frontend_response(full_path)
 
     logger.info("app created (env=%s)", settings.app_env)
@@ -224,9 +240,19 @@ def _request_id(request: Request) -> str:
 
 
 async def validation_error_handler(request: Request, exc: RequestValidationError):
+    # Step 16a: details carry only loc/type/msg. The raw `input` (and any
+    # `ctx`/`url`) is dropped so rejected payloads are never echoed back.
+    details = [
+        {
+            "loc": list(err.get("loc", ())),
+            "msg": err.get("msg", ""),
+            "type": err.get("type", ""),
+        }
+        for err in exc.errors()
+    ]
     return JSONResponse(
         status_code=422,
-        content=error_payload("VALIDATION_ERROR", "Invalid request", exc.errors()),
+        content=error_payload("VALIDATION_ERROR", "Invalid request", details),
         headers={"X-Request-ID": _request_id(request)},
     )
 

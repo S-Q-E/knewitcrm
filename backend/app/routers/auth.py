@@ -5,17 +5,19 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth_deps import CurrentUser, require_user
 from ..cookies import clear_session_cookies, session_expiry, set_session_cookies
 from ..deps import get_session
-from ..errors import ApiError
+from ..errors import ApiError, error_payload
 from ..models import CrmSession, CrmUser
 from ..schemas.settings import ProfileUpdate, SessionListOut, SessionOut
 from ..schemas.users import ChangePasswordIn, LoginIn, UserOut
 from ..security import (
+    DUMMY_PASSWORD_HASH,
     MIN_PASSWORD_LENGTH,
     csrf_hash,
     hash_password,
@@ -28,7 +30,7 @@ from ..security import (
     verify_password,
 )
 from ..services.activity import log_activity
-from ..services.ratelimit import login_limiter
+from ..services.login_limits import is_blocked, record_failure, record_success
 from ..session_middleware import client_ip
 
 logger = logging.getLogger(__name__)
@@ -45,19 +47,30 @@ async def login(
 ):
     email = normalize_email(payload.email)
     ip = client_ip(request)
-    if login_limiter.is_blocked(ip, email):
+    blocked, retry_after = await is_blocked(session, ip, email)
+    if blocked:
         logger.warning("login rate-limited email=%s ip=%s", email, ip)
-        raise ApiError("RATE_LIMITED", "Too many failed attempts, try again later", 429)
+        return JSONResponse(
+            status_code=429,
+            content=error_payload("RATE_LIMITED", "Too many failed attempts, try again later"),
+            headers={
+                "Retry-After": str(retry_after),
+                "X-Request-ID": getattr(request.state, "request_id", ""),
+            },
+        )
 
     user = (
         await session.execute(select(CrmUser).where(CrmUser.email == email))
     ).scalar_one_or_none()
-    if (
-        user is None
-        or not user.is_active
-        or not verify_password(user.password_hash, payload.password)
-    ):
-        login_limiter.record_failure(ip, email)
+    if user is None or not user.is_active:
+        # Burn the same argon2 cost as a real check so response time does
+        # not reveal whether the account exists or is active.
+        verify_password(DUMMY_PASSWORD_HASH, payload.password)
+        await record_failure(session, ip, email)
+        logger.warning("login failed email=%s ip=%s", email, ip)
+        raise ApiError("INVALID_CREDENTIALS", "Invalid email or password", 401)
+    if not verify_password(user.password_hash, payload.password):
+        await record_failure(session, ip, email)
         logger.warning("login failed email=%s ip=%s", email, ip)
         raise ApiError("INVALID_CREDENTIALS", "Invalid email or password", 401)
 
@@ -78,7 +91,7 @@ async def login(
     user.last_login_at = datetime.now(UTC)
     await session.commit()
 
-    login_limiter.record_success(ip, email)
+    await record_success(session, ip, email)
     await log_activity(session, user.id, "user", user.id, "auth_login", {"ip": ip})
     await session.commit()
     set_session_cookies(

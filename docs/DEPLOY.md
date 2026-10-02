@@ -127,7 +127,11 @@ HSTS-заголовок уже выставляется бэкендом (D22).
 3. Залогиниться под `ADMIN_EMAIL` / `ADMIN_PASSWORD`, сменить пароль.
 4. **Удалить `ADMIN_PASSWORD`** из переменных и передеплоить (переменные
    с пустым значением игнорируются — bootstrap срабатывает только при
-   нуле админов, D9).
+   нуле админов, D9). Проверка: переменная отсутствует в Railway →
+   Variables, в логах старта нет строки о создании админа, старый
+   пароль больше не подходит, новый работает. Этот шаг нельзя
+   пропускать: пока переменная задана, anyone with deploy access видит
+   действующий пароль от учётки с полными правами.
 5. Backfill: в логах sync-worker `sync cycle done leads=N ...` — контакты
    и сделки подъехали из `knewit_leads`. Проверить канбан глазами.
 6. Воркеры: в логах `outbox cycle done`, `notify cycle done`, realtime
@@ -165,6 +169,36 @@ SEND_TEST_MESSAGE=1 TEST_WHATSAPP_ID="79990000001@c.us" scripts/smoke.sh
 сделок, SSE-пролог `connected` за 10 секунд и — по флагу — постановку
 сообщения в outbox (202). Любой шаг при ошибке роняет скрипт с `FAIL`
 и кодом 1 — годится как post-deploy gate в CI/CD и для ручной проверки.
+Без `SMOKE_PASSWORD` скрипт проверяет только публичный health и выходит
+с кодом 0 (так работает CI-шаг, когда секрета нет).
+
+### Проверка лимита входа на staging
+
+Лимит неудачных логинов — 5 на пару (IP, email) и 20 на email за 10 минут
+(D9/D25), считается в БД и общий для всех воркеров. Поддельный
+`X-Forwarded-For` тестирует именно тот IP, который увидит приложение
+(`TRUSTED_PROXY_HOPS=1` берёт последнее значение):
+
+```bash
+BASE="https://crm-staging.up.railway.app"
+# 5 неудач с одного (поддельного) IP → 401, 6-я → 429 с Retry-After:
+for i in $(seq 1 6); do
+  curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/api/auth/login" \
+    -H 'Content-Type: application/json' \
+    -H 'X-Forwarded-For: 203.0.113.7' \
+    -d '{"email":"audit-probe@example.com","password":"wrong-password-1"}'
+done
+# → 401 ×5, затем 429. Другой поддельный IP не заблокирован:
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/api/auth/login" \
+  -H 'Content-Type: application/json' \
+  -H 'X-Forwarded-For: 203.0.113.8' \
+  -d '{"email":"audit-probe@example.com","password":"wrong-password-1"}'
+# → 401 (попытка засчитана, но блок — только на паре IP+email и flood-бюджете)
+```
+
+Ожидаемо: свой правильный пароль с известного владельцу IP проходит даже
+при исчерпанном flood-бюджете email (мягкая блокировка, D25), с чужого —
+429. Реальный пароль в эту проверку не подставлять.
 
 ## 8. Откат
 

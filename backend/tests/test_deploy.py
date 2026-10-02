@@ -89,10 +89,10 @@ def test_smoke_script_shape_and_no_secrets():
     for probe in ("/api/health", "/api/auth/login", "/api/deals", "/api/stream"):
         assert probe in src, f"smoke.sh must probe {probe}"
     assert "SEND_TEST_MESSAGE" in src and "TEST_WHATSAPP_ID" in src
-    # Credentials only from the environment with hard-fail guards; no
-    # literal passwords or tokens anywhere in the script.
-    assert "${SMOKE_EMAIL:?" in src
-    assert "${SMOKE_PASSWORD:?" in src
+    # Credentials only from the environment, empty allowed: the script
+    # skips the authenticated checks itself (no secrets in CI `if:`).
+    assert 'SMOKE_PASSWORD="${SMOKE_PASSWORD:-}"' in src
+    assert "SMOKE_PASSWORD is empty" in src
     assert "admin-test-password" not in src
     # Quoted PASSWORD values must be env expansions or the "..." placeholder,
     # never hardcoded literals.

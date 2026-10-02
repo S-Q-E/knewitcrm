@@ -12,18 +12,30 @@
       "name": "CRM Send Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "webhookId": "crm-send-message"
     },
     {
       "parameters": {
         "conditions": {
           "options": {
-            "caseSensitive": false,
+            "caseSensitive": true,
             "leftValue": "",
             "typeValidation": "strict"
           },
           "conditions": [
+            {
+              "id": "cond-secret-nonempty",
+              "leftValue": "={{ $json.headers[\"x-crm-secret\"] }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
             {
               "id": "cond-secret",
               "leftValue": "={{ $json.headers[\"x-crm-secret\"] }}",
@@ -42,7 +54,10 @@
       "name": "Check Secret",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -56,18 +71,31 @@
       "name": "Respond 401",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [460, 500]
+      "position": [
+        460,
+        500
+      ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Dedupe by CRM outbox_id (Step 9D).\n// Repeat calls with the same outbox_id must not send twice.\n// Workflow static data survives across executions on one n8n instance.\n// For multi-instance n8n use the Postgres variant from docs/n8n/README.md\n// (table n8n_processed_outbox) instead of this in-memory map.\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.sentOutbox) staticData.sentOutbox = {};\nconst outboxId = String($json.body?.outbox_id || '');\nconst whatsappId = String($json.body?.whatsapp_id || '');\nconst text = String($json.body?.text || '');\nif (!outboxId || !whatsappId || !text) {\n  return [{ json: { badRequest: true, outbox_id: outboxId } }];\n}\nif (staticData.sentOutbox[outboxId]) {\n  return [{ json: {\n    duplicate: true,\n    outbox_id: outboxId,\n    whatsapp_id: whatsappId,\n    provider_message_id: staticData.sentOutbox[outboxId]\n  } }];\n}\nreturn [{ json: { duplicate: false, outbox_id: outboxId, whatsapp_id: whatsappId, text } }];"
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) AS seen, MAX(provider_message_id) AS provider_message_id FROM n8n_processed_outbox WHERE outbox_id = '{{ $json.outbox_id }}'::uuid",
+        "options": {}
       },
       "id": "44444444-4444-4444-8444-444444444444",
       "name": "Check Duplicate",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [680, 300]
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        680,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "n8n Postgres (connect in n8n UI)"
+        }
+      }
     },
     {
       "parameters": {
@@ -79,13 +107,12 @@
           },
           "conditions": [
             {
-              "id": "cond-dupe",
-              "leftValue": "={{ $json.duplicate }}",
-              "rightValue": true,
+              "id": "cond-seen",
+              "leftValue": "={{ $json.seen }}",
+              "rightValue": 0,
               "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
+                "type": "number",
+                "operation": "larger"
               }
             }
           ],
@@ -97,7 +124,10 @@
       "name": "Is Duplicate",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -111,7 +141,10 @@
       "name": "Respond Duplicate",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [900, 500]
+      "position": [
+        900,
+        500
+      ]
     },
     {
       "parameters": {
@@ -142,20 +175,33 @@
       "name": "Send via WhatsApp (REPLACE)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1120, 300],
+      "position": [
+        1120,
+        300
+      ],
       "onError": "continueErrorOutput",
       "notes": "REPLACE this node with the same WhatsApp provider node used in the main bot workflow (same credentials, same API). Keep the input fields whatsapp_id/text/outbox_id and return provider_message_id."
     },
     {
       "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "// Remember the successful delivery so redeliveries dedupe.\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.sentOutbox) staticData.sentOutbox = {};\nconst outboxId = $('Check Duplicate').first().json.outbox_id;\nconst body = $json;\nconst providerId = String(body.provider_message_id || body.message_id || body.id || '');\nstaticData.sentOutbox[outboxId] = providerId;\nreturn [{ json: { outbox_id: outboxId, provider_message_id: providerId } }];"
+        "operation": "executeQuery",
+        "query": "INSERT INTO n8n_processed_outbox (outbox_id, provider_message_id) VALUES ('{{ $('Check Duplicate').first().json.outbox_id }}'::uuid, '{{ $json.provider_message_id }}') ON CONFLICT (outbox_id) DO NOTHING",
+        "options": {}
       },
       "id": "88888888-8888-4888-8888-888888888888",
       "name": "Mark Sent",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1340, 260]
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1340,
+        260
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "n8n Postgres (connect in n8n UI)"
+        }
+      }
     },
     {
       "parameters": {
@@ -169,7 +215,10 @@
       "name": "Respond OK",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1560, 260]
+      "position": [
+        1560,
+        260
+      ]
     },
     {
       "parameters": {
@@ -183,11 +232,14 @@
       "name": "Respond Error",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1340, 440]
+      "position": [
+        1340,
+        440
+      ]
     },
     {
       "parameters": {
-        "content": "## CRM Send Message (Step 9D)\n1. Импортируйте этот файл в n8n (Workflows → Import from file).\n2. Замените ноду `Send via WhatsApp (REPLACE)` тем же провайдером, что в основном воркфлоу бота (те же credentials).\n3. Задайте env `N8N_WEBHOOK_SECRET` в n8n (совпадает с CRM `N8N_WEBHOOK_SECRET`).\n4. Активируйте воркфлоу; URL вида `https://<n8n>/webhook/crm-send-message` → CRM `N8N_SEND_WEBHOOK_URL`.",
+        "content": "## CRM Send Message (Step 16a)\n1. Импортируйте этот файл в n8n (Workflows → Import from file).\n2. Создайте таблицу n8n_processed_outbox (SQL в docs/n8n/README.md §Дедупликация)\n   и подключите credentials Postgres в нодах `Check Duplicate` / `Mark Sent`.\n3. Замените ноду `Send via WhatsApp (REPLACE)` тем же провайдером, что в основном\n   воркфлоу бота (те же credentials); поправьте поле provider_message_id в `Mark Sent`.\n4. Задайте env `N8N_WEBHOOK_SECRET` в n8n (совпадает с CRM `N8N_WEBHOOK_SECRET`).\n5. Активируйте воркфлоу; URL вида `https://<n8n>/webhook/crm-send-message` → CRM\n   `N8N_SEND_WEBHOOK_URL`. Без доступа к Postgres — запасной вариант на static data\n   описан в README (приложение «Запасной вариант»).",
         "height": 320,
         "width": 420,
         "color": 4
@@ -196,36 +248,99 @@
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [120, 80]
+      "position": [
+        120,
+        80
+      ]
     }
   ],
   "connections": {
     "CRM Send Webhook": {
-      "main": [[{ "node": "Check Secret", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Check Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Check Secret": {
       "main": [
-        [{ "node": "Check Duplicate", "type": "main", "index": 0 }],
-        [{ "node": "Respond 401", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Check Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Check Duplicate": {
-      "main": [[{ "node": "Is Duplicate", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Is Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Is Duplicate": {
       "main": [
-        [{ "node": "Send via WhatsApp (REPLACE)", "type": "main", "index": 0 }],
-        [{ "node": "Respond Duplicate", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Send via WhatsApp (REPLACE)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Send via WhatsApp (REPLACE)": {
       "main": [
-        [{ "node": "Mark Sent", "type": "main", "index": 0 }],
-        [{ "node": "Respond Error", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Mark Sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Mark Sent": {
-      "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
@@ -234,7 +349,7 @@
   },
   "staticData": null,
   "pinData": {},
-  "versionId": "9d-crm-send-message-1",
+  "versionId": "16a-postgres-dedupe-1",
   "meta": {
     "templateCredsSetupCompleted": false
   }

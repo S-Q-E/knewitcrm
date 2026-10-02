@@ -18,10 +18,19 @@ const queryClient = new QueryClient({
 
 // Optional error reporting: only loads @sentry/react when a DSN is baked in
 // at build time (VITE_SENTRY_DSN). No DSN means zero Sentry code runs.
+// beforeSend drops request bodies (may hold passwords and message texts).
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
 if (sentryDsn) {
   void import("@sentry/react").then((sentry) => {
-    sentry.init({ dsn: sentryDsn });
+    sentry.init({
+      dsn: sentryDsn,
+      beforeSend(event) {
+        if (event.request) {
+          delete event.request.data;
+        }
+        return event;
+      },
+    });
   });
 }
 

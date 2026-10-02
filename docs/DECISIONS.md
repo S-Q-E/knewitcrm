@@ -526,3 +526,38 @@ Why: protects against accidental data loss, keeps audit trail.
   `railway up` with `RAILWAY_TOKEN`. `scripts/smoke.sh` is the
   post-deploy gate (health → login → deals → SSE prologue, opt-in send).
 
+## D25. Step 16a security-audit closure notes
+- CI smoke step no longer gates on secrets in `if:`: `SMOKE_PASSWORD`
+  always passes through env (possibly empty) and `smoke.sh` skips the
+  authenticated checks itself with exit 0. `actionlint` runs as its own
+  CI job over `.github/workflows/ci.yml`.
+- Interactive docs are off in production (`APP_ENV=production` →
+  `docs_url/redoc_url/openapi_url=None`); the SPA fallback explicitly
+  404s `/docs`, `/redoc`, `/openapi.json` instead of serving index.html.
+  Local/dev keeps full docs.
+- Login timing: unknown and inactive accounts burn one full argon2 verify
+  against a precomputed random dummy hash, so response time does not
+  reveal account existence or status (means within 30% in tests).
+- Login rate limiting moved from process memory to `crm_login_attempts`
+  (`ip`, `email`, `at` + two composite indexes, migration `0019`,
+  opportunistic purge of rows older than 1h on write), so the 5-per-pair
+  / 20-per-email budgets hold across `--workers 2` and instances.
+  The per-email block is soft: after 20 failures, requests from the
+  owner's last session IP still pass (unknown emails have no owner IP
+  and stay blocked); 429 carries `Retry-After` computed from the oldest
+  counted failure.
+- 422 details are `{loc, msg, type}` only: raw `input` (passwords, message
+  texts) and `ctx` are never echoed back. Frontend treats details as
+  opaque `unknown`, so nothing depended on `input`.
+- Sentry `before_send` (`scrub_sentry_event`, backend + `beforeSend` in
+  `main.tsx`) drops request bodies and SQLAlchemy breadcrumb `params`;
+  statement text and method/URL are kept for triage. Span-level
+  `db.params` (transactions) are out of scope — `traces_sample_rate`
+  stays 0.0, so no spans leave the process.
+- n8n send workflow: Postgres dedupe (`n8n_processed_outbox`,
+  `INSERT ... ON CONFLICT DO NOTHING`) is primary — the `COUNT(*)`
+  check always yields one row so the IF branch never stalls; static-data
+  Code is documented as fallback only. Secret check requires a non-empty
+  header plus case-sensitive equality (an empty env secret no longer
+  matches an empty header).
+
