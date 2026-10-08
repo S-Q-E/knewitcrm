@@ -578,3 +578,9 @@ Why: protects against accidental data loss, keeps audit trail.
   `npm run gen:api`), and the tests that used it; `test_legacy_bot.py`
   keeps the migration test and asserts the routes now return 404.
   Health tests use `/api/dialogs` as the protected route.
+- DB-backed tests fail instead of skipping under CI (audit H4, 2026-10-08):
+  `conftest.db_available` calls `pytest.fail` when `CI` is set and Postgres
+  is unreachable. Locally it still skips, so developers without a DB are
+  not blocked. Not yet done from P1-7: CI deploy gates (H3) need owner
+  decisions (a `develop` branch does not exist; `workflow_dispatch` does not
+  deploy production; `production` environment reviewers must be set in GitHub).

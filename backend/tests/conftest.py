@@ -50,7 +50,10 @@ async def db_available(settings):
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
-    except Exception:
+    except Exception as exc:
+        # CI must never report green with the DB suite silently skipped (audit H4).
+        if os.environ.get("CI"):
+            pytest.fail(f"Postgres is required in CI: {type(exc).__name__}")
         pytest.skip("Postgres is not available")
     finally:
         await engine.dispose()
