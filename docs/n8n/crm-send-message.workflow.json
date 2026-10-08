@@ -72,7 +72,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT \n  COUNT(*) AS seen, \n  MAX(provider_message_id) AS provider_message_id \nFROM n8n_processed_outbox \nWHERE outbox_id = $1::uuid",
+        "query": "SELECT COUNT(*) AS seen, MAX(provider_message_id) AS provider_message_id FROM n8n_processed_outbox WHERE outbox_id = $1::uuid",
         "options": {
           "queryReplacement": "={{ $json.body.outbox_id }}"
         }
