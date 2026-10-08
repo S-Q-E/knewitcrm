@@ -16,51 +16,12 @@ async def authed(client, settings):
     return client
 
 
-async def test_leads_list_shape_and_pagination(authed):
-    response = await authed.get("/api/leads?limit=2&offset=0")
-    assert response.status_code == 200
-    body = response.json()
-    assert len(body["items"]) == 2
-    assert body["count"] == 2
-    first = body["items"][0]
-    for key in ("whatsapp_id", "name", "current_stage", "status", "last_message"):
-        assert key in first
-
-
-async def test_leads_search_and_filters(authed):
-    by_name = await authed.get("/api/leads?search=айгерим")
-    assert by_name.json()["count"] == 1
-
-    by_status = await authed.get("/api/leads?status=ЗАПИСАН")
-    items = by_status.json()["items"]
-    assert items and all(i["status"] == "ЗАПИСАН" for i in items)
-
-    by_stage = await authed.get("/api/leads?stage=ПРОДАЖА")
-    items = by_stage.json()["items"]
-    assert items and all(i["current_stage"] == "ПРОДАЖА" for i in items)
-
-
-async def test_get_lead_and_404(authed):
-    ok = await authed.get(f"/api/leads/{LEAD_ID}")
-    assert ok.status_code == 200
-    assert ok.json()["whatsapp_id"] == LEAD_ID
-
-    missing = await authed.get("/api/leads/unknown@c.us")
-    assert missing.status_code == 404
-    assert missing.json()["error"]["code"] == "NOT_FOUND"
-
-
-async def test_messages_and_events_contract(authed):
-    messages = await authed.get(f"/api/leads/{LEAD_ID}/messages")
-    assert messages.status_code == 200
-    items = messages.json()["items"]
-    assert len(items) >= 3
-    assert items[0]["direction"] == "in"
-    assert "content" in items[0]
-
-    events = await authed.get(f"/api/leads/{LEAD_ID}/events")
-    assert events.status_code == 200
-    assert any(e["event_type"] == "stage_entered" for e in events.json()["items"])
+async def test_legacy_leads_api_is_gone(authed):
+    # Legacy /api/leads* had no visibility checks; it was removed (audit C1).
+    assert (await authed.get("/api/leads")).status_code == 404
+    assert (await authed.get(f"/api/leads/{LEAD_ID}")).status_code == 404
+    assert (await authed.get(f"/api/leads/{LEAD_ID}/messages")).status_code == 404
+    assert (await authed.get(f"/api/leads/{LEAD_ID}/events")).status_code == 404
 
 
 async def test_removed_stats_and_funnel(authed):

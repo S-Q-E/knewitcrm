@@ -37,7 +37,6 @@ from .routers import (
     deals,
     dialogs,
     health,
-    legacy_bot,
     lost_reasons,
     metrics,
     notes,
@@ -218,7 +217,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(stream.router)
     app.include_router(settings_router)
     app.include_router(notifications.router)
-    app.include_router(legacy_bot.router)
 
     @app.get("/")
     async def root_index():

@@ -570,3 +570,11 @@ Why: protects against accidental data loss, keeps audit trail.
   parallel sends or repeated duplicates appear; the fix is a pre-send
   `pending` row with `INSERT ... RETURNING` (needs a `status` column).
 
+- Removed legacy `/api/leads*` (audit C1, 2026-10-08): the router
+  `routers/legacy_bot.py` had no visibility checks, so any logged-in
+  manager could read every lead, phone, message and event even with
+  `restrict_managers_to_own`. The frontend never called it. Removed the
+  router, its `main.py` include, the `types.ts` paths (regenerated via
+  `npm run gen:api`), and the tests that used it; `test_legacy_bot.py`
+  keeps the migration test and asserts the routes now return 404.
+  Health tests use `/api/dialogs` as the protected route.

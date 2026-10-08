@@ -21,7 +21,7 @@ async def test_ready_is_public(client):
 
 
 async def test_protected_route_requires_session(client):
-    response = await client.get("/api/leads")
+    response = await client.get("/api/dialogs")
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "UNAUTHORIZED"
 
@@ -29,7 +29,7 @@ async def test_protected_route_requires_session(client):
 async def test_unknown_token_rejected(client):
     client.cookies.set("crm_session", "00" * 32)
     client.cookies.set("crm_csrf", "bogus")
-    response = await client.get("/api/leads")
+    response = await client.get("/api/dialogs")
     assert response.status_code == 401
 
 
@@ -37,7 +37,7 @@ async def test_validation_error_format(client, settings):
     from backend.tests.conftest import login_admin
 
     await login_admin(client, settings)
-    response = await client.get("/api/leads?limit=9999")
+    response = await client.get("/api/dialogs?limit=9999")
     assert response.status_code == 422
     body = response.json()
     assert body["error"]["code"] == "VALIDATION_ERROR"
