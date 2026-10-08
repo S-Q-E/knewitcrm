@@ -560,4 +560,13 @@ Why: protects against accidental data loss, keeps audit trail.
   Code is documented as fallback only. Secret check requires a non-empty
   header plus case-sensitive equality (an empty env secret no longer
   matches an empty header).
+- Accepted risk (2026-10-08): the n8n `CRM Send Message` dedupe is
+  sequential only. Two concurrent requests with the same `outbox_id`
+  can both miss `n8n_processed_outbox` and double-send. Considered
+  unlikely: the outbox claim is `SKIP LOCKED`, manual retry is allowed
+  only from `failed`, the n8n send timeout (10 s) equals the CRM
+  timeout, and `sending` rows are reaped after 120 s (`_reap_stale_sending`),
+  so the first request has finished before any retry. Revisit if
+  parallel sends or repeated duplicates appear; the fix is a pre-send
+  `pending` row with `INSERT ... RETURNING` (needs a `status` column).
 
