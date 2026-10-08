@@ -8,14 +8,11 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "11111111-1111-4111-8111-111111111111",
+      "id": "ec890df8-7d97-45ee-b448-fe83e4acfbc6",
       "name": "CRM Send Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [
-        240,
-        300
-      ],
+      "position": [-672, 400],
       "webhookId": "crm-send-message"
     },
     {
@@ -24,7 +21,8 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "loose",
+            "version": 2
           },
           "conditions": [
             {
@@ -48,16 +46,14 @@
           ],
           "combinator": "and"
         },
+        "looseTypeValidation": true,
         "options": {}
       },
-      "id": "22222222-2222-4222-8222-222222222222",
+      "id": "3b8e6f71-5a1d-4811-8032-ee4c0cf0e23f",
       "name": "Check Secret",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [
-        460,
-        300
-      ]
+      "position": [-400, 384]
     },
     {
       "parameters": {
@@ -67,33 +63,29 @@
           "responseCode": 401
         }
       },
-      "id": "33333333-3333-4333-8333-333333333333",
+      "id": "b8600fc8-7089-4970-9190-2a92557b85db",
       "name": "Respond 401",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [
-        460,
-        500
-      ]
+      "position": [-400, 576]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT COUNT(*) AS seen, MAX(provider_message_id) AS provider_message_id FROM n8n_processed_outbox WHERE outbox_id = '{{ $json.outbox_id }}'::uuid",
-        "options": {}
+        "query": "SELECT \n  COUNT(*) AS seen, \n  MAX(provider_message_id) AS provider_message_id \nFROM n8n_processed_outbox \nWHERE outbox_id = $1::uuid",
+        "options": {
+          "queryReplacement": "={{ $json.body.outbox_id }}"
+        }
       },
-      "id": "44444444-4444-4444-8444-444444444444",
+      "id": "990119ee-473f-405b-ba66-1dc533b30fec",
       "name": "Check Duplicate",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [
-        680,
-        300
-      ],
+      "position": [-176, 384],
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": {
-          "id": "1",
-          "name": "n8n Postgres (connect in n8n UI)"
+          "name": "Postgres account"
         }
       }
     },
@@ -103,7 +95,8 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "loose",
+            "version": 2
           },
           "conditions": [
             {
@@ -118,107 +111,110 @@
           ],
           "combinator": "and"
         },
+        "looseTypeValidation": true,
         "options": {}
       },
-      "id": "55555555-5555-4555-8555-555555555555",
+      "id": "9d884d39-96fd-4583-a5e8-a3cab96159a6",
       "name": "Is Duplicate",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [
-        900,
-        300
-      ]
+      "position": [48, 384]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\"ok\": true, \"deduped\": true, \"provider_message_id\": \"{{ $json.provider_message_id }}\"}",
+        "responseBody": "={{ JSON.stringify({ ok: true, deduped: true, provider_message_id: $json.provider_message_id ?? null }) }}",
         "options": {
           "responseCode": 200
         }
       },
-      "id": "66666666-6666-4666-8666-666666666666",
+      "id": "f8da6cf2-9d22-49c7-a211-0f5c44ea6d2c",
       "name": "Respond Duplicate",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [
-        900,
-        500
-      ]
+      "position": [128, 160]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://whatsapp-provider.example.local/send",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"to\": \"{{ $json.whatsapp_id }}\",\n  \"text\": \"{{ $json.text }}\",\n  \"client_reference\": \"{{ $json.outbox_id }}\"\n}",
-        "options": {
-          "timeout": 10000,
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
+        "recipient": "={{ $('CRM Send Webhook').item.json.body.whatsapp_id }}",
+        "msg": "={{ $('CRM Send Webhook').item.json.body.text }}"
+      },
+      "id": "e1de0802-1dc6-48a1-893f-1dba428eb538",
+      "name": "Send WhatsApp Message",
+      "type": "n8n-nodes-chatflow.chatflow",
+      "typeVersion": 2,
+      "position": [272, 368],
+      "credentials": {
+        "chatflowApi": {
+          "name": "knewit whatsapp"
         }
       },
-      "id": "77777777-7777-4777-8777-777777777777",
-      "name": "Send via WhatsApp (REPLACE)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1120,
-        300
-      ],
-      "onError": "continueErrorOutput",
-      "notes": "REPLACE this node with the same WhatsApp provider node used in the main bot workflow (same credentials, same API). Keep the input fields whatsapp_id/text/outbox_id and return provider_message_id."
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-send-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d3f1c2a0-5e7b-4c9a-8f10-2b6e4a9c7d51",
+      "name": "Send OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [496, 368]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO n8n_processed_outbox (outbox_id, provider_message_id) VALUES ('{{ $('Check Duplicate').first().json.outbox_id }}'::uuid, '{{ $json.provider_message_id }}') ON CONFLICT (outbox_id) DO NOTHING",
-        "options": {}
+        "query": "INSERT INTO n8n_processed_outbox (outbox_id, provider_message_id) VALUES ($1::uuid, NULL) ON CONFLICT (outbox_id) DO NOTHING",
+        "options": {
+          "queryReplacement": "={{ $('CRM Send Webhook').item.json.body.outbox_id }}"
+        }
       },
-      "id": "88888888-8888-4888-8888-888888888888",
+      "id": "e85bbf63-b2b3-4185-aebb-b4176a87af2f",
       "name": "Mark Sent",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [
-        1340,
-        260
-      ],
+      "position": [720, 336],
       "credentials": {
         "postgres": {
-          "id": "1",
-          "name": "n8n Postgres (connect in n8n UI)"
+          "name": "Postgres account"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\"ok\": true, \"provider_message_id\": \"{{ $json.provider_message_id }}\"}",
+        "responseBody": "={\"ok\": true, \"provider_message_id\": null}",
         "options": {
           "responseCode": 200
         }
       },
-      "id": "99999999-9999-4999-8999-999999999999",
+      "id": "f37b8620-1ea3-477f-b542-72782f3872a6",
       "name": "Respond OK",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [
-        1560,
-        260
-      ]
+      "position": [944, 336]
     },
     {
       "parameters": {
@@ -228,30 +224,24 @@
           "responseCode": 502
         }
       },
-      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "id": "d1a04614-ea9d-43f6-b7eb-75e0e64af3f6",
       "name": "Respond Error",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [
-        1340,
-        440
-      ]
+      "position": [720, 512]
     },
     {
       "parameters": {
-        "content": "## CRM Send Message (Step 16a)\n1. Импортируйте этот файл в n8n (Workflows → Import from file).\n2. Создайте таблицу n8n_processed_outbox (SQL в docs/n8n/README.md §Дедупликация)\n   и подключите credentials Postgres в нодах `Check Duplicate` / `Mark Sent`.\n3. Замените ноду `Send via WhatsApp (REPLACE)` тем же провайдером, что в основном\n   воркфлоу бота (те же credentials); поправьте поле provider_message_id в `Mark Sent`.\n4. Задайте env `N8N_WEBHOOK_SECRET` в n8n (совпадает с CRM `N8N_WEBHOOK_SECRET`).\n5. Активируйте воркфлоу; URL вида `https://<n8n>/webhook/crm-send-message` → CRM\n   `N8N_SEND_WEBHOOK_URL`. Без доступа к Postgres — запасной вариант на static data\n   описан в README (приложение «Запасной вариант»).",
+        "content": "## CRM Send Message (исправленная версия)\n1. Импорт: Workflows → Import from file. Credentials подключить в UI: `Postgres account`, `knewit whatsapp`.\n2. Таблица `n8n_processed_outbox` создаётся по SQL из docs/n8n/README.md §Дедупликация.\n3. Env `N8N_WEBHOOK_SECRET` в n8n = CRM `N8N_WEBHOOK_SECRET`.\n4. Успех = `success: true` у Chatflow. Любой другой ответ → 502, в дедуп-таблицу не пишем, повтор из CRM снова отправит.\n5. Активировать, URL `https://<n8n>/webhook/crm-send-message` → CRM `N8N_SEND_WEBHOOK_URL`.",
         "height": 320,
         "width": 420,
         "color": 4
       },
-      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "id": "eb8c87db-5311-4218-9b79-e51455ec7371",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [
-        120,
-        80
-      ]
+      "position": [-1152, -16]
     }
   ],
   "connections": {
@@ -299,21 +289,39 @@
       "main": [
         [
           {
-            "node": "Send via WhatsApp (REPLACE)",
+            "node": "Respond Duplicate",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Respond Duplicate",
+            "node": "Send WhatsApp Message",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send via WhatsApp (REPLACE)": {
+    "Send WhatsApp Message": {
+      "main": [
+        [
+          {
+            "node": "Send OK?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send OK?": {
       "main": [
         [
           {
@@ -349,7 +357,6 @@
   },
   "staticData": null,
   "pinData": {},
-  "versionId": "16a-postgres-dedupe-1",
   "meta": {
     "templateCredsSetupCompleted": false
   }

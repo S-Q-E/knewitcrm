@@ -15,9 +15,16 @@ Webhook POST /webhook/crm-send-message
   {outbox_id, whatsapp_id, text} + header X-CRM-Secret
     → 401 {ok:false} при несовпадении секрета
     → дедупликация по outbox_id (повтор = 200 без второй отправки)
-    → отправка через того же WhatsApp-провайдера, что в основном воркфлоу
-    → 200 {ok:true, provider_message_id} или {ok:false, error}
+    → отправка нодой Chatflow «Send WhatsApp Message» (credential `knewit whatsapp`)
+    → success:true → запись в n8n_processed_outbox → 200 {ok:true, provider_message_id:null}
+    → любой другой ответ (success:false, ошибка ноды) → 502 {ok:false}, без записи в дедуп
 ```
+
+Ответ Chatflow при неверном номере (проверено на живом тесте):
+`[{"success": false, "message": "Recipient is not registered or not reachable on WhatsApp"}]`.
+Нода не выбрасывает ошибку, поэтому проверка идёт по полю `success` (нода `Send OK?`).
+Если бы не эта проверка, `Mark Sent` записал бы неотправленное сообщение как отправленное,
+и повтор из CRM вернул бы `deduped: true` без доставки.
 
 Контракт со стороны CRM (`workers/outbox_worker.py::post_to_n8n`):
 
@@ -34,12 +41,10 @@ Webhook POST /webhook/crm-send-message
 
 1. n8n → Workflows → `⋯` → Import from file → выбрать
    `crm-send-message.workflow.json`.
-2. Открыть ноду `Send via WhatsApp (REPLACE)` и заменить её тем же
-   способом отправки, что в основном воркфлоу бота: те же credentials,
-   тот же API. Сохранить маппинг входов:
-   - получатель ← `{{ $json.whatsapp_id }}`
-   - текст ← `{{ $json.text }}`
-   - референс/клиентский ID ← `{{ $json.outbox_id }}` (нужен для сверки).
+2. Credentials в нодах `Check Duplicate`, `Mark Sent` (`Postgres account`) и
+   `Send WhatsApp Message` (`knewit whatsapp`, Chatflow) выбрать в UI после импорта:
+   в файле они не хранятся. Получатель и текст уже заданы из `body` запроса
+   (`whatsapp_id`, `text`).
 3. В окружении n8n задать `N8N_WEBHOOK_SECRET` — тот же, что
    `N8N_WEBHOOK_SECRET` у CRM. В ноде `Check Secret` сравнение идёт
    с `{{ $env.N8N_WEBHOOK_SECRET }}`; ничего секретного в самом
@@ -100,20 +105,21 @@ CREATE TABLE IF NOT EXISTS n8n_processed_outbox (
   отправку.
 - `Is Duplicate` (IF): `{{ $json.seen }}` > 0 → `Respond Duplicate`
   (`{ok:true, deduped:true, ...}`), иначе → отправка.
-- `Mark Sent` (Postgres, `executeQuery`) после успешной отправки:
+- `Send OK?` (IF) — `{{ $json.success }}` is true. Только при true идём в `Mark Sent`;
+  иначе → `Respond Error` (502).
+- `Mark Sent` (Postgres, `executeQuery`) после успешной отправки, `queryReplacement` = `outbox_id`:
   ```sql
-  INSERT INTO n8n_processed_outbox (outbox_id, provider_message_id) VALUES
-    ('{{ $('Check Duplicate').first().json.outbox_id }}'::uuid,
-     '{{ $json.provider_message_id }}')
+  INSERT INTO n8n_processed_outbox (outbox_id, provider_message_id) VALUES ($1::uuid, NULL)
   ON CONFLICT (outbox_id) DO NOTHING
   ```
-  `ON CONFLICT DO NOTHING` делает запись идемпотентной при гонках.
-  Имя поля с ID провайдера (`provider_message_id`) зависит от вашего
-  провайдера — поправьте выражение под ответ вашей ноды отправки.
+  `provider_message_id` = NULL: Chatflow не возвращает ID сообщения. `ON CONFLICT DO NOTHING`
+  делает запись идемпотентной при повторной записи. `onError: continueRegularOutput`: если запись
+  не удалась уже после отправки, клиент получает `ok:true` и не получает повтор (иначе повтор дал бы дубль).
+  Такой случай нужно видеть в Executions.
 
 Порядок в воркфлоу: Webhook → Check Secret → Check Duplicate (Postgres)
-→ Is Duplicate → (да) Respond Duplicate / (нет) Send → Mark Sent
-(Postgres) → Respond OK. Работает на любом числе инстансов n8n за
+→ Is Duplicate → (да) Respond Duplicate / (нет) Send WhatsApp Message →
+Send OK? → (true) Mark Sent (Postgres) → Respond OK; (false или ошибка ноды) → Respond Error (502). Работает на любом числе инстансов n8n за
 балансировщиком — состояние в Postgres, а не в памяти.
 
 ### Дедупликация (запасной вариант — static data)
