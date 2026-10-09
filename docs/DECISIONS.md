@@ -178,7 +178,7 @@ Why: protects against accidental data loss, keeps audit trail.
 - `notify()` dedupes on unread rows with the same (user, type, dedupe_key).
   Worker (60s loop, own xact lock): overdue + due-within-24h reminders keyed per
   task per day; automations evaluated in the same cycle.
-- D5 handover in the sync worker: МЕНЕДЖЕР status always creates urgent
+- D5 handover in the sync worker: МЕНЕДЖЕР status creates (once per deal, see D32) urgent
   "Ответить клиенту" (due +1h, once per deal) + notifies owner (or all managers);
   `auto_pause_on_manager` setting (default false) gates bot pausing. Fresh
   conversation rows start read; unread 0→N transitions notify the assignee;
@@ -662,3 +662,58 @@ Why: protects against accidental data loss, keeps audit trail.
   label is hidden below the `md` breakpoint; the dot stays.
 - Not included: an alert to the admin for dialogs nobody sees (no owner and no managers),
   and a settings UI for the threshold (API only for now).
+
+## D30. Long bot pause alert (P3-2, commit 54e6ab9)
+- Setting `paused_alert_hours` in `crm_settings`: integer 1–50, default 6 (default is the
+  implementer's assumption, not confirmed by the owner). Read by `services/paused.py`
+  (`threshold_hours`), exposed through `GET/PATCH /api/settings`.
+- `notify_long_paused` (notify worker, 60 s, advisory-locked): a dialog is alerted when
+  `bot_paused = true` and `paused_at < now − N h`. Recipients: all active users (`crm_users`
+  `is_active`, admins included). Dedupe key `paused:<whatsapp_id>:<paused_at>`, checked
+  against all notifications, read or not: one alert per pause episode. A new pause after a
+  resume is a new episode. No time window, no advance warning.
+- Not included (owner decisions): list filter «Пауза > N часов» and its badge; auto-return
+  to the bot. Auto-return stays out until the CRM flag is connected to Chatflow (P0-1″).
+- Not changed: `PATCH /api/dialogs` with `bot_paused: true` still overwrites `paused_at`
+  (the POST `/bot/pause` endpoint does not). A re-PATCH therefore starts a new episode.
+  Rows with `bot_paused = true` and `paused_at IS NULL` are never alerted.
+- Risk on first run: every dialog already paused longer than N h alerts all users once.
+  Count them before relying on the alerts.
+
+## D31. Full conversation capture (research, no code yet)
+- Facts checked in the repo:
+  - n8n writes `knewit_messages` for incoming (`direction='in'`) and bot replies
+    (`direction='out', message_type='chat'`) (`Log Incoming Message`, `Log Outgoing Message`).
+  - CRM mirrors its own sends as `direction='out', message_type='manager'`
+    (`bot_bridge.insert_outgoing_message`, called from `outbox_worker`).
+  - Messages a manager sends from the phone are not captured: the Chatflow Trigger is
+    subscribed to `Incoming Message` only (owner confirmed; `chatflow_docs.md`).
+  - `knewit_messages.direction` is checked to `in`/`out`. `message_type` is `varchar(20)`
+    with no check, so a new value (e.g. `operator`) needs no schema change.
+  - `knewit_messages` has no unique external message id. Deduplication needs a new column
+    in the n8n database or a content/time match.
+- Facts from the Chatflow docs (not tested): with no events selected, the trigger receives
+  all supported events. Outgoing events are `Outgoing message from API` and
+  `Outgoing message from phone/operator`. Exact `wh_type` values are not documented.
+- Constraints: CRM writes `knewit_*` only through `bot_bridge` (D6). The capture writer
+  should be an n8n workflow, not new CRM code. The bot workflow must not reply to outgoing
+  events, so the capture should be a separate workflow, not edits to the bot's `If2`.
+- Open before any change: payloads for an operator message from the phone, a CRM send, an
+  API send, and a bot reply (roadmap P0-1′), plus owner permission to add a workflow or a
+  column in the n8n database. Live n8n is not changed.
+
+## D32. Handover once per deal (B-01, audit fix)
+- Decision: a deal is handed over to a manager once, the first time its bot status becomes
+  МЕНЕДЖЕР. A done or read task does not start a new handover, and neither does a new sync
+  pass or `force_full`. This follows D15 («once per deal»). The audit proposed keying episodes
+  by the transition time instead; not chosen, so a deal that goes back to the bot and returns
+  to МЕНЕДЖЕР gets no second task. Revisit if the owner wants a new episode per transition.
+- Mechanism, no migration: "already handed over" means a `Ответить клиенту` task exists for
+  the deal (any state) or an activity-log row `handover_triggered` (`entity='deal'`) exists.
+  The row is written with the task. The `manager_handover` notification is created only on
+  the first handover and is skipped for any recipient who already has a notification with
+  key `handover:<deal_id>`, read or not.
+- Not changed: the `auto_pause_on_manager` pause still runs on each pass while the bot is
+  not paused (as before).
+- Existing deals: those already in МЕНЕДЖЕР with a task (done or not) are treated as handed
+  over and get nothing new. Deals with no task yet get one on the next pass.

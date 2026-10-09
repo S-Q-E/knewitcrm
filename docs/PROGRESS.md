@@ -283,6 +283,33 @@
   Known timing flakes under machine load: `test_login_timing_equalized`,
   `test_dialogs_list_paginates_in_sql_under_200ms`, `test_load_idle_cycle_under_one_second`.
 
+## Step 18 — P3-2 long bot pause alert; full conversation research (2026-10-09)
+- [x] P3-2 notifications: `paused_alert_hours` (1–50, default 6), all active users, one
+  alert per pause episode, no window, no list filter, no auto-return (54e6ab9, D30)
+- [x] Full test run before the fix: 224 passed, 2 failed. One failure was caused by the new
+  settings field (expected dict in `test_settings_get_update_roundtrip`, updated). The other
+  is the known flake `test_login_timing_equalized`, which passes alone.
+- [x] Full conversation: research only, no live n8n change (D31). Waiting for Chatflow payload
+  tests (P0-1′) and owner permission for a new workflow or a column in the n8n database.
+- [ ] D30/D31, roadmap and this step are not committed yet.
+
+## Step 19 — Audit fixes, stage 1 (branch fix/audit-p1-p2, 2026-10-09)
+- [x] B-02 export and notes visibility, import status owner check (d4a3584)
+- [x] B-04 + FE-01 dialog history: newest window, `has_more`, `before_id` paging (7795517)
+- [x] B-03 + FE-20 import: savepoint per row, final status always set, task reference,
+  stale queued/running jobs failed on start, polling stops on terminal state or error (611c749)
+- [x] B-01 handover once per deal, even after the task is done or read (e4352a6, D32)
+- Tests: full suite on `fix_scratch` 231 passed, 0 failed (before the docs commit).
+  Checked against the previous code: B-02, B-04, the duplicate-row import test and B-01
+  fail there as expected. Not checked against old code: the stale-job startup test, the
+  FE-20 polling unit test and the FE-01 merge unit test (new functions, no old code path).
+- Frontend: tsc, eslint src, vitest 11 files, vite build to /tmp/opencode/fe-dist.
+- Audit probes (`/tmp/opencode/audit/test_probe.py`): 9 passed, 3 failed. The failing ones:
+  `test_exports_ignore_restriction` and `test_dialog_messages_returns_oldest` assert the old
+  behaviour (fixed now); `test_merge_bot_contact_into_manual` is B-09, stage 2.
+- Not done in stage 1: B-05 to B-14, FE-03, FE-04, FE-06, FE-07, FE-09 (stage 2 and later).
+- Note: the PROMPT asked for «Step 18». Step 18 was already used for P3-2, so this is Step 19.
+
 ## Step 16 — Final audit [todo]
 
 ## Deferred
