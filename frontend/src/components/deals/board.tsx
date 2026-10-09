@@ -52,14 +52,16 @@ export function DealsBoard({
   const { push } = useToast();
   const queryClient = useQueryClient();
   const move = useMoveDeal();
-  const [cursors, setCursors] = useState<Record<string, string>>({});
+  // Pages after the first one live in local state only; the main query key stays fixed,
+  // so refetching never swaps the first page for a later one.
+  const [tailCursors, setTailCursors] = useState<Record<string, string | null>>({});
   const [appended, setAppended] = useState<Record<string, Deal[]>>({});
   const [loadingMore, setLoadingMore] = useState<string | null>(null);
   const [activeStageId, setActiveStageId] = useState<string | null>(null);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [confirmWon, setConfirmWon] = useState<PendingMove | null>(null);
 
-  const boardQuery = useBoard(pipelineId, filters, 50, cursors);
+  const boardQuery = useBoard(pipelineId, filters, 50);
   const board = boardQuery.data;
 
   const sensors = useSensors(
@@ -74,8 +76,10 @@ export function DealsBoard({
     return board.columns.map((column) => ({
       ...column,
       items: [...column.items, ...(appended[column.stage_id] ?? [])],
+      next_cursor:
+        column.stage_id in tailCursors ? tailCursors[column.stage_id] : column.next_cursor,
     }));
-  }, [board, appended]);
+  }, [board, appended, tailCursors]);
 
   const findColumn = (id: string) => columns.find((column) => column.stage_id === id);
 
@@ -107,7 +111,7 @@ export function DealsBoard({
         },
         onSuccess: () => {
           setAppended({});
-          setCursors({});
+          setTailCursors({});
         },
       },
     );
@@ -150,7 +154,7 @@ export function DealsBoard({
     }
 
     // Optimistic update: move the card immediately, roll back on error.
-    queryClient.setQueryData<Board>(["board", pipelineId, filters, 50, cursors], (previous) => {
+    queryClient.setQueryData<Board>(["board", pipelineId, filters, 50, {}], (previous) => {
       if (!previous) {
         return previous;
       }
@@ -187,7 +191,7 @@ export function DealsBoard({
   };
 
   const showMore = async (stageId: string) => {
-    const column = board?.columns.find((item) => item.stage_id === stageId);
+    const column = columns.find((item) => item.stage_id === stageId);
     if (!column?.next_cursor) {
       return;
     }
@@ -197,7 +201,7 @@ export function DealsBoard({
       const params = new URLSearchParams({
         pipeline_id: pipelineId,
         limit: "50",
-        cursors: JSON.stringify({ [stageId]: column.next_cursor as string }),
+        cursors: JSON.stringify({ [stageId]: column.next_cursor }),
       });
       const next = await api.get<Board>(`/api/deals/board?${params.toString()}`);
       const fresh = next.columns.find((item) => item.stage_id === stageId);
@@ -206,31 +210,8 @@ export function DealsBoard({
           ...prev,
           [stageId]: [...(prev[stageId] ?? []), ...fresh.items],
         }));
-        if (fresh.next_cursor) {
-          setCursors((prev) => ({ ...prev, [stageId]: fresh.next_cursor as string }));
-        } else {
-          // Column exhausted: drop the cursor so the button disappears on refetch.
-          setCursors((prev) => {
-            const nextCursors = { ...prev };
-            delete nextCursors[stageId];
-            return nextCursors;
-          });
-          queryClient.setQueryData<Board>(
-            ["board", pipelineId, filters, 50, cursors],
-            (previous) =>
-              previous
-                ? {
-                    ...previous,
-                    columns: previous.columns.map((item) =>
-                      item.stage_id === stageId ? { ...item, next_cursor: null } : item,
-                    ),
-                  }
-                : previous,
-          );
-        }
+        setTailCursors((prev) => ({ ...prev, [stageId]: fresh.next_cursor ?? null }));
       }
-    } catch (error) {
-      toastError(push, error);
     } finally {
       setLoadingMore(null);
     }
