@@ -32,6 +32,11 @@ def event_visible(event: dict[str, Any], user: CurrentUser, restricted: bool) ->
             return True
         owner_id = data.get("owner_id")
         return owner_id is None or str(owner_id) == str(user.id)
+    if kind == "task_created":
+        if user.is_admin or not restricted:
+            return True
+        assignee_id = data.get("assignee_id")
+        return assignee_id is None or str(assignee_id) == str(user.id)
     return True
 
 

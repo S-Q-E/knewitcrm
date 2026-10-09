@@ -457,6 +457,24 @@ def test_deal_visibility_filter_for_restricted_manager():
     assert event_visible({"type": "new_message", "data": {}}, manager, True)
 
 
+def test_task_created_visibility_filter():
+    from backend.app.auth_deps import CurrentUser
+    from backend.app.routers.stream import event_visible
+
+    admin = CurrentUser(id=uuid.uuid4(), email="a@x.com", name="A", role="admin")
+    manager = CurrentUser(id=uuid.uuid4(), email="m@x.com", name="M", role="manager")
+    other = uuid.uuid4()
+
+    def task(assignee):
+        return {"type": "task_created", "data": {"task_id": "t", "assignee_id": assignee}}
+
+    assert event_visible(task(str(manager.id)), manager, True)
+    assert event_visible(task(None), manager, True)
+    assert not event_visible(task(str(other)), manager, True)
+    assert event_visible(task(str(other)), manager, False)
+    assert event_visible(task(str(other)), admin, True)
+
+
 async def test_whatsapp_visibility_lookup(client, settings):
     """Bot events resolve visibility through the linked contact owner."""
     from backend.app.auth_deps import CurrentUser
