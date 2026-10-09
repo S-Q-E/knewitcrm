@@ -16,6 +16,7 @@ import { useUsersLite } from "@/api/deals";
 import { useToast, toastError } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { isoToLocalInput, localInputToIso } from "@/lib/datetime";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -61,7 +62,7 @@ function TaskModal({ task, onClose }: { task?: Task; onClose: () => void }) {
       title: task?.title ?? "",
       type: (task?.type as TaskForm["type"]) ?? "other",
       assignee_id: task?.assignee_id ?? "",
-      due_at: task?.due_at ? task.due_at.slice(0, 16) : "",
+      due_at: isoToLocalInput(task?.due_at),
     },
   });
 
@@ -74,7 +75,7 @@ function TaskModal({ task, onClose }: { task?: Task; onClose: () => void }) {
             title: values.title,
             type: values.type,
             assignee_id: values.assignee_id || null,
-            due_at: values.due_at || null,
+            due_at: localInputToIso(values.due_at ?? ""),
           },
         });
       } else {
@@ -82,7 +83,7 @@ function TaskModal({ task, onClose }: { task?: Task; onClose: () => void }) {
           title: values.title,
           type: values.type,
           assignee_id: values.assignee_id || null,
-          due_at: values.due_at || null,
+          due_at: localInputToIso(values.due_at ?? ""),
         });
       }
       onClose();

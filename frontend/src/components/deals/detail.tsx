@@ -20,6 +20,7 @@ import { LostReasonModal, NoteModal, WonConfirmModal } from "@/components/deals/
 import { useToast, toastError } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { isoToLocalInput, localInputToIso } from "@/lib/datetime";
 
 const BOT_FIELDS: { key: string; label: string }[] = [
   { key: "direction", label: "Направление" },
@@ -227,7 +228,7 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
       await createTask.mutateAsync({
         deal_id: deal.id,
         title: taskTitle.trim(),
-        due_at: taskDue || null,
+        due_at: localInputToIso(taskDue),
       });
       setTaskTitle("");
       setTaskDue("");
@@ -281,9 +282,9 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
           <Field label="Пробный урок">
             <Input
               type="datetime-local"
-              defaultValue={deal.trial_at ? deal.trial_at.slice(0, 16) : ""}
+              defaultValue={isoToLocalInput(deal.trial_at)}
               key={`trial-${deal.updated_at}`}
-              onChange={(event) => edit("trial_at", event.target.value || null)}
+              onChange={(event) => edit("trial_at", localInputToIso(event.target.value))}
             />
           </Field>
         </div>
