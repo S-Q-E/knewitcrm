@@ -23,6 +23,7 @@ from ..services.export import (
     xlsx_bytes,
 )
 from ..services.importing import apply_mapping, parse_csv_text
+from ..services.visibility import owner_condition, restrict_managers_to_own
 
 router = APIRouter(tags=["data-exchange"])
 
@@ -89,6 +90,10 @@ async def export_contacts(
         stmt = stmt.where(or_(*conds))
     if source is not None:
         stmt = stmt.where(CrmContact.source == source)
+    restricted = await restrict_managers_to_own(session)
+    scope = owner_condition(CrmContact.owner_id, user, restricted)
+    if scope is not None:
+        stmt = stmt.where(scope)
     stmt = stmt.order_by(CrmContact.created_at.desc()).limit(EXPORT_LIMIT)
     rows = (await session.execute(stmt)).scalars().all()
     dicts = [_contact_row(c) for c in rows]
@@ -124,13 +129,21 @@ async def export_deals(
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    stmt = select(CrmDeal).where(CrmDeal.deleted_at.is_(None))
+    stmt = (
+        select(CrmDeal)
+        .join(CrmContact, CrmContact.id == CrmDeal.contact_id)
+        .where(CrmDeal.deleted_at.is_(None), CrmContact.deleted_at.is_(None))
+    )
     if pipeline_id is not None:
         stmt = stmt.where(CrmDeal.pipeline_id == pipeline_id)
     if status is not None:
         stmt = stmt.where(CrmDeal.status == status)
     if search:
         stmt = stmt.where(CrmDeal.title.ilike(f"%{search.strip()}%"))
+    restricted = await restrict_managers_to_own(session)
+    scope = owner_condition(CrmDeal.owner_id, user, restricted)
+    if scope is not None:
+        stmt = stmt.where(scope)
     stmt = stmt.order_by(CrmDeal.created_at.desc()).limit(EXPORT_LIMIT)
     rows = (await session.execute(stmt)).scalars().all()
     dicts = [_deal_row(d) for d in rows]
@@ -257,7 +270,7 @@ async def import_status(
     session: AsyncSession = Depends(get_session),
 ):
     job = await session.get(CrmImport, job_id)
-    if job is None:
+    if job is None or (not user.is_admin and job.created_by != user.id):
         raise ApiError("NOT_FOUND", "Import job not found", 404)
     return ImportJobOut.model_validate(job)
 

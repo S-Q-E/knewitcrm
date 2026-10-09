@@ -8,7 +8,17 @@ from httpx import AsyncClient
 from sqlalchemy import text
 
 from backend.app.services.event_bus import bus
-from backend.tests.crm_helpers import admin_csrf, engine_factory, make_manager, purge_contacts
+from backend.tests.conftest import csrf_headers
+from backend.tests.crm_helpers import (
+    ManagerSession,
+    admin_csrf,
+    create_contact,
+    create_deal,
+    default_pipeline,
+    engine_factory,
+    make_manager,
+    purge_contacts,
+)
 from backend.tests.test_realtime import (
     _next_event,
     _open_stream,
@@ -249,3 +259,133 @@ async def test_visibility_matrix_sse(app, settings, clean_bus):
     finally:
         await _purge(factory, was, contact_ids)
         await engine.dispose()
+
+
+async def test_visibility_matrix_exports_notes_and_import_status(client, settings, app):
+    engine, factory = engine_factory(settings)
+    secret = f"ScopeExp{uuid.uuid4().hex[:8]}"
+    job_id: str | None = None
+    try:
+        token = await admin_csrf(client, settings)
+        owner = await make_manager(client, token)
+        stranger = await make_manager(client, token)
+        own_contact = await create_contact(
+            client, token, name=f"{secret} own", owner_id=owner["user"]["id"]
+        )
+        await create_contact(client, token, name=f"{secret} free")
+        pipe = await default_pipeline(client)
+        own_deal = await create_deal(
+            client,
+            token,
+            own_contact["id"],
+            pipe,
+            title=f"{secret} own deal",
+            owner_id=owner["user"]["id"],
+        )
+        gone_contact = await create_contact(client, token, name=f"{secret} gone")
+        await create_deal(client, token, gone_contact["id"], pipe, title=f"{secret} gone deal")
+        note = await client.post(
+            "/api/notes",
+            json={"contact_id": own_contact["id"], "body": f"{secret} note"},
+            headers=csrf_headers(token),
+        )
+        assert note.status_code == 201, note.text
+        note_id = note.json()["id"]
+        deal_note = await client.post(
+            "/api/notes",
+            json={"deal_id": own_deal["id"], "body": f"{secret} deal note"},
+            headers=csrf_headers(token),
+        )
+        assert deal_note.status_code == 201, deal_note.text
+        deal_note_id = deal_note.json()["id"]
+        deleted = await client.delete(
+            f"/api/contacts/{gone_contact['id']}", headers=csrf_headers(token)
+        )
+        assert deleted.status_code == 200, deleted.text
+        csv_bytes = f"name\n{secret} imported\n".encode()
+        imported = await client.post(
+            "/api/contacts/import",
+            files={"file": ("c.csv", csv_bytes, "text/csv")},
+            data={"mapping": '{"name":"name"}'},
+            headers=csrf_headers(token),
+        )
+        assert imported.status_code == 201, imported.text
+        job_id = imported.json()["id"]
+        await _set_restrict(factory, True)
+        try:
+            async with ManagerSession(app, stranger["email"], stranger["password"]) as mgr:
+                assert mgr.client is not None
+                contacts_csv = (
+                    await mgr.client.get("/api/contacts/export", params={"search": secret})
+                ).text
+                assert f"{secret} free" in contacts_csv
+                assert f"{secret} own" not in contacts_csv
+                deals_csv = (
+                    await mgr.client.get("/api/deals/export", params={"search": secret})
+                ).text
+                assert f"{secret} own deal" not in deals_csv
+
+                listed = await mgr.client.get(
+                    "/api/notes", params={"contact_id": own_contact["id"]}
+                )
+                assert listed.status_code == 200
+                assert listed.json()["total"] == 0
+                listed = await mgr.client.get("/api/notes", params={"deal_id": own_deal["id"]})
+                assert listed.json()["total"] == 0
+                assert (await mgr.client.get(f"/api/notes/{note_id}")).status_code == 404
+                edited = await mgr.client.patch(
+                    f"/api/notes/{deal_note_id}", json={"body": "чужая"}, headers=mgr.headers()
+                )
+                assert edited.status_code == 404
+                created = await mgr.client.post(
+                    "/api/notes",
+                    json={"contact_id": own_contact["id"], "body": "в чужой контакт"},
+                    headers=mgr.headers(),
+                )
+                assert created.status_code == 422, created.text
+                assert (await mgr.client.get(f"/api/contacts/import/{job_id}")).status_code == 404
+
+            async with ManagerSession(app, owner["email"], owner["password"]) as own:
+                assert own.client is not None
+                own_csv = (
+                    await own.client.get("/api/contacts/export", params={"search": secret})
+                ).text
+                assert f"{secret} own" in own_csv
+                assert (await own.client.get(f"/api/notes/{note_id}")).status_code == 200
+                listed = await own.client.get("/api/notes", params={"deal_id": own_deal["id"]})
+                assert listed.json()["total"] == 1
+                assert (await own.client.get(f"/api/contacts/import/{job_id}")).status_code == 404
+
+            admin_csv = (await client.get("/api/contacts/export", params={"search": secret})).text
+            assert f"{secret} own" in admin_csv and f"{secret} free" in admin_csv
+            admin_deals = (await client.get("/api/deals/export", params={"search": secret})).text
+            assert f"{secret} own deal" in admin_deals
+            assert f"{secret} gone deal" not in admin_deals
+            assert (await client.get(f"/api/notes/{note_id}")).status_code == 200
+            assert (await client.get(f"/api/contacts/import/{job_id}")).status_code == 200
+        finally:
+            await _set_restrict(factory, False)
+    finally:
+        await _purge_scope_rows(factory, secret, job_id)
+        await engine.dispose()
+
+
+async def _contact_ids_by_name(factory, secret: str) -> list[str]:
+    async with factory() as session:
+        rows = (
+            await session.execute(
+                text("SELECT id FROM crm_contacts WHERE name LIKE :p"), {"p": f"{secret}%"}
+            )
+        ).scalars()
+        return [str(r) for r in rows]
+
+
+async def _purge_scope_rows(factory, secret: str, job_id: str | None) -> None:
+    async with factory() as session:
+        if job_id is not None:
+            await session.execute(
+                text("DELETE FROM crm_activity_log WHERE entity_id = :id"), {"id": job_id}
+            )
+            await session.execute(text("DELETE FROM crm_imports WHERE id = :id"), {"id": job_id})
+        await session.commit()
+    await purge_contacts(factory, await _contact_ids_by_name(factory, secret))

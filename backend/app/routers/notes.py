@@ -3,13 +3,13 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth_deps import CurrentUser, require_user
 from ..deps import get_session, pagination
 from ..errors import ApiError
-from ..models import CrmNote
+from ..models import CrmContact, CrmDeal, CrmNote
 from ..schemas.meta import (
     NoteCreate,
     NoteListOut,
@@ -17,8 +17,47 @@ from ..schemas.meta import (
     NoteUpdate,
 )
 from ..services.activity import diff_payload, log_activity, slim
+from ..services.visibility import (
+    is_visible,
+    owner_condition,
+    restrict_managers_to_own,
+)
 
 router = APIRouter(prefix="/api/notes", tags=["notes"])
+
+
+async def _note_scope(session: AsyncSession, user: CurrentUser):
+    """A note follows its deal when it has one, otherwise its contact (same rule as D18)."""
+    restricted = await restrict_managers_to_own(session)
+    if user.is_admin or not restricted:
+        return None
+    deal_visible = (
+        select(CrmDeal.id)
+        .where(CrmDeal.id == CrmNote.deal_id, owner_condition(CrmDeal.owner_id, user, True))
+        .exists()
+    )
+    contact_visible = (
+        select(CrmContact.id)
+        .where(
+            CrmContact.id == CrmNote.contact_id, owner_condition(CrmContact.owner_id, user, True)
+        )
+        .exists()
+    )
+    return or_(
+        and_(CrmNote.deal_id.is_not(None), deal_visible),
+        and_(CrmNote.deal_id.is_(None), contact_visible),
+    )
+
+
+async def _load_note(session: AsyncSession, note_id: uuid.UUID, user: CurrentUser) -> CrmNote:
+    stmt = select(CrmNote).where(CrmNote.id == note_id)
+    scope = await _note_scope(session, user)
+    if scope is not None:
+        stmt = stmt.where(scope)
+    note = (await session.execute(stmt)).scalar_one_or_none()
+    if note is None:
+        raise ApiError("NOT_FOUND", "Note not found", 404)
+    return note
 
 
 @router.get("", response_model=NoteListOut)
@@ -30,7 +69,6 @@ async def list_notes(
     session: AsyncSession = Depends(get_session),
     page: dict = Depends(pagination),
 ):
-    del user
     stmt = select(CrmNote)
     if deal_id is not None:
         stmt = stmt.where(CrmNote.deal_id == deal_id)
@@ -38,6 +76,9 @@ async def list_notes(
         stmt = stmt.where(CrmNote.contact_id == contact_id)
     if pinned is not None:
         stmt = stmt.where(CrmNote.pinned.is_(pinned))
+    scope = await _note_scope(session, user)
+    if scope is not None:
+        stmt = stmt.where(scope)
     total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar() or 0
     rows = (
         await session.execute(
@@ -57,17 +98,22 @@ async def create_note(
 ):
     if payload.deal_id is None and payload.contact_id is None:
         raise ApiError("NOTE_TARGET_REQUIRED", "deal_id or contact_id is required", 422)
+    restricted = await restrict_managers_to_own(session)
     if payload.deal_id is not None:
-        from ..models import CrmDeal
-
         deal = await session.get(CrmDeal, payload.deal_id)
-        if deal is None or deal.deleted_at is not None:
+        if (
+            deal is None
+            or deal.deleted_at is not None
+            or not is_visible(deal.owner_id, user, restricted)
+        ):
             raise ApiError("UNKNOWN_DEAL", "Deal not found", 422)
     if payload.contact_id is not None:
-        from ..models import CrmContact
-
         contact = await session.get(CrmContact, payload.contact_id)
-        if contact is None or contact.deleted_at is not None:
+        if (
+            contact is None
+            or contact.deleted_at is not None
+            or not is_visible(contact.owner_id, user, restricted)
+        ):
             raise ApiError("UNKNOWN_CONTACT", "Contact not found", 422)
     note = CrmNote(
         deal_id=payload.deal_id,
@@ -97,10 +143,7 @@ async def get_note(
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    del user
-    note = await session.get(CrmNote, note_id)
-    if note is None:
-        raise ApiError("NOT_FOUND", "Note not found", 404)
+    note = await _load_note(session, note_id, user)
     return NoteOut.model_validate(note)
 
 
@@ -111,9 +154,7 @@ async def update_note(
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    note = await session.get(CrmNote, note_id)
-    if note is None:
-        raise ApiError("NOT_FOUND", "Note not found", 404)
+    note = await _load_note(session, note_id, user)
     before = slim({"body": note.body[:200], "pinned": note.pinned})
     if payload.body is not None:
         note.body = payload.body.strip()
@@ -139,9 +180,7 @@ async def delete_note(
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    note = await session.get(CrmNote, note_id)
-    if note is None:
-        raise ApiError("NOT_FOUND", "Note not found", 404)
+    note = await _load_note(session, note_id, user)
     if not user.is_admin and note.author_id != user.id:
         raise ApiError("FORBIDDEN", "Only the author or an admin can delete a note", 403)
     await log_activity(
