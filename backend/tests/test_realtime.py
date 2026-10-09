@@ -610,3 +610,83 @@ async def test_stream_hides_foreign_bot_events_when_scoped(app, settings, clean_
         await _purge_lead(factory, wa_foreign)
         await _purge_lead(factory, wa_free)
         await engine.dispose()
+
+
+async def _insert_message_with_id(factory, msg_id: int, wa: str) -> None:
+    async with factory() as session:
+        await session.execute(
+            text(
+                "INSERT INTO knewit_messages (id, whatsapp_id, direction, message_type, content)"
+                " VALUES (:id, :wa, 'in', 'chat', 'ordered')"
+            ),
+            {"id": msg_id, "wa": wa},
+        )
+        await session.commit()
+
+
+async def test_poller_publishes_row_committed_out_of_order(settings, clean_bus):
+    from backend.app.workers.realtime_poller import _max_id
+
+    engine, factory = engine_factory(settings)
+    wa = _wa()
+    try:
+        await _insert_lead(factory, wa)
+        poller = RealtimePoller(factory, clean_bus)
+        await poller.start()
+        async with factory() as session:
+            base = await _max_id(session, "knewit_messages")
+
+        # id base+2 commits first and is seen; base+1 commits later, below the cursor.
+        await _insert_message_with_id(factory, base + 2, wa)
+        assert (await poller.poll_once())["messages"] == 1
+        await _insert_message_with_id(factory, base + 1, wa)
+        assert (await poller.poll_once())["messages"] == 1
+        assert await poller.poll_once() == {"messages": 0, "events": 0}
+    finally:
+        await _purge_lead(factory, wa)
+        await engine.dispose()
+
+
+async def test_poller_restores_cursor_and_replays_small_gap(settings, clean_bus):
+    from backend.app.workers.realtime_poller import CURSOR_SETTING, _max_id
+
+    engine, factory = engine_factory(settings)
+    wa = _wa()
+
+    async def clear_cursor() -> None:
+        async with factory() as session:
+            await session.execute(
+                text("DELETE FROM crm_settings WHERE key = :key"), {"key": CURSOR_SETTING}
+            )
+            await session.commit()
+
+    try:
+        await clear_cursor()
+        await _insert_lead(factory, wa)
+        first = RealtimePoller(factory, clean_bus, persist_cursor=True)
+        await first.start()
+        async with factory() as session:
+            base = await _max_id(session, "knewit_messages")
+        await _insert_message_with_id(factory, base + 1, wa)
+        assert (await first.poll_once())["messages"] == 1  # saves the cursor (first save)
+        await _insert_message_with_id(factory, base + 2, wa)  # arrives while "down"
+
+        restarted = RealtimePoller(factory, clean_bus, persist_cursor=True)
+        await restarted.start()
+        assert (await restarted.poll_once())["messages"] == 1
+        assert await restarted.poll_once() == {"messages": 0, "events": 0}
+    finally:
+        await clear_cursor()
+        await _purge_lead(factory, wa)
+        await engine.dispose()
+
+
+def test_replay_window_is_capped():
+    from backend.app.workers.realtime_poller import REPLAY_ROWS, _replay_start
+
+    assert _replay_start({"message_id": 100}, "message_id", 150) == 100
+    assert _replay_start({"message_id": 100}, "message_id", 100 + REPLAY_ROWS + 1) == (
+        100 + REPLAY_ROWS + 1
+    )
+    assert _replay_start({"message_id": 900}, "message_id", 500) == 500
+    assert _replay_start(None, "message_id", 500) == 500

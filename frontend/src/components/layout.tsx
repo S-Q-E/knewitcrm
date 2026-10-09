@@ -17,6 +17,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useLogout, useMe } from "@/api/auth";
 import { useEventStream } from "@/api/stream";
 import { BellBadge, BellDropdown } from "@/components/bell";
+import { RealtimeStatus } from "@/components/realtime-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTheme } from "@/lib/theme";
@@ -93,6 +94,7 @@ export function Layout() {
             />
           </form>
           <div className="ml-auto flex items-center gap-1 md:gap-2">
+            <RealtimeStatus />
             <Button variant="ghost" size="icon" onClick={toggle} title="Переключить тему">
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>

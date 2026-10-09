@@ -274,6 +274,9 @@
 - [x] P1-1 steps 1–2: one uvicorn worker (7521852), resync on overflow and reconnect (047d195); step 3 deferred (D26)
 - [x] P1-11 operational gauges on `/api/metrics` (82e9217, D27)
 - [x] P0-5 unanswered dialogs: threshold, filter, flag, notifications (d6a18c6, D28)
+- [x] P2-2 realtime cursor: overlap + dedupe (fixes lost out-of-order commits), cursor restored
+  after restart within a 500-id gap (D29)
+- [x] P3-6 realtime status indicator in the header (D29)
 - [ ] Open items and blockers: see `docs/KNEWIT_INTEGRATION_ROADMAP.md` §1
 - Test database reproduction: `DROP/CREATE knewit_test`, then `knewit_schema.sql`, `seed.sql`,
   `alembic upgrade head`, `pytest -q -p no:cacheprovider` (password only via environment).

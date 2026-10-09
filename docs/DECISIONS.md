@@ -643,5 +643,22 @@ Why: protects against accidental data loss, keeps audit trail.
   filter but do not notify, so the first run after deploy does not flood managers with
   history. Check the initial count of the filter before relying on it.
 - Read-only for `knewit_*`; the only writes are `crm_notifications` rows through `notify()`.
+
+## D29. Realtime poller cursor: overlap, dedupe, restart (P2-2) and header status (P3-6)
+- Defect found and fixed: the cursor was the max id seen. n8n inserts can commit out of
+  id order, so a lower id that commits after a higher one was never published. Each poll
+  now re-reads `OVERLAP_ROWS = 200` ids below the cursor and publishes only ids not yet
+  seen. Test: `test_poller_publishes_row_committed_out_of_order` fails on the old code.
+  Limit: a row that commits more than 200 new rows late is not published in realtime
+  (it stays in the database).
+- Restart: `realtime_loop` persists the cursors to `crm_settings`
+  (`realtime_poller.cursors`, at most every 10 s, only when changed; a failed save is
+  logged and does not stop polling). On start the stored cursor is used only when the gap
+  is at most `REPLAY_ROWS = 500` ids; a larger gap starts from the table maximum, so a long
+  downtime never floods clients. Tests call the poller with `persist_cursor=False` by
+  default, so the test database never carries a cursor between runs.
+- Header indicator (`components/realtime-status.tsx`): green «Онлайн» when live frames flow,
+  amber «Резервный опрос» when SSE gave up, red «Нет соединения» while reconnecting. The
+  label is hidden below the `md` breakpoint; the dot stays.
 - Not included: an alert to the admin for dialogs nobody sees (no owner and no managers),
   and a settings UI for the threshold (API only for now).
