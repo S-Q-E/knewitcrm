@@ -609,4 +609,21 @@ Why: protects against accidental data loss, keeps audit trail.
   of a silently dropped backlog (`event_bus._resync`); the frontend refetches the
   core lists on `resync` and after any reconnect (events during a drop are lost).
 - Not yet done: LISTEN/NOTIFY bus (P1-1 step 3). Until step 3, do not add workers
-  or replicas (DEPLOY.md §5).
+  or replicas (DEPLOY.md §5). Owner approved deferring step 3 until scale-out.
+
+## D27. Operational gauges on /api/metrics (P1-11)
+- `services/ops_metrics.py` adds, read-only, on each scrape:
+  `crm_sync_lag_seconds` and `crm_sync_full_lag_seconds` (age of the sync markers in
+  `crm_settings`), `crm_realtime_poll_age_seconds` (age of the last successful poll in
+  this process, `services/metrics.mark_cycle`), `crm_outbox_oldest_due_seconds{status}`
+  for `queued` (since `next_attempt_at` or `created_at`) and `sending` (since
+  `claimed_at`), `crm_unanswered_dialogs` (last message `in`, bot not paused, older
+  than 10 min), `crm_sse_subscribers`. Plus the existing outbox counts and pool gauges.
+- A gauge without a known value is omitted (sync lag before the first cycle), but
+  empty backlogs read as 0.
+- Not included: failures per hour. `crm_outbox` has no `failed_at` column, so this
+  needs one (an expand migration) or a log-based counter. Use
+  `crm_outbox_messages{status="failed"}` for the current total meanwhile.
+- The unanswered gauge uses the P0-5 rule with the default 10-minute threshold. It is
+  not an alert; alerting is the P0-5 work.
+- AI replies after takeover are not included: they need the bot/manager event mapping.

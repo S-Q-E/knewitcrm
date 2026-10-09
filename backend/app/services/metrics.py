@@ -20,9 +20,24 @@ def uptime_seconds() -> float:
     return time.monotonic() - _started_at
 
 
+# Wall-clock time of the last successful cycle per in-process worker. Gauges
+# derived from it show a stalled loop even when its DB marker is absent.
+_cycle_marks: dict[str, float] = {}
+
+
+def mark_cycle(worker: str) -> None:
+    _cycle_marks[worker] = time.time()
+
+
+def cycle_age_seconds(worker: str) -> float | None:
+    mark = _cycle_marks.get(worker)
+    return None if mark is None else max(0.0, time.time() - mark)
+
+
 def reset() -> None:
     _requests_total.clear()
     _request_seconds_total.clear()
+    _cycle_marks.clear()
 
 
 def render_prometheus(extra_lines: list[str] | None = None) -> str:

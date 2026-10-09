@@ -10,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..deps import get_session
 from ..errors import ApiError
+from ..services.event_bus import bus
 from ..services.metrics import render_prometheus
+from ..services.ops_metrics import ops_gauges
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,10 @@ async def metrics(
             extra.append(f'crm_outbox_messages{{status="{row["status"]}"}} {int(row["count"])}')
     except Exception as exc:
         logger.warning("metrics outbox gauge failed: %s", type(exc).__name__)
+    try:
+        extra.extend(await ops_gauges(session, bus))
+    except Exception as exc:
+        logger.warning("metrics ops gauges failed: %s", type(exc).__name__)
     try:
         pool = request.app.state.engine.pool
         extra.append(f"crm_db_pool_size {pool.size()}")

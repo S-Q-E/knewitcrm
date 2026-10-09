@@ -6,6 +6,7 @@ import logging
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ..services import metrics
 from ..services.event_bus import EventBus, bus
 
 logger = logging.getLogger(__name__)
@@ -129,6 +130,7 @@ async def realtime_loop(
     while True:
         try:
             await poller.poll_once()
+            metrics.mark_cycle("realtime")
         except asyncio.CancelledError:
             raise
         except Exception:

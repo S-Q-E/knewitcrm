@@ -47,7 +47,7 @@ psql "$STAGING_DATABASE_URL" -f tests/fixtures/seed.sql
 | `DEFAULT_CURRENCY` | `KZT` | `KZT` | Валюта сумм по умолчанию |
 | `LOG_LEVEL` | `INFO` | `WARNING` | JSON-логи; `DEBUG` только для разбора инцидента |
 | `SENTRY_DSN` | (опц., свой проект) | (опц., свой проект) | Пусто = Sentry выключен и на бэке, и на фронте |
-| `METRICS_TOKEN` | Случайный токен | Случайный токен | Bearer для `/api/metrics`; пусто = 404 |
+| `METRICS_TOKEN` | Случайный токен | Случайный токен | Bearer для `/api/metrics`; пусто = 404 (состав метрик — в D27) |
 | `TRUSTED_PROXY_HOPS` | `1` | `1` | Один прокси — сам Railway |
 | `PORT` | — | — | Выставляет сам Railway, не задавать |
 
