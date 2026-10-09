@@ -197,9 +197,14 @@ export function useLostReasons() {
 }
 
 export function useCreateNote() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { deal_id?: string; contact_id?: string; body: string }) =>
       api.post(`/api/notes`, input),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["timeline"] });
+      void queryClient.invalidateQueries({ queryKey: ["contact-timeline"] });
+    },
   });
 }
 
