@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -17,6 +18,7 @@ export function ContactPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { push } = useToast();
+  const queryClient = useQueryClient();
   const contact = useContact(id ?? null);
   const deals = useContactDeals(id ?? null);
   const timeline = useContactTimeline(id ?? null);
@@ -61,6 +63,9 @@ export function ContactPage() {
       push({ title: "Теги обновлены", variant: "default" });
     } catch (error) {
       toastError(push, error);
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: ["contact", c.id] });
+      void queryClient.invalidateQueries({ queryKey: ["contacts"] });
     }
   };
 
