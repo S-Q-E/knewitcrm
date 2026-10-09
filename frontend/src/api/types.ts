@@ -2669,6 +2669,11 @@ export interface components {
              * @default 10
              */
             unanswered_after_minutes: number;
+            /**
+             * Paused Alert Hours
+             * @default 6
+             */
+            paused_alert_hours: number;
         };
         /** SettingsUpdate */
         SettingsUpdate: {
@@ -2684,6 +2689,8 @@ export interface components {
             deal_assignment_mode?: ("unassigned" | "round_robin") | null;
             /** Unanswered After Minutes */
             unanswered_after_minutes?: number | null;
+            /** Paused Alert Hours */
+            paused_alert_hours?: number | null;
         };
         /** SourceRow */
         SourceRow: {

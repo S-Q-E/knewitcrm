@@ -42,6 +42,7 @@ async def test_settings_get_update_roundtrip(client, settings):
         "analytics_managers_visible": True,
         "deal_assignment_mode": "unassigned",
         "unanswered_after_minutes": 10,
+        "paused_alert_hours": 6,
     }
 
     updated = await client.patch(

@@ -15,6 +15,7 @@ const TYPE_LABEL: Record<string, string> = {
   dialog_message: "Новое сообщение",
   locked_stage: "Бот упёрся в блокировку",
   unanswered: "Клиент ждёт ответа",
+  bot_paused_long: "Бот на паузе слишком долго",
   automation: "Автоматизация",
 };
 
