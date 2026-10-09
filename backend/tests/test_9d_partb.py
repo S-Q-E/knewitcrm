@@ -37,6 +37,10 @@ async def _insert_lead(factory, wa: str) -> None:
 async def _purge(factory, wa: str) -> None:
     async with factory() as session:
         await session.execute(text("DELETE FROM crm_outbox WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(
+            text("DELETE FROM knewit_messages WHERE whatsapp_id = :wa"), {"wa": wa}
+        )
+        await session.execute(text("DELETE FROM knewit_events WHERE whatsapp_id = :wa"), {"wa": wa})
         await session.execute(text("DELETE FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": wa})
         # Failure paths notify the sender; drop those rows too so later
         # tests counting notifications (test_outbox.py) see a clean slate.

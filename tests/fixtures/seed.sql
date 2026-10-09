@@ -31,5 +31,5 @@ INSERT INTO knewit_events (whatsapp_id, event_type, from_stage, to_stage, payloa
 ('77010000005@c.us', 'sale_won', NULL, 'ПРОДАЖА', '{}', now() - interval '1 day'),
 ('77010000006@c.us', 'lead_lost', NULL, NULL, '{"reason": "нет времени"}', now() - interval '3 days');
 
-INSERT INTO knewit_followups (whatsapp_id, run_at, status, payload, created_at) VALUES
-('77010000003@c.us', now() + interval '2 days', 'queued', '{"note": "follow-up: подумать"}', now());
+INSERT INTO knewit_followups (whatsapp_id, kind, scheduled_at, attempt_number, status, message, created_at) VALUES
+('77010000003@c.us', 'THINKING', now() + interval '2 days', 1, 'PENDING', 'follow-up: подумать', now());

@@ -188,10 +188,13 @@ async def purge_contacts(factory, contact_ids: list[str]) -> None:
                     text("DELETE FROM crm_conversation_state WHERE whatsapp_id = :wa"), {"wa": wa}
                 )
                 await session.execute(
-                    text("DELETE FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": wa}
+                    text("DELETE FROM knewit_messages WHERE whatsapp_id = :wa"), {"wa": wa}
                 )
                 await session.execute(
                     text("DELETE FROM knewit_events WHERE whatsapp_id = :wa"), {"wa": wa}
+                )
+                await session.execute(
+                    text("DELETE FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": wa}
                 )
         await session.commit()
 

@@ -91,9 +91,13 @@ async def _purge(factory, wa: str, user_ids: list[str]) -> None:
                 text("DELETE FROM crm_notifications WHERE user_id = ANY(:ids)"),
                 {"ids": user_ids},
             )
-        # Delete the bot lead directly (cascades to messages/events):
-        # purge_contacts skips lead cleanup when no contact exists, and most
-        # outbox tests never run the sync that would create one.
+        # Delete the bot lead directly: purge_contacts skips lead cleanup when no
+        # contact exists, and most outbox tests never run the sync that would
+        # create one. Production has no FK cascade, so child rows go first.
+        await session.execute(
+            text("DELETE FROM knewit_messages WHERE whatsapp_id = :wa"), {"wa": wa}
+        )
+        await session.execute(text("DELETE FROM knewit_events WHERE whatsapp_id = :wa"), {"wa": wa})
         await session.execute(text("DELETE FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": wa})
         await session.commit()
     await purge_contacts(factory, [str(c) for c in contacts])

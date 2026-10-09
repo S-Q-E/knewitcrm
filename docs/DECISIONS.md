@@ -584,3 +584,11 @@ Why: protects against accidental data loss, keeps audit trail.
   not blocked. Not yet done from P1-7: CI deploy gates (H3) need owner
   decisions (a `develop` branch does not exist; `workflow_dispatch` does not
   deploy production; `production` environment reviewers must be set in GitHub).
+- Test schema for knewit_* follows production (P0-4, 2026-10-09):
+  `tests/fixtures/knewit_schema.sql` is rebuilt from `schema_dump.sql`
+  (PK `id` on leads, `whatsapp_id` UNIQUE, no FK between knewit_* tables,
+  `updated_at` trigger, prod defaults). The old fixture had a TEXT PK and
+  cascading FKs, which hid cleanup bugs. Tests that deleted leads and relied
+  on cascades now delete messages/events/followups first. `docs/db_schema.md`
+  is rebuilt from the dump. The composite index missing in production makes
+  the idle-sync timing test borderline (~1.0 s); that is tracked under P2-6.

@@ -90,6 +90,9 @@ async def _purge(factory, numbers: list[int]) -> None:
             {"ids": ids},
         )
         await session.execute(
+            text("DELETE FROM knewit_messages WHERE whatsapp_id = ANY(:ids)"), {"ids": ids}
+        )
+        await session.execute(
             text("DELETE FROM knewit_events WHERE whatsapp_id = ANY(:ids)"), {"ids": ids}
         )
         await session.execute(
@@ -545,7 +548,11 @@ async def _purge_load(factory) -> None:
             text("DELETE FROM crm_conversation_state WHERE whatsapp_id LIKE :pattern"),
             {"pattern": pattern},
         )
-        # Cascades to knewit_messages / knewit_events / knewit_followups.
+        for table in ("knewit_messages", "knewit_events", "knewit_followups"):
+            await session.execute(
+                text(f"DELETE FROM {table} WHERE whatsapp_id LIKE :pattern"),
+                {"pattern": pattern},
+            )
         await session.execute(
             text("DELETE FROM knewit_leads WHERE whatsapp_id LIKE :pattern"),
             {"pattern": pattern},
@@ -561,10 +568,12 @@ async def test_load_idle_cycle_under_one_second(settings):
             await session.execute(
                 text(
                     "INSERT INTO knewit_leads"
-                    " (whatsapp_id, name, current_stage, status, goal, created_at, updated_at)"
+                    " (whatsapp_id, name, current_stage, status, goal, created_at, updated_at,"
+                    " last_message_at)"
                     " SELECT :prefix || lpad(g::text, 5, '0') || '@c.us',"
                     " 'Load ' || g, 'НОВЫЙ_ЛИД', 'ACTIVE', 'load goal',"
-                    " now() - interval '1 hour', now() - interval '1 hour'"
+                    " now() - interval '1 hour', now() - interval '1 hour',"
+                    " now() - interval '1 hour'"
                     " FROM generate_series(0, 2999) g"
                     " ON CONFLICT (whatsapp_id) DO NOTHING"
                 ),

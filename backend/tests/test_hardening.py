@@ -330,6 +330,12 @@ async def test_malicious_message_content_round_trips_as_text(client, settings):
                 text("DELETE FROM crm_outbox WHERE whatsapp_id = :wa"), {"wa": wa}
             )
             await session.execute(
+                text("DELETE FROM knewit_messages WHERE whatsapp_id = :wa"), {"wa": wa}
+            )
+            await session.execute(
+                text("DELETE FROM knewit_events WHERE whatsapp_id = :wa"), {"wa": wa}
+            )
+            await session.execute(
                 text("DELETE FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": wa}
             )
             await session.commit()
