@@ -227,3 +227,43 @@ async def test_dialog_messages_returns_newest_window_and_pages_back(client, sett
     finally:
         await _purge_lead(factory, wa)
         await engine.dispose()
+
+
+async def test_read_and_patch_refuse_a_dialog_without_a_bot_lead(client, settings):
+    engine, factory = engine_factory(settings)
+    wa = _wa()
+    try:
+        token = await admin_csrf(client, settings)
+        async with factory() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO crm_conversation_state (whatsapp_id, bot_paused)"
+                    " VALUES (:wa, FALSE)"
+                ),
+                {"wa": wa},
+            )
+            await session.commit()
+
+        read = await client.post(f"/api/dialogs/{wa}/read", headers=csrf_headers(token))
+        assert read.status_code == 404, read.text
+        assert read.json()["error"]["code"] == "LEAD_NOT_FOUND"
+        patched = await client.patch(
+            f"/api/dialogs/{wa}", json={"bot_paused": True}, headers=csrf_headers(token)
+        )
+        assert patched.status_code == 404, patched.text
+        assert patched.json()["error"]["code"] == "LEAD_NOT_FOUND"
+        async with factory() as session:
+            paused = (
+                await session.execute(
+                    text("SELECT bot_paused FROM crm_conversation_state WHERE whatsapp_id = :wa"),
+                    {"wa": wa},
+                )
+            ).scalar_one()
+        assert paused is False
+    finally:
+        async with factory() as session:
+            await session.execute(
+                text("DELETE FROM crm_conversation_state WHERE whatsapp_id = :wa"), {"wa": wa}
+            )
+            await session.commit()
+        await engine.dispose()

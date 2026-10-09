@@ -227,12 +227,24 @@ async def get_dialog(
     }
 
 
+async def _ensure_bot_lead(session: AsyncSession, whatsapp_id: str) -> None:
+    """Dialog state exists only for bot leads; anything else is a 404 (as in routers/chats)."""
+    lead_exists = (
+        await session.execute(
+            text("SELECT 1 FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": whatsapp_id}
+        )
+    ).scalar_one_or_none()
+    if lead_exists is None:
+        raise ApiError("LEAD_NOT_FOUND", "Dialog not found", 404)
+
+
 @router.post("/{whatsapp_id:path}/read")
 async def mark_dialog_read(
     whatsapp_id: str,
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
+    await _ensure_bot_lead(session, whatsapp_id)
     await ensure_lead_visible(session, whatsapp_id, user)
     state = await session.get(CrmConversationState, whatsapp_id)
     if state is None:
@@ -251,6 +263,7 @@ async def update_dialog(
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
+    await _ensure_bot_lead(session, whatsapp_id)
     await ensure_lead_visible(session, whatsapp_id, user)
     state = await session.get(CrmConversationState, whatsapp_id)
     if state is None:
