@@ -592,3 +592,9 @@ Why: protects against accidental data loss, keeps audit trail.
   on cascades now delete messages/events/followups first. `docs/db_schema.md`
   is rebuilt from the dump. The composite index missing in production makes
   the idle-sync timing test borderline (~1.0 s); that is tracked under P2-6.
+- CRM ↔ n8n contract test (P0-4 tail, 2026-10-09): `tests/test_integration_contract.py`
+  checks that code only references contracted `knewit_*` tables (scan of SQL
+  FROM/INTO/UPDATE/JOIN targets in `backend/app`), that the contracted columns
+  and key types exist in the test schema, that `knewit_leads.whatsapp_id` is
+  UNIQUE, and that no FKs exist between `knewit_*` tables. The contract is a
+  hand-kept list in the test: extend it together with any new CRM query.
