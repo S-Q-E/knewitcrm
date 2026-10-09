@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..errors import ApiError
@@ -90,6 +91,12 @@ async def merge_contacts(
         l_visible = is_visible(loser.owner_id, _stub(actor_is_admin, actor_user_id), restricted)
         ensure_visible(w_visible)
         ensure_visible(l_visible)
+    if winner.whatsapp_id and loser.whatsapp_id and winner.whatsapp_id != loser.whatsapp_id:
+        raise ApiError(
+            "MERGE_WHATSAPP_CONFLICT",
+            "Both contacts have different WhatsApp chats; merge is refused",
+            409,
+        )
 
     # Move deals
     deal_rows = await session.execute(select(CrmDeal).where(CrmDeal.contact_id == loser.id))
@@ -116,9 +123,15 @@ async def merge_contacts(
         if tag.id not in winner_tags:
             session.add(CrmEntityTag(tag_id=tag.id, entity=ENTITY_CONTACT, entity_id=winner.id))
     # Fill empty winner fields from loser (name/phone/email/source/custom keys)
-    for field in ("name", "phone", "email", "whatsapp_id"):
+    for field in ("name", "phone", "email"):
         if getattr(winner, field) in (None, "") and getattr(loser, field) not in (None, ""):
             setattr(winner, field, getattr(loser, field))
+    # whatsapp_id is unique: release it from the loser before the winner takes it.
+    if not winner.whatsapp_id and loser.whatsapp_id:
+        moved_wa = loser.whatsapp_id
+        loser.whatsapp_id = None
+        await session.flush()
+        winner.whatsapp_id = moved_wa
     if winner.owner_id is None and loser.owner_id is not None:
         winner.owner_id = loser.owner_id
     merged_custom = dict(winner.custom or {})
@@ -128,7 +141,11 @@ async def merge_contacts(
     winner.custom = merged_custom
 
     loser.deleted_at = datetime.now(UTC)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ApiError("MERGE_CONFLICT", "Contacts could not be merged", 409) from exc
     await log_activity(
         session,
         actor_id,
@@ -151,7 +168,11 @@ async def merge_contacts(
         "contact_merged_from",
         {"merged_into": str(winner.id), **slim({"name": loser.name})},
     )
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ApiError("MERGE_CONFLICT", "Contacts could not be merged", 409) from exc
     await session.refresh(winner)
     return winner
 
