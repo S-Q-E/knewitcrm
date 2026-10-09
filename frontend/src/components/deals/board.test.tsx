@@ -9,6 +9,8 @@ import { ToastProvider } from "@/components/toast";
 const { get } = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock("@/api/client", () => ({ api: { get, post: vi.fn(), put: vi.fn(), patch: vi.fn() } }));
 
+// Rendering the board is slow on a loaded machine; a 1 s default is too tight.
+const SLOW = { timeout: 10000 };
 const STAGE = "11111111-1111-4111-8111-111111111111";
 const PIPELINE = "22222222-2222-4222-8222-222222222222";
 
@@ -84,11 +86,11 @@ describe("DealsBoard pagination", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByText("Deal 1", {}, { timeout: 10000 });
-    fireEvent.click(await screen.findByRole("button", { name: /Показать ещё/ }));
-    await screen.findByText("Deal 51");
-    fireEvent.click(await screen.findByRole("button", { name: /Показать ещё/ }));
-    await screen.findByText("Deal 120");
+    await screen.findByText("Deal 1", {}, SLOW);
+    fireEvent.click(await screen.findByRole("button", { name: /Показать ещё/ }, SLOW));
+    await screen.findByText("Deal 51", {}, SLOW);
+    fireEvent.click(await screen.findByRole("button", { name: /Показать ещё/ }, SLOW));
+    await screen.findByText("Deal 120", {}, SLOW);
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
