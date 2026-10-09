@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import uuid
 from contextlib import asynccontextmanager
@@ -690,3 +691,29 @@ def test_replay_window_is_capped():
     )
     assert _replay_start({"message_id": 900}, "message_id", 500) == 500
     assert _replay_start(None, "message_id", 500) == 500
+
+
+async def test_realtime_loop_survives_database_down_at_start(settings, clean_bus):
+    import asyncio
+
+    from backend.app.workers.realtime_poller import realtime_loop
+
+    engine, real_factory = engine_factory(settings)
+    calls = {"n": 0}
+
+    def flaky_factory():
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise ConnectionError("database is starting")
+        return real_factory()
+
+    task = asyncio.create_task(realtime_loop(flaky_factory, clean_bus, 0.01))
+    try:
+        await asyncio.sleep(0.5)
+        assert not task.done(), task.exception() if task.done() else None
+        assert calls["n"] > 2
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        await engine.dispose()

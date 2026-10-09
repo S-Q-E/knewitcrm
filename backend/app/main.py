@@ -99,6 +99,14 @@ def frontend_response(path: str) -> FileResponse:
 
 
 @asynccontextmanager
+def _log_unexpected_end(task: asyncio.Task) -> None:
+    """Background loops never return on their own; log if one ends, so it is not silent."""
+    if task.cancelled():
+        return
+    error = task.exception()
+    logger.error("background task ended unexpectedly", exc_info=error)
+
+
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
     engine = create_engine(settings)
@@ -130,6 +138,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             realtime_loop(app.state.session_factory, bus, POLL_INTERVAL_SECONDS)
         )
     app.state.realtime_task = realtime_task
+    for background in (sync_task, notify_task, outbox_task, realtime_task):
+        if background is not None:
+            background.add_done_callback(_log_unexpected_end)
     try:
         yield
     finally:

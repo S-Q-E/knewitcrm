@@ -233,9 +233,12 @@ async def realtime_loop(
     event_bus: EventBus = bus,
     interval_seconds: int = POLL_INTERVAL_SECONDS,
 ) -> None:
-    """Background loop for lifespan. Never raises; failures are logged."""
+    """Background loop for lifespan. Never raises; failures are logged.
+
+    The poller starts inside the loop (poll_once starts it on first use), so a database
+    that is down at boot is retried like any other failed cycle.
+    """
     poller = RealtimePoller(session_factory, event_bus, persist_cursor=True)
-    await poller.start()
     while True:
         try:
             await poller.poll_once()
