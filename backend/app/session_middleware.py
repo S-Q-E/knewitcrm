@@ -27,7 +27,8 @@ logger = logging.getLogger(__name__)
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 # API paths that never require a session. Everything else under /api/* does.
-PUBLIC_API_PATHS = frozenset({"/api/health", "/api/ready", "/api/auth/login"})
+# /api/metrics is guarded by its own Bearer token (routers/metrics.py), not by sessions.
+PUBLIC_API_PATHS = frozenset({"/api/health", "/api/ready", "/api/auth/login", "/api/metrics"})
 # Login cannot present a CSRF token yet (no session); SameSite=Lax covers it.
 CSRF_EXEMPT_PATHS = frozenset({"/api/auth/login"})
 

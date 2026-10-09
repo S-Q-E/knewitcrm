@@ -15,15 +15,15 @@ PUBLIC = {
     ("GET", "/api/health"),
     ("GET", "/api/ready"),
     ("POST", "/api/auth/login"),
+    # Scrapers send only a Bearer token; the route itself enforces it (test_hardening).
+    ("GET", "/api/metrics"),
 }
 
 # Streaming never ends under httpx; covered by test_realtime.py on live servers.
 # Logout would kill the probe session; covered by test_auth.py.
-# Metrics has its own token guard; covered by test_metrics.py.
 SKIP = {
     ("GET", "/api/stream"),
     ("POST", "/api/auth/logout"),
-    ("GET", "/api/metrics"),
 }
 
 # Every route that must answer 403 to a non-admin (require_role("admin")).

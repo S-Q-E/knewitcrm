@@ -153,16 +153,18 @@ async def test_body_limit_413(settings):
 
 
 async def test_metrics_disabled_404_and_token_gate(client, settings):
-    # Anonymous callers always get the uniform 401 from session auth.
-    assert (await client.get("/api/metrics")).status_code == 401
-    # Authenticated, but no token configured -> 404 so scanners learn nothing.
-    await login_admin(client, settings)
+    # No token configured -> 404 so scanners learn nothing, even without a session.
     missing = await client.get("/api/metrics")
     assert missing.status_code == 404
+    await login_admin(client, settings)
+    assert (await client.get("/api/metrics")).status_code == 404
 
     guarded = _custom_settings(metrics_token="secret-token")
     lifespan, ac = await _custom_client(guarded)
     try:
+        # Anonymous with a token configured -> 403 (token guard, not session 401).
+        assert (await ac.get("/api/metrics")).status_code == 403
+        # A logged-in session is not a substitute for the Bearer token.
         await login_admin(ac, settings)
         assert (await ac.get("/api/metrics")).status_code == 403
         wrong = await ac.get("/api/metrics", headers={"Authorization": "Bearer wrong"})
