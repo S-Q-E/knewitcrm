@@ -266,6 +266,20 @@
 - [x] DEPLOY.md: усилен пункт про удаление `ADMIN_PASSWORD` + проверка
   лимита входа на staging с поддельным X-Forwarded-For
 - [x] D25 в `docs/DECISIONS.md`
+## Step 17 — Roadmap execution (2026-10-08/09) [done for listed items]
+- [x] P0-3 `/api/leads*` removed (d714f70); P1-7 H4 DB tests fail under CI (3a11d18)
+- [x] P0-4 test schema follows `schema_dump.sql` (fc2080a); contract test CRM ↔ `knewit_*` (02db6a6)
+- [x] P1-2 SSE holds no pool connection (1b27342)
+- [x] P1-10 SSE `task_created` follows REST task visibility (7c70cdf)
+- [x] P1-1 steps 1–2: one uvicorn worker (7521852), resync on overflow and reconnect (047d195); step 3 deferred (D26)
+- [x] P1-11 operational gauges on `/api/metrics` (82e9217, D27)
+- [x] P0-5 unanswered dialogs: threshold, filter, flag, notifications (d6a18c6, D28)
+- [ ] Open items and blockers: see `docs/KNEWIT_INTEGRATION_ROADMAP.md` §1
+- Test database reproduction: `DROP/CREATE knewit_test`, then `knewit_schema.sql`, `seed.sql`,
+  `alembic upgrade head`, `pytest -q -p no:cacheprovider` (password only via environment).
+  Known timing flakes under machine load: `test_login_timing_equalized`,
+  `test_dialogs_list_paginates_in_sql_under_200ms`, `test_load_idle_cycle_under_one_second`.
+
 ## Step 16 — Final audit [todo]
 
 ## Deferred
