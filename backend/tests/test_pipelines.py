@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from sqlalchemy import text
 
 from backend.tests.conftest import csrf_headers
 from backend.tests.crm_helpers import (
@@ -203,3 +204,72 @@ async def test_duplicate_names_rejected(client, settings):
             await purge_pipelines(factory, [pipeline_id])
         finally:
             await engine.dispose()
+
+
+async def test_delete_stage_counts_and_moves_soft_deleted_deals(client, settings):
+    engine, factory = engine_factory(settings)
+    contact_ids: list[str] = []
+    pipeline_ids: list[str] = []
+    try:
+        token = await admin_csrf(client, settings)
+        pipe = (
+            await client.post(
+                "/api/pipelines",
+                json={"name": f"Trash stage {uuid.uuid4().hex[:8]}"},
+                headers=csrf_headers(token),
+            )
+        ).json()
+        pipeline_ids.append(pipe["id"])
+        donor = (
+            await client.post(
+                f"/api/pipelines/{pipe['id']}/stages",
+                json={"name": "Donor"},
+                headers=csrf_headers(token),
+            )
+        ).json()
+        recipient = (
+            await client.post(
+                f"/api/pipelines/{pipe['id']}/stages",
+                json={"name": "Recipient"},
+                headers=csrf_headers(token),
+            )
+        ).json()
+        contact = await create_contact(
+            client, token, whatsapp_id=f"7999{uuid.uuid4().hex[:8]}@c.us"
+        )
+        contact_ids.append(contact["id"])
+        deal = await create_deal(
+            client,
+            token,
+            contact["id"],
+            {**pipe, "stages": [donor]},
+            stage_id=donor["id"],
+            pipeline_id=pipe["id"],
+            title="Trashed",
+        )
+        trashed = await client.delete(f"/api/deals/{deal['id']}", headers=csrf_headers(token))
+        assert trashed.status_code == 200, trashed.text
+
+        blocked = await client.delete(f"/api/stages/{donor['id']}", headers=csrf_headers(token))
+        assert blocked.status_code == 409, blocked.text
+        assert blocked.json()["error"]["code"] == "STAGE_HAS_DEALS"
+        assert blocked.json()["error"]["details"]["deals"] == 1
+
+        moved = await client.delete(
+            f"/api/stages/{donor['id']}?to_stage_id={recipient['id']}",
+            headers=csrf_headers(token),
+        )
+        assert moved.status_code == 200, moved.text
+        assert moved.json()["moved_deals"] == 1
+        async with factory() as session:
+            stage_now = (
+                await session.execute(
+                    text("SELECT stage_id::text FROM crm_deals WHERE id = :id"),
+                    {"id": deal["id"]},
+                )
+            ).scalar_one()
+        assert stage_now == recipient["id"]
+    finally:
+        await purge_contacts(factory, contact_ids)
+        await purge_pipelines(factory, pipeline_ids)
+        await engine.dispose()

@@ -301,11 +301,10 @@ async def delete_stage(
     stage = await session.get(CrmStage, stage_id)
     if stage is None:
         raise ApiError("NOT_FOUND", "Stage not found", 404)
+    # Trashed deals still point at the stage (FK), so they count and move with live ones.
     deal_count = (
         await session.execute(
-            select(func.count())
-            .select_from(CrmDeal)
-            .where(CrmDeal.stage_id == stage.id, CrmDeal.deleted_at.is_(None))
+            select(func.count()).select_from(CrmDeal).where(CrmDeal.stage_id == stage.id)
         )
     ).scalar()
     if deal_count:
@@ -322,9 +321,7 @@ async def delete_stage(
         if recipient.id == stage.id:
             raise ApiError("INVALID_RECIPIENT", "Recipient stage must differ", 422)
         deals = (
-            await session.execute(
-                select(CrmDeal).where(CrmDeal.stage_id == stage.id, CrmDeal.deleted_at.is_(None))
-            )
+            await session.execute(select(CrmDeal).where(CrmDeal.stage_id == stage.id))
         ).scalars()
         for deal in deals:
             deal.stage_id = recipient.id
@@ -338,5 +335,11 @@ async def delete_stage(
         diff_payload(slim({"name": stage.name, "pipeline_id": str(stage.pipeline_id)}), None),
     )
     await session.delete(stage)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ApiError(
+            "STAGE_IN_USE", "Stage is still referenced; nothing was deleted", 409
+        ) from exc
     return {"ok": True, "moved_deals": deal_count or 0}
