@@ -83,29 +83,8 @@ async def test_handover_creates_task_and_notification(client, settings):
         token = await admin_csrf(client, settings)
         owner = await make_manager(client, token)
         await _insert_lead(factory, wa, "МЕНЕДЖЕР")
-        # Owner is unknown before sync; assign after backfill, then resync.
         await run_sync(factory)
-        async with factory() as session:
-            contact_id = (
-                await session.execute(
-                    text("SELECT id FROM crm_contacts WHERE whatsapp_id = :wa"), {"wa": wa}
-                )
-            ).scalar_one()
-            deal_id = (
-                await session.execute(
-                    text("SELECT id FROM crm_deals WHERE contact_id = :id"), {"id": contact_id}
-                )
-            ).scalar_one()
-            # Drop the unassigned first-pass task so the owned pass recreates it.
-            await session.execute(
-                text("DELETE FROM crm_tasks WHERE deal_id = :id"), {"id": deal_id}
-            )
-            await session.execute(
-                text("UPDATE crm_deals SET owner_id = :owner WHERE id = :id"),
-                {"owner": owner["user"]["id"], "id": deal_id},
-            )
-            await session.commit()
-        await run_sync(factory)
+        deal_id = await _deal_id(factory, wa)
 
         async with factory() as session:
             tasks = (
@@ -122,7 +101,7 @@ async def test_handover_creates_task_and_notification(client, settings):
                 .all()
             )
             assert [t["title"] for t in tasks] == ["Ответить клиенту"]
-            assert str(tasks[0]["assignee_id"]) == owner["user"]["id"]
+            assert tasks[0]["assignee_id"] is None
             paused = (
                 await session.execute(
                     text("SELECT bot_paused FROM crm_conversation_state WHERE whatsapp_id = :wa"),
@@ -157,6 +136,74 @@ async def test_handover_creates_task_and_notification(client, settings):
             and (n["payload"] or {}).get("deal_id") == str(deal_id)
         ]
         assert len(handovers) == 1
+    finally:
+        await _purge_lead(factory, wa)
+        await engine.dispose()
+
+
+async def _deal_id(factory, wa: str):
+    async with factory() as session:
+        return (
+            await session.execute(
+                text(
+                    "SELECT d.id FROM crm_deals d JOIN crm_contacts c ON c.id = d.contact_id"
+                    " WHERE c.whatsapp_id = :wa"
+                ),
+                {"wa": wa},
+            )
+        ).scalar_one()
+
+
+async def test_handover_once_per_deal_after_task_done_and_read(client, settings):
+    from backend.app.workers.sync_worker import run_sync_cycle
+
+    engine, factory = engine_factory(settings)
+    wa = _wa()
+    try:
+        token = await admin_csrf(client, settings)
+        owner = await make_manager(client, token)
+        await _insert_lead(factory, wa, "МЕНЕДЖЕР")
+        await run_sync(factory)
+        deal_id = await _deal_id(factory, wa)
+        async with factory() as session:
+            await session.execute(
+                text("UPDATE crm_tasks SET done_at = now() WHERE deal_id = :id"), {"id": deal_id}
+            )
+            await session.execute(
+                text(
+                    "UPDATE crm_notifications SET read_at = now()"
+                    " WHERE type = 'manager_handover' AND payload->>'deal_id' = :id"
+                ),
+                {"id": str(deal_id)},
+            )
+            await session.commit()
+
+        await run_sync(factory)
+        await run_sync_cycle(factory, force_full=True)
+
+        async with factory() as session:
+            task_count = (
+                await session.execute(
+                    text("SELECT COUNT(*) FROM crm_tasks WHERE deal_id = :id"), {"id": deal_id}
+                )
+            ).scalar_one()
+            per_user = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT user_id, COUNT(*) AS n FROM crm_notifications"
+                            " WHERE type = 'manager_handover' AND payload->>'deal_id' = :id"
+                            " GROUP BY user_id"
+                        ),
+                        {"id": str(deal_id)},
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        assert task_count == 1
+        assert per_user and all(row["n"] == 1 for row in per_user)
+        assert str(owner["user"]["id"]) in {str(row["user_id"]) for row in per_user}
     finally:
         await _purge_lead(factory, wa)
         await engine.dispose()
