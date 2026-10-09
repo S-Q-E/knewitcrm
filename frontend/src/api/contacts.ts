@@ -204,12 +204,24 @@ export interface ImportJob {
   finished_at: string | null;
 }
 
+// Stop polling on a terminal status or after any error; otherwise a failed request
+// would be retried every second for as long as the page stays open.
+export function importJobPollInterval(state: {
+  data?: { status: string } | undefined;
+  error: unknown;
+}): number | false {
+  if (state.error || state.data?.status === "done" || state.data?.status === "failed") {
+    return false;
+  }
+  return 1000;
+}
+
 export function useImportJob(id: string | null, enabled: boolean) {
   return useQuery({
     queryKey: ["import-job", id],
     queryFn: () => api.get<ImportJob>(`/api/contacts/import/${id}`),
     enabled: enabled && id !== null,
-    refetchInterval: enabled ? 1000 : false,
+    refetchInterval: (query) => (enabled ? importJobPollInterval(query.state) : false),
   });
 }
 

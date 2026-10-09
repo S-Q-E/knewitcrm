@@ -228,6 +228,86 @@ async def test_import_preview_and_background_job(client, settings):
         await engine.dispose()
 
 
+async def test_import_duplicate_whatsapp_id_fails_only_that_row(client, settings):
+    engine, factory = engine_factory(settings)
+    contact_ids: list[str] = []
+    prefix = f"DupImp{uuid.uuid4().hex[:8]}"
+    try:
+        token = await admin_csrf(client, settings)
+        dup, other = _wa(), _wa()
+        csv_text = f"name,whatsapp_id\n{prefix}-a,{dup}\n{prefix}-b,{other}\n{prefix}-c,{dup}\n"
+        job_resp = await client.post(
+            "/api/contacts/import",
+            files={"file": ("dup.csv", csv_text.encode(), "text/csv")},
+            data={"mapping": '{"name":"name","whatsapp_id":"whatsapp_id"}'},
+            headers=csrf_headers(token),
+        )
+        assert job_resp.status_code == 201, job_resp.text
+        job_id = job_resp.json()["id"]
+        for _ in range(100):
+            status = (await client.get(f"/api/contacts/import/{job_id}")).json()
+            if status["status"] in ("done", "failed"):
+                break
+            await asyncio.sleep(0.05)
+        assert status["status"] == "done"
+        assert status["ok_count"] == 2 and status["error_count"] == 1
+        found = await client.get("/api/contacts", params={"search": prefix})
+        names = sorted(item["name"] for item in found.json()["items"])
+        assert names == [f"{prefix}-a", f"{prefix}-b"]
+        contact_ids = [item["id"] for item in found.json()["items"]]
+    finally:
+        await purge_contacts(factory, contact_ids)
+        await engine.dispose()
+
+
+async def test_stale_import_jobs_are_failed_on_startup(settings):
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import text
+
+    from backend.app.routers.data_exchange import fail_stale_imports
+
+    engine, factory = engine_factory(settings)
+    now = datetime.now(UTC)
+    stale_id, fresh_id = str(uuid.uuid4()), str(uuid.uuid4())
+    try:
+        async with factory() as session:
+            for job_id, age in (
+                (stale_id, timedelta(minutes=10)),
+                (fresh_id, timedelta(minutes=1)),
+            ):
+                await session.execute(
+                    text(
+                        "INSERT INTO crm_imports (id, entity, status, mapping, created_at)"
+                        " VALUES (:id, 'contact', 'running', '{}', :at)"
+                    ),
+                    {"id": job_id, "at": now - age},
+                )
+            await session.commit()
+        assert await fail_stale_imports(factory, now) >= 1
+        async with factory() as session:
+            statuses = dict(
+                (
+                    await session.execute(
+                        text(
+                            "SELECT id::text, status FROM crm_imports WHERE id IN"
+                            " (CAST(:a AS uuid), CAST(:b AS uuid))"
+                        ),
+                        {"a": stale_id, "b": fresh_id},
+                    )
+                ).all()
+            )
+        assert statuses == {stale_id: "failed", fresh_id: "running"}
+    finally:
+        async with factory() as session:
+            await session.execute(
+                text("DELETE FROM crm_imports WHERE id IN (CAST(:a AS uuid), CAST(:b AS uuid))"),
+                {"a": stale_id, "b": fresh_id},
+            )
+            await session.commit()
+        await engine.dispose()
+
+
 async def test_trash_lists_deleted(client, settings):
     engine, factory = engine_factory(settings)
     contact_ids: list[str] = []

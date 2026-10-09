@@ -49,6 +49,7 @@ from .routers import (
     users,
     views,
 )
+from .routers.data_exchange import fail_stale_imports
 from .routers.settings import router as settings_router
 from .services.bootstrap import try_bootstrap
 from .services.event_bus import bus
@@ -104,6 +105,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
     await try_bootstrap(app.state.session_factory, settings.admin_email, settings.admin_password)
+    await fail_stale_imports(app.state.session_factory)
     sync_task = None
     if settings.sync_enabled:
         sync_task = asyncio.create_task(

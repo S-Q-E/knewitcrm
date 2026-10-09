@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth_deps import CurrentUser, require_user
@@ -26,8 +28,12 @@ from ..services.importing import apply_mapping, parse_csv_text
 from ..services.visibility import owner_condition, restrict_managers_to_own
 
 router = APIRouter(tags=["data-exchange"])
+logger = logging.getLogger(__name__)
 
 EXPORT_LIMIT = 10000
+IMPORT_STALE_AFTER = timedelta(minutes=5)
+# Strong references: a task nobody holds can be garbage-collected mid-run.
+_import_tasks: set[asyncio.Task] = set()
 
 # Import uploads are small CSVs: reject anything above 2 MiB with 413.
 # Other endpoints are covered by the global BodyLimitMiddleware (10 MiB).
@@ -228,6 +234,18 @@ async def import_preview(
     )
 
 
+def _start_import_job(job_id: str, factory) -> None:
+    task = asyncio.create_task(_run_import_job(job_id, factory))
+    _import_tasks.add(task)
+    task.add_done_callback(_import_task_done)
+
+
+def _import_task_done(task: asyncio.Task) -> None:
+    _import_tasks.discard(task)
+    if not task.cancelled() and task.exception() is not None:
+        logger.error("import task ended with an unexpected error", exc_info=task.exception())
+
+
 @router.post("/api/contacts/import", response_model=ImportJobOut, status_code=201)
 async def import_start(
     request: Request,
@@ -259,7 +277,7 @@ async def import_start(
     await log_activity(session, user.id, "import", job.id, "import_queued", {"total": len(data)})
     await session.commit()
     factory = request.app.state.session_factory
-    asyncio.create_task(_run_import_job(str(job.id), factory))
+    _start_import_job(str(job.id), factory)
     return ImportJobOut.model_validate(job)
 
 
@@ -276,6 +294,14 @@ async def import_status(
 
 
 async def _run_import_job(job_id: str, factory) -> None:
+    try:
+        await _execute_import_job(job_id, factory)
+    except Exception:
+        logger.exception("contact import failed job_id=%s", job_id)
+        await _mark_import_failed(factory, job_id, "внутренняя ошибка импорта")
+
+
+async def _execute_import_job(job_id: str, factory) -> None:
     from ..services.normalize import normalize_email
 
     async with factory() as session:
@@ -297,17 +323,20 @@ async def _run_import_job(job_id: str, factory) -> None:
                 email = record.get("email")
                 if email:
                     record["email"] = normalize_email(str(email))
-                contact = CrmContact(
-                    name=record.get("name"),
-                    phone=record.get("phone"),
-                    email=record.get("email"),
-                    whatsapp_id=record.get("whatsapp_id"),
-                    source=record.get("source") or "import",
-                    custom={},
-                )
-                session.add(contact)
-                await session.flush()
+                async with session.begin_nested():
+                    contact = CrmContact(
+                        name=record.get("name"),
+                        phone=record.get("phone"),
+                        email=record.get("email"),
+                        whatsapp_id=record.get("whatsapp_id"),
+                        source=record.get("source") or "import",
+                        custom={},
+                    )
+                    session.add(contact)
+                    await session.flush()
                 ok += 1
+            except IntegrityError:
+                errors.append({"row": idx + 2, "error": "duplicate whatsapp_id"})
             except Exception as exc:  # noqa: BLE001 - per-row report, never fail whole job
                 errors.append({"row": idx + 2, "error": str(exc)})
         job.ok_count = ok
@@ -324,3 +353,38 @@ async def _run_import_job(job_id: str, factory) -> None:
             {"ok": ok, "errors": len(errors)},
         )
         await session.commit()
+
+
+async def _mark_import_failed(factory, job_id: str, reason: str) -> None:
+    async with factory() as session:
+        job = await session.get(CrmImport, uuid.UUID(job_id))
+        if job is None or job.status in ("done", "failed"):
+            return
+        job.status = "failed"
+        job.finished_at = datetime.now(UTC)
+        job.errors = [{"error": reason}]
+        await session.commit()
+
+
+async def fail_stale_imports(factory, now: datetime | None = None) -> int:
+    """Startup: jobs still queued/running after IMPORT_STALE_AFTER have no live worker."""
+    cutoff = (now or datetime.now(UTC)) - IMPORT_STALE_AFTER
+    async with factory() as session:
+        result = await session.execute(
+            update(CrmImport)
+            .where(
+                CrmImport.status.in_(("queued", "running")),
+                CrmImport.created_at < cutoff,
+            )
+            .values(
+                status="failed",
+                finished_at=datetime.now(UTC),
+                errors=[{"error": "импорт прерван перезапуском сервера"}],
+            )
+            .returning(CrmImport.id)
+        )
+        stale = result.all()
+        await session.commit()
+    if stale:
+        logger.warning("marked %d stale import job(s) failed", len(stale))
+    return len(stale)

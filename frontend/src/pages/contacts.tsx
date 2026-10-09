@@ -609,9 +609,10 @@ function ImportView() {
     setRunning(true);
   };
 
-  const finished = job.data?.status === "done" || job.data?.status === "failed";
+  const finished =
+    job.data?.status === "done" || job.data?.status === "failed" || job.isError;
   useEffect(() => {
-    // Intentional sync: stop polling once the polled import reaches a terminal state.
+    // Intentional sync: stop polling once the polled import reaches a terminal state or errors.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (finished && running) setRunning(false);
   }, [finished, running]);
