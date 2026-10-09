@@ -48,7 +48,7 @@ def test_docker_entrypoint_migrates_then_serves():
     src = path.read_text(encoding="utf-8")
     assert "alembic -c backend/alembic.ini upgrade head" in src
     assert "exec uvicorn backend.app.main:app" in src
-    assert "--workers 2" in src
+    assert "--workers 1" in src  # P1-1: process-local event bus, see DECISIONS D26
     assert "--proxy-headers" in src
     assert '--forwarded-allow-ips="*"' in src
     # Migrations run from the entrypoint, not baked into the image build.

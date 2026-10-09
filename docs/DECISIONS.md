@@ -490,7 +490,7 @@ Why: protects against accidental data loss, keeps audit trail.
 - One container serves API + SPA + all four in-process workers. The
   entrypoint (`scripts/docker-entrypoint.sh`) runs
   `alembic upgrade head` first, then `uvicorn backend.app.main:app
-  --workers 2 --proxy-headers --forwarded-allow-ips="*"`. (The brief wrote
+  --workers 2 --proxy-headers --forwarded-allow-ips="*" (superseded by D26: 1 worker)`. (The brief wrote
   `app.main:app`; the repo layout is `backend.app.main`, so the real
   module path is used.)
 - Two uvicorn workers each run lifespan loops, but every loop is
@@ -598,3 +598,12 @@ Why: protects against accidental data loss, keeps audit trail.
   and key types exist in the test schema, that `knewit_leads.whatsapp_id` is
   UNIQUE, and that no FKs exist between `knewit_*` tables. The contract is a
   hand-kept list in the test: extend it together with any new CRM query.
+
+## D26. Single uvicorn worker until the realtime bus is cross-process (P1-1, step 1)
+- `scripts/docker-entrypoint.sh` starts uvicorn with `--workers 1` (was 2, see D24).
+- Why: `services/event_bus.py` is process-local. With two workers, a publish in one
+  process (outbox status, task created, bot events from the poller) never reaches SSE
+  clients connected to the other one. Advisory locks already keep the background loops
+  single-run, so the only cost of one worker is HTTP throughput.
+- Not yet done: LISTEN/NOTIFY bus (P1-1 step 3) and the client resync on reconnect
+  (step 2). Until step 3, do not add workers or replicas (DEPLOY.md §5).

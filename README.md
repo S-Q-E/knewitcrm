@@ -95,7 +95,7 @@ first-run order, backups, rollback, CI/CD). Short version:
 
 `railway.json` + `Dockerfile` (multi-stage: Node builds the SPA, Python
 serves API + static; pinned bases; non-root user; entrypoint migrates
-first, then serves with 2 workers; healthcheck `GET /api/health`):
+first, then serves with 1 worker (D26); healthcheck `GET /api/health`):
 
 1. Deploy the repo, attach the n8n Postgres (or a new one) and reference its
    `DATABASE_URL` (production uses the `crm_app` role, see DEPLOY.md §3).

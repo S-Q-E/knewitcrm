@@ -42,7 +42,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:' + __import__('os').environ.get('PORT', '8000') + '/api/health')"
 
 # Railway passes $PORT automatically. The entrypoint migrates first
-# (concurrent-safe via advisory lock), then starts uvicorn with 2 workers;
+# (concurrent-safe via advisory lock), then starts uvicorn with 1 worker
+# (the realtime bus is process-local, D26);
 # --proxy-headers trusts Railway's X-Forwarded-For (client IP resolution is
 # still gated by TRUSTED_PROXY_HOPS). --timeout-graceful-shutdown gives
 # in-process workers time to finish a cycle.
