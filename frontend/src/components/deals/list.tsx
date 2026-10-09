@@ -18,6 +18,13 @@ const ALL_COLUMNS = [
 
 type ColumnId = (typeof ALL_COLUMNS)[number]["id"];
 
+// Only columns the backend can sort by (DEAL_SORTS); other headers are plain text.
+export function dealSortField(column: string): string | null {
+  if (column === "amount") return "amount";
+  if (column === "updated") return "updated_at";
+  return null;
+}
+
 const STORAGE_KEY = "knewitcrm-deal-columns";
 
 function loadColumns(): ColumnId[] {
@@ -220,19 +227,27 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
                   }
                 />
               </th>
-              {columns.map((col) => (
-                <th key={col} className="p-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleSort(col === "updated" ? "updated_at" : col)}
-                    className={cn("font-medium hover:underline")}
-                  >
-                    {ALL_COLUMNS.find((candidate) => candidate.id === col)?.label}
-                    {sort.replace("-", "") === (col === "updated" ? "updated_at" : col) &&
-                      (sort.startsWith("-") ? " ↓" : " ↑")}
-                  </button>
-                </th>
-              ))}
+              {columns.map((col) => {
+                const label = ALL_COLUMNS.find((candidate) => candidate.id === col)?.label;
+                const sortField = dealSortField(col);
+                return (
+                  <th key={col} className="p-2">
+                    {sortField ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(sortField)}
+                        className={cn("font-medium hover:underline")}
+                      >
+                        {label}
+                        {sort.replace("-", "") === sortField &&
+                          (sort.startsWith("-") ? " ↓" : " ↑")}
+                      </button>
+                    ) : (
+                      <span className="font-medium">{label}</span>
+                    )}
+                  </th>
+                );
+              })}
               <th className="p-2 font-medium">Стадия</th>
             </tr>
           </thead>
