@@ -717,3 +717,40 @@ async def test_realtime_loop_survives_database_down_at_start(settings, clean_bus
         with contextlib.suppress(asyncio.CancelledError):
             await task
         await engine.dispose()
+
+
+async def test_stream_closes_when_session_is_revoked(app, settings, monkeypatch, clean_bus):
+    from backend.tests.crm_helpers import make_manager
+
+    monkeypatch.setattr(stream_router, "HEARTBEAT_SECONDS", 0.05)
+    monkeypatch.setattr(stream_router, "SESSION_RECHECK_SECONDS", 0.05, raising=False)
+    engine, factory = engine_factory(settings)
+    try:
+        async with live_server(app) as (base, timeout):
+            async with AsyncClient(base_url=base, timeout=timeout) as admin_client:
+                admin = await login_admin(admin_client, settings)
+                manager = await make_manager(admin_client, admin["csrf"])
+            async with AsyncClient(base_url=base, timeout=timeout) as client:
+                await login(client, manager["email"], manager["password"])
+                stream = await _open_stream(client)
+                try:
+                    async with factory() as session:
+                        await session.execute(
+                            text(
+                                "UPDATE crm_sessions SET revoked_at = now()"
+                                " WHERE user_id = :user"
+                            ),
+                            {"user": manager["user"]["id"]},
+                        )
+                        await session.commit()
+
+                    async def drain() -> None:
+                        async for _ in stream.iterator:
+                            pass
+
+                    await asyncio.wait_for(drain(), timeout=5)
+                finally:
+                    await stream.aclose()
+        await _wait_for_subscribers(0)
+    finally:
+        await engine.dispose()

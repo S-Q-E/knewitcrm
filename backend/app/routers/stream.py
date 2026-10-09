@@ -10,8 +10,10 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth_deps import CurrentUser, require_user
+from ..security import SESSION_COOKIE
 from ..services.event_bus import bus
 from ..services.visibility import is_visible, lead_owner, restrict_managers_to_own
+from ..session_middleware import session_still_active
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,8 @@ router = APIRouter(prefix="/api/stream", tags=["stream"])
 
 # SSE comment heartbeat; keeps proxies from closing idle connections.
 HEARTBEAT_SECONDS = 15
+# A revoked, expired or deactivated session must not keep receiving events for long.
+SESSION_RECHECK_SECONDS = 60
 
 
 def event_visible(event: dict[str, Any], user: CurrentUser, restricted: bool) -> bool:
@@ -71,6 +75,7 @@ async def stream(
     user: CurrentUser = Depends(require_user),
 ):
     factory = request.app.state.session_factory
+    token_value = request.cookies.get(SESSION_COOKIE, "")
     # Visibility snapshot per connection; a role/scope change applies on reconnect.
     # Short-lived session: the stream itself must not hold a pool connection.
     async with factory() as session:
@@ -79,9 +84,17 @@ async def stream(
     async def generate():
         queue = bus.subscribe()
         owner_cache: dict[str, bool] = {}
+        loop = asyncio.get_running_loop()
+        checked_at = loop.time()
         try:
             yield ": connected\n\n"
             while True:
+                if loop.time() - checked_at >= SESSION_RECHECK_SECONDS:
+                    checked_at = loop.time()
+                    owner_cache.clear()
+                    if not await session_still_active(factory, token_value):
+                        logger.info("stream closed: session is no longer active")
+                        break
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_SECONDS)
                 except TimeoutError:

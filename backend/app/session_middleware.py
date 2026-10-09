@@ -61,6 +61,35 @@ def client_ip(request: Request, trusted_proxy_hops: int | None = None) -> str:
     return peer
 
 
+def _active_session_conditions(token_hash: str) -> tuple:
+    return (
+        CrmSession.token_hash == token_hash,
+        CrmSession.revoked_at.is_(None),
+        CrmSession.expires_at > datetime.now(UTC),
+        CrmUser.is_active.is_(True),
+    )
+
+
+async def session_still_active(factory, token_value: str) -> bool:
+    """Re-check a session after login: not revoked, not expired, user still active."""
+    try:
+        raw = bytes.fromhex(token_value)
+    except (ValueError, TypeError):
+        return False
+    if len(raw) != 32:
+        return False
+    token_hash = hashlib.sha256(raw).hexdigest()
+    async with factory() as db:
+        row = (
+            await db.execute(
+                select(CrmSession.id)
+                .join(CrmUser, CrmSession.user_id == CrmUser.id)
+                .where(*_active_session_conditions(token_hash))
+            )
+        ).first()
+    return row is not None
+
+
 class SessionAuthMiddleware(BaseHTTPMiddleware):
     """Cookie session auth for all /api/* except the public probes and login."""
 
@@ -104,12 +133,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 await db.execute(
                     select(CrmSession, CrmUser)
                     .join(CrmUser, CrmSession.user_id == CrmUser.id)
-                    .where(
-                        CrmSession.token_hash == token_hash,
-                        CrmSession.revoked_at.is_(None),
-                        CrmSession.expires_at > datetime.now(UTC),
-                        CrmUser.is_active.is_(True),
-                    )
+                    .where(*_active_session_conditions(token_hash))
                 )
             ).one_or_none()
             if row is None:
