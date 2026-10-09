@@ -61,11 +61,13 @@ export interface DialogSummary {
   unread_count: number;
   last_read_at: string | null;
   last_message: { direction: string; content: string | null; created_at: string } | null;
+  needs_reply: boolean;
 }
 
 export interface DialogFilters {
   assigned?: string;
   unread?: boolean;
+  needsReply?: boolean;
   search?: string;
 }
 
@@ -73,6 +75,7 @@ export function useDialogs(filters: DialogFilters) {
   const params = new URLSearchParams({ limit: "100" });
   if (filters.assigned) params.set("assigned", filters.assigned);
   if (filters.unread) params.set("unread", "true");
+  if (filters.needsReply) params.set("needs_reply", "true");
   if (filters.search) params.set("search", filters.search);
   return useQuery({
     queryKey: ["dialogs", filters],

@@ -6,18 +6,17 @@ numbers show what the workers did last, not a sampled value. Read-only.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..models import CrmConversationState
 from ..workers.sync_worker import SETTINGS_KEY_LAST_FULL, SETTINGS_KEY_LAST_SYNCED, _load_marker
 from .event_bus import EventBus
 from .metrics import cycle_age_seconds
-
-# A dialog is unanswered when the client's last message is older than this and
-# the bot is not paused. Same default as the planned P0-5 alert.
-UNANSWERED_AFTER = timedelta(minutes=10)
+from .unanswered import cutoff as unanswered_cutoff
+from .unanswered import unanswered_clause
 
 
 def _age(now: datetime, moment: datetime | None) -> float | None:
@@ -74,12 +73,9 @@ async def ops_gauges(session: AsyncSession, event_bus: EventBus) -> list[str]:
 
     unanswered = (
         await session.execute(
-            text(
-                "SELECT COUNT(*) FROM crm_conversation_state"
-                " WHERE last_message_direction = 'in' AND bot_paused = false"
-                " AND last_message_at < :cutoff"
-            ),
-            {"cutoff": now - UNANSWERED_AFTER},
+            select(func.count())
+            .select_from(CrmConversationState)
+            .where(unanswered_clause(await unanswered_cutoff(session, now)))
         )
     ).scalar()
     emit("crm_unanswered_dialogs", int(unanswered or 0))

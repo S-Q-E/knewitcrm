@@ -13,6 +13,8 @@ from ..deps import get_session, pagination
 from ..errors import ApiError
 from ..models import CrmContact, CrmConversationState, CrmDeal, CrmUser
 from ..services.activity import log_activity
+from ..services.unanswered import cutoff as unanswered_cutoff
+from ..services.unanswered import is_unanswered, unanswered_clause
 from ..services.visibility import (
     ensure_lead_visible,
     restrict_managers_to_own,
@@ -30,6 +32,7 @@ class DialogUpdate(BaseModel):
 async def list_dialogs(
     assigned: str | None = Query(default=None, pattern="^(mine|unassigned|all)$"),
     unread: bool = False,
+    needs_reply: bool = False,
     search: str | None = Query(default=None, max_length=255),
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
@@ -81,6 +84,9 @@ async def list_dialogs(
         base = base.where(CrmConversationState.assigned_to.is_(None))
     if unread:
         base = base.where(CrmConversationState.unread_count > 0)
+    cut = await unanswered_cutoff(session)
+    if needs_reply:
+        base = base.where(unanswered_clause(cut))
     if search:
         term = f"%{search.strip()}%"
         base = base.where(
@@ -124,6 +130,7 @@ async def list_dialogs(
                 "unread_count": state.unread_count,
                 "last_read_at": state.last_read_at.isoformat() if state.last_read_at else None,
                 "last_message": last_message,
+                "needs_reply": is_unanswered(state, cut),
             }
         )
     return {"items": items, "total": total}

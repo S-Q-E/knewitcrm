@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ..models import CrmTask
 from ..services.automations import evaluate_automations
 from ..services.notifications import notify, publish_pending
+from ..services.unanswered import notify_unanswered
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +34,12 @@ async def run_notify_cycle(session_factory: async_sessionmaker[AsyncSession]) ->
             due_soon, due_soon_events = await _remind_due_soon(session)
             stats["overdue"] = overdue
             stats["due_soon"] = due_soon
+            unanswered_events = await notify_unanswered(session, datetime.now(UTC))
+            stats["unanswered"] = len(unanswered_events)
             auto = await evaluate_automations(session)
             stats["automations_evaluated"] = auto.evaluated
             stats["automations_fired"] = auto.fired
-            pending = overdue_events + due_soon_events + auto.events
+            pending = overdue_events + due_soon_events + unanswered_events + auto.events
         publish_pending(pending)
     logger.info("notify cycle done %s", stats)
     return stats

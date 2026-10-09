@@ -25,6 +25,7 @@ from ..services.assignment import (
     SETTING_ASSIGNMENT,
     get_assignment_mode,
 )
+from ..services.unanswered import SETTING_KEY, threshold_minutes
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ async def current_settings(session: AsyncSession) -> SettingsOut:
         auto_pause_on_manual_reply=await _read_bool(session, SETTING_AUTOPAUSE_REPLY, True),
         analytics_managers_visible=await _read_bool(session, SETTING_ANALYTICS_MANAGERS, True),
         deal_assignment_mode=await get_assignment_mode(session),
+        unanswered_after_minutes=await threshold_minutes(session),
     )
 
 
@@ -93,6 +95,8 @@ async def update_settings(
         await _write_setting(
             session, SETTING_ANALYTICS_MANAGERS, payload.analytics_managers_visible
         )
+    if payload.unanswered_after_minutes is not None:
+        await _write_setting(session, SETTING_KEY, payload.unanswered_after_minutes)
     if payload.deal_assignment_mode is not None:
         mode = payload.deal_assignment_mode
         if mode not in (MODE_UNASSIGNED, MODE_ROUND_ROBIN):

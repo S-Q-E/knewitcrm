@@ -627,3 +627,21 @@ Why: protects against accidental data loss, keeps audit trail.
 - The unanswered gauge uses the P0-5 rule with the default 10-minute threshold. It is
   not an alert; alerting is the P0-5 work.
 - AI replies after takeover are not included: they need the bot/manager event mapping.
+
+## D28. Unanswered dialogs (P0-5)
+- One definition in `services/unanswered.py`: the last message is `in`, the bot is not
+  paused, and the message is older than the threshold (`unanswered_after_minutes` in
+  `crm_settings`, default 10, range 1–1440, editable through `PATCH /api/settings`).
+  The list filter `needs_reply=true`, the per-row `needs_reply` flag, the
+  `crm_unanswered_dialogs` gauge and the notifications all use it.
+- Detection runs in the notify worker cycle (60 s, advisory-locked). Each unanswered
+  episode, keyed by `unanswered:<whatsapp_id>:<last_message_at>`, notifies the dialog
+  assignee, else the managed-deal owner, else the contact owner, else all active managers.
+  A new client message starts a new episode. The key is checked against all notifications,
+  read or not, so a read notification does not come back every cycle.
+- Only episodes from the last 24 h alert. Older unanswered dialogs stay visible in the
+  filter but do not notify, so the first run after deploy does not flood managers with
+  history. Check the initial count of the filter before relying on it.
+- Read-only for `knewit_*`; the only writes are `crm_notifications` rows through `notify()`.
+- Not included: an alert to the admin for dialogs nobody sees (no owner and no managers),
+  and a settings UI for the threshold (API only for now).

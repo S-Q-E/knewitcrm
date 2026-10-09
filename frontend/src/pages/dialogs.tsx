@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { formatDate, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type Filter = "all" | "mine" | "unassigned" | "unread";
+type Filter = "all" | "mine" | "unassigned" | "unread" | "needs_reply";
 
 export function DialogsPage() {
   const [params, setParams] = useSearchParams();
@@ -42,8 +42,9 @@ export function DialogsPage() {
   const users = useUsersLite();
 
   const dialogs = useDialogs({
-    assigned: filter === "all" || filter === "unread" ? undefined : filter,
+    assigned: filter === "mine" || filter === "unassigned" ? filter : undefined,
     unread: filter === "unread",
+    needsReply: filter === "needs_reply",
     search: search || undefined,
   });
   const dialog = useDialog(selected);
@@ -119,6 +120,7 @@ export function DialogsPage() {
               ["mine", "Мои"],
               ["unassigned", "Без ответственного"],
               ["unread", "Непрочитанные"],
+              ["needs_reply", "Требуют ответа"],
             ] as [Filter, string][]
           ).map(([id, label]) => (
             <button
@@ -159,11 +161,18 @@ export function DialogsPage() {
                 <span className="truncate font-medium">
                   {item.contact_name ?? item.contact_phone ?? item.whatsapp_id}
                 </span>
-                {item.unread_count > 0 && (
-                  <span className="rounded-full bg-slate-900 px-1.5 text-[11px] text-white dark:bg-slate-100 dark:text-slate-900">
-                    {item.unread_count}
-                  </span>
-                )}
+                <span className="flex items-center gap-1">
+                  {item.needs_reply && (
+                    <span className="rounded-full bg-amber-100 px-1.5 text-[11px] text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                      ждёт ответа
+                    </span>
+                  )}
+                  {item.unread_count > 0 && (
+                    <span className="rounded-full bg-slate-900 px-1.5 text-[11px] text-white dark:bg-slate-100 dark:text-slate-900">
+                      {item.unread_count}
+                    </span>
+                  )}
+                </span>
               </span>
               <span className="block truncate text-xs text-slate-500">
                 {item.last_message?.content ?? "Нет сообщений"}

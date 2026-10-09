@@ -14,6 +14,7 @@ const TYPE_LABEL: Record<string, string> = {
   manager_handover: "Клиент ждёт менеджера",
   dialog_message: "Новое сообщение",
   locked_stage: "Бот упёрся в блокировку",
+  unanswered: "Клиент ждёт ответа",
   automation: "Автоматизация",
 };
 

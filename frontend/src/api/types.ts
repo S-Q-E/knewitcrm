@@ -2664,6 +2664,11 @@ export interface components {
              * @enum {string}
              */
             deal_assignment_mode: "unassigned" | "round_robin";
+            /**
+             * Unanswered After Minutes
+             * @default 10
+             */
+            unanswered_after_minutes: number;
         };
         /** SettingsUpdate */
         SettingsUpdate: {
@@ -2677,6 +2682,8 @@ export interface components {
             analytics_managers_visible?: boolean | null;
             /** Deal Assignment Mode */
             deal_assignment_mode?: ("unassigned" | "round_robin") | null;
+            /** Unanswered After Minutes */
+            unanswered_after_minutes?: number | null;
         };
         /** SourceRow */
         SourceRow: {
@@ -5924,6 +5931,7 @@ export interface operations {
             query?: {
                 assigned?: string | null;
                 unread?: boolean;
+                needs_reply?: boolean;
                 search?: string | null;
                 limit?: number;
                 offset?: number;

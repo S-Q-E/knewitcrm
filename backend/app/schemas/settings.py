@@ -15,6 +15,7 @@ class SettingsOut(BaseModel):
     auto_pause_on_manual_reply: bool = True
     analytics_managers_visible: bool = True
     deal_assignment_mode: AssignmentMode = "unassigned"
+    unanswered_after_minutes: int = Field(default=10, ge=1, le=1440)
 
 
 class SettingsUpdate(BaseModel):
@@ -23,6 +24,7 @@ class SettingsUpdate(BaseModel):
     auto_pause_on_manual_reply: bool | None = None
     analytics_managers_visible: bool | None = None
     deal_assignment_mode: AssignmentMode | None = None
+    unanswered_after_minutes: int | None = Field(default=None, ge=1, le=1440)
 
 
 class BotStagesOut(BaseModel):
