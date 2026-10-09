@@ -140,10 +140,15 @@ async def list_dialogs(
 async def get_dialog_messages(
     whatsapp_id: str,
     limit: int = Query(500, ge=1, le=2000),
+    before_id: int | None = Query(default=None, ge=1),
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Bot message history with an explicit column list (replaces /api/leads/*/messages)."""
+    """Newest ``limit`` bot messages, oldest first. ``before_id`` pages further back.
+
+    ``has_more`` is true when older messages exist; pass the id of the first item
+    of the current page as ``before_id`` to get the page before it.
+    """
     lead_exists = (
         await session.execute(
             text("SELECT 1 FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": whatsapp_id}
@@ -152,17 +157,30 @@ async def get_dialog_messages(
     if lead_exists is None:
         raise ApiError("LEAD_NOT_FOUND", "Dialog not found", 404)
     await ensure_lead_visible(session, whatsapp_id, user)
-    rows = (
-        await session.execute(
-            text(
-                "SELECT id, direction, message_type, content, stage_at_moment,"
-                " created_at FROM knewit_messages"
-                " WHERE whatsapp_id = :whatsapp_id"
-                " ORDER BY created_at ASC, id ASC LIMIT :limit"
-            ),
-            {"whatsapp_id": whatsapp_id, "limit": limit},
+    params: dict[str, object] = {"whatsapp_id": whatsapp_id, "limit": limit + 1}
+    cursor = ""
+    if before_id is not None:
+        cursor = (
+            " AND (created_at, id) < (SELECT created_at, id FROM knewit_messages"
+            " WHERE id = :before_id AND whatsapp_id = :whatsapp_id)"
         )
-    ).mappings()
+        params["before_id"] = before_id
+    rows = (
+        (
+            await session.execute(
+                text(
+                    "SELECT id, direction, message_type, content, stage_at_moment,"
+                    " created_at FROM knewit_messages"
+                    " WHERE whatsapp_id = :whatsapp_id" + cursor + " ORDER BY created_at DESC,"
+                    " id DESC LIMIT :limit"
+                ),
+                params,
+            )
+        )
+        .mappings()
+        .all()
+    )
+    has_more = len(rows) > limit
     return {
         "items": [
             {
@@ -173,8 +191,9 @@ async def get_dialog_messages(
                 "stage_at_moment": row["stage_at_moment"],
                 "created_at": row["created_at"].isoformat(),
             }
-            for row in rows
-        ]
+            for row in reversed(rows[:limit])
+        ],
+        "has_more": has_more,
     }
 
 

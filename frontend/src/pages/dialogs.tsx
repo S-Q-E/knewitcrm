@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import type { DialogSummary, OutboxItem } from "@/api/timeline";
+import type { DialogSummary, LeadMessage, OutboxItem } from "@/api/timeline";
 import {
+  fetchOlderLeadMessages,
+  mergeLeadMessages,
   useDialog,
   useDialogs,
   useLeadMessages,
@@ -32,6 +34,12 @@ export function DialogsPage() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(params.get("wa"));
   const [draft, setDraft] = useState("");
+  const [older, setOlder] = useState<{
+    whatsappId: string;
+    items: LeadMessage[];
+    hasMore: boolean;
+  } | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const { push } = useToast();
   const markRead = useMarkRead();
   const updateDialog = useUpdateDialog();
@@ -97,6 +105,31 @@ export function DialogsPage() {
         onError: (error) => toastError(push, error),
       },
     );
+  };
+
+  const olderForSelected = older?.whatsappId === selected ? older : null;
+  const olderItems = olderForSelected?.items ?? [];
+  const shownMessages = mergeLeadMessages(olderItems, messages.data?.items ?? []);
+  const hasMoreOlder = olderForSelected?.hasMore ?? messages.data?.has_more ?? false;
+
+  const loadOlder = async () => {
+    const oldest = shownMessages[0];
+    if (!selected || !oldest) {
+      return;
+    }
+    setLoadingOlder(true);
+    try {
+      const page = await fetchOlderLeadMessages(selected, oldest.id);
+      setOlder({
+        whatsappId: selected,
+        items: mergeLeadMessages(page.items, olderItems),
+        hasMore: page.has_more,
+      });
+    } catch (error) {
+      toastError(push, error);
+    } finally {
+      setLoadingOlder(false);
+    }
   };
 
   const applyQuickReply = (body: string, contactName: string | null) => {
@@ -244,7 +277,18 @@ export function DialogsPage() {
 
             <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
               {messages.isPending && <p className="text-sm text-slate-500">Загрузка…</p>}
-              {messages.data?.items.map((message) => (
+              {hasMoreOlder && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="self-center"
+                  disabled={loadingOlder}
+                  onClick={() => void loadOlder()}
+                >
+                  Показать более ранние
+                </Button>
+              )}
+              {shownMessages.map((message) => (
                 <div
                   key={message.id}
                   className={cn(

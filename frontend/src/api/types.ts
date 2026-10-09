@@ -1168,7 +1168,10 @@ export interface paths {
         };
         /**
          * Get Dialog Messages
-         * @description Bot message history with an explicit column list (replaces /api/leads/*\/messages).
+         * @description Newest ``limit`` bot messages, oldest first. ``before_id`` pages further back.
+         *
+         *     ``has_more`` is true when older messages exist; pass the id of the first item
+         *     of the current page as ``before_id`` to get the page before it.
          */
         get: operations["get_dialog_messages_api_dialogs__whatsapp_id__messages_get"];
         put?: never;
@@ -5973,6 +5976,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                before_id?: number | null;
             };
             header?: never;
             path: {

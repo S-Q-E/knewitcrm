@@ -119,21 +119,40 @@ export function useUpdateDialog() {
   });
 }
 
+export interface LeadMessage {
+  id: number;
+  direction: string;
+  message_type: string;
+  content: string | null;
+  stage_at_moment: string | null;
+  created_at: string;
+}
+
+export interface LeadMessagesPage {
+  items: LeadMessage[];
+  has_more: boolean;
+}
+
+export function fetchOlderLeadMessages(whatsappId: string, beforeId: number) {
+  return api.get<LeadMessagesPage>(
+    `/api/dialogs/${encodeURIComponent(whatsappId)}/messages?limit=500&before_id=${beforeId}`,
+  );
+}
+
+// Older pages come first; a message present in both lists is kept once, from the newer list.
+export function mergeLeadMessages(older: LeadMessage[], newest: LeadMessage[]): LeadMessage[] {
+  const seen = new Set(newest.map((message) => message.id));
+  return [...older.filter((message) => !seen.has(message.id)), ...newest];
+}
+
 export function useLeadMessages(whatsappId: string | null) {
   const { connected } = useStreamStatus();
   return useQuery({
     queryKey: ["lead-messages", whatsappId],
     queryFn: () =>
-      api.get<{
-        items: {
-          id: number;
-          direction: string;
-          message_type: string;
-          content: string | null;
-          stage_at_moment: string | null;
-          created_at: string;
-        }[];
-      }>(`/api/dialogs/${encodeURIComponent(whatsappId as string)}/messages?limit=500`),
+      api.get<LeadMessagesPage>(
+        `/api/dialogs/${encodeURIComponent(whatsappId as string)}/messages?limit=500`,
+      ),
     enabled: whatsappId !== null,
     // Live updates arrive over SSE; poll only as a fallback while offline.
     refetchInterval: connected ? false : 5000,

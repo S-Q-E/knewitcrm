@@ -180,3 +180,50 @@ async def test_dialog_assign_and_pause(client, settings):
     finally:
         await _purge_lead(factory, wa)
         await engine.dispose()
+
+
+async def test_dialog_messages_returns_newest_window_and_pages_back(client, settings):
+    engine, factory = engine_factory(settings)
+    wa = _wa()
+    try:
+        await admin_csrf(client, settings)
+        async with factory() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+                    " VALUES (:wa, 'Long Bot', 'НОВЫЙ_ЛИД', 'ACTIVE')"
+                ),
+                {"wa": wa},
+            )
+            await session.execute(
+                text(
+                    "INSERT INTO knewit_messages"
+                    " (whatsapp_id, direction, message_type, content, created_at)"
+                    " SELECT :wa, 'in', 'chat', 'msg-' || g,"
+                    " now() - make_interval(secs => 600 - g)"
+                    " FROM generate_series(1, 600) AS g"
+                ),
+                {"wa": wa},
+            )
+            await session.commit()
+
+        newest = await client.get(f"/api/dialogs/{wa}/messages?limit=500")
+        assert newest.status_code == 200, newest.text
+        body = newest.json()
+        contents = [item["content"] for item in body["items"]]
+        assert len(contents) == 500
+        assert contents[0] == "msg-101"
+        assert contents[-1] == "msg-600"
+        assert body["has_more"] is True
+
+        older = await client.get(
+            f"/api/dialogs/{wa}/messages?limit=500&before_id={body['items'][0]['id']}"
+        )
+        assert older.status_code == 200, older.text
+        older_body = older.json()
+        older_contents = [item["content"] for item in older_body["items"]]
+        assert older_contents == [f"msg-{n}" for n in range(1, 101)]
+        assert older_body["has_more"] is False
+    finally:
+        await _purge_lead(factory, wa)
+        await engine.dispose()
