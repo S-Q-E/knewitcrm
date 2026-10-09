@@ -4,7 +4,7 @@ import logging
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,6 +106,7 @@ async def get_user(
 async def update_user(
     user_id: uuid.UUID,
     payload: UserUpdate,
+    request: Request,
     admin: CurrentUser = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
@@ -119,6 +120,9 @@ async def update_user(
     password_reset = payload.password is not None
     if password_reset:
         user.password_hash = hash_password(payload.password)
+        # A reset ends every session of that user; an admin keeps the one making the change.
+        keep = request.state.crm_session_id if user.id == admin.id else None
+        await _revoke_sessions(session, user.id, keep=keep)
     if payload.role is not None and payload.role != user.role:
         if user.role == ROLE_ADMIN and not await _another_active_admin(session, user.id):
             raise ApiError("LAST_ADMIN", "Cannot demote the last active admin", 409)
@@ -159,9 +163,12 @@ async def _another_active_admin(session: AsyncSession, exclude_id: uuid.UUID) ->
     return bool(row)
 
 
-async def _revoke_sessions(session: AsyncSession, user_id: uuid.UUID) -> None:
+async def _revoke_sessions(
+    session: AsyncSession, user_id: uuid.UUID, keep: uuid.UUID | None = None
+) -> None:
+    conditions = [CrmSession.user_id == user_id, CrmSession.revoked_at.is_(None)]
+    if keep is not None:
+        conditions.append(CrmSession.id != keep)
     await session.execute(
-        update(CrmSession)
-        .where(CrmSession.user_id == user_id, CrmSession.revoked_at.is_(None))
-        .values(revoked_at=datetime.now(UTC))
+        update(CrmSession).where(*conditions).values(revoked_at=datetime.now(UTC))
     )

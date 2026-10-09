@@ -175,3 +175,41 @@ async def test_get_missing_user_is_404(client, settings):
     response = await client.get("/api/users/00000000-0000-0000-0000-000000000000")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
+async def test_admin_password_reset_revokes_the_users_sessions(client, settings, app):
+    admin = await login_admin(client, settings)
+    created = await _create_user(client, admin["csrf"])
+    async for manager_http, _ in _manager_client(app, created["email"], MANAGER_PASSWORD):
+        assert (await manager_http.get("/api/auth/me")).status_code == 200
+        reset = await client.patch(
+            f"/api/users/{created['id']}",
+            json={"password": "reset-password-9"},
+            headers=csrf_headers(admin["csrf"]),
+        )
+        assert reset.status_code == 200
+        assert (await manager_http.get("/api/auth/me")).status_code == 401
+
+
+async def test_admin_changing_own_password_keeps_only_current_session(client, settings, app):
+    admin = await login_admin(client, settings)
+    me = (await client.get("/api/auth/me")).json()
+    headers = csrf_headers(admin["csrf"])
+    async with LifespanManager(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as other:
+            await login(other, settings.admin_email, settings.admin_password)
+            assert (await other.get("/api/auth/me")).status_code == 200
+            changed = await client.patch(
+                f"/api/users/{me['id']}",
+                json={"password": "admin-rotated-pass-1"},
+                headers=headers,
+            )
+            assert changed.status_code == 200, changed.text
+            assert (await other.get("/api/auth/me")).status_code == 401
+            assert (await client.get("/api/auth/me")).status_code == 200
+    restored = await client.patch(
+        f"/api/users/{me['id']}",
+        json={"password": settings.admin_password},
+        headers=headers,
+    )
+    assert restored.status_code == 200, restored.text
