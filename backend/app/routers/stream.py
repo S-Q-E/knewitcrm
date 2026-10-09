@@ -10,7 +10,6 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth_deps import CurrentUser, require_user
-from ..deps import get_session
 from ..services.event_bus import bus
 from ..services.visibility import is_visible, lead_owner, restrict_managers_to_own
 
@@ -65,11 +64,12 @@ def format_sse(type: str, data: dict[str, Any]) -> str:
 async def stream(
     request: Request,
     user: CurrentUser = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
 ):
-    # Visibility snapshot per connection; a role/scope change applies on reconnect.
-    restricted = await restrict_managers_to_own(session)
     factory = request.app.state.session_factory
+    # Visibility snapshot per connection; a role/scope change applies on reconnect.
+    # Short-lived session: the stream itself must not hold a pool connection.
+    async with factory() as session:
+        restricted = await restrict_managers_to_own(session)
 
     async def generate():
         queue = bus.subscribe()

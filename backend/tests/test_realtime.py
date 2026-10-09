@@ -313,6 +313,27 @@ async def test_stream_heartbeat(app, settings, monkeypatch, clean_bus):
         await engine.dispose()
 
 
+async def test_open_streams_do_not_hold_pool_connections(app, settings, clean_bus):
+    engine, _ = engine_factory(settings)
+    try:
+        async with live_server(app) as (base, timeout):
+            async with AsyncClient(base_url=base, timeout=timeout) as client:
+                await login_admin(client, settings)
+                await asyncio.sleep(0.1)
+                pool = app.state.engine.pool
+                baseline = pool.checkedout()
+                streams = [await _open_stream(client) for _ in range(3)]
+                try:
+                    await _wait_for_subscribers(3)
+                    assert pool.checkedout() <= baseline
+                finally:
+                    for stream in streams:
+                        await stream.aclose()
+        await _wait_for_subscribers(0)
+    finally:
+        await engine.dispose()
+
+
 async def test_sync_move_publishes_deal_moved(settings, clean_bus):
     from backend.app.services.event_bus import bus as global_bus
 
