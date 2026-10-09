@@ -605,5 +605,8 @@ Why: protects against accidental data loss, keeps audit trail.
   process (outbox status, task created, bot events from the poller) never reaches SSE
   clients connected to the other one. Advisory locks already keep the background loops
   single-run, so the only cost of one worker is HTTP throughput.
-- Not yet done: LISTEN/NOTIFY bus (P1-1 step 3) and the client resync on reconnect
-  (step 2). Until step 3, do not add workers or replicas (DEPLOY.md §5).
+- Step 2 (done): a subscriber whose queue overflows gets one `resync` event instead
+  of a silently dropped backlog (`event_bus._resync`); the frontend refetches the
+  core lists on `resync` and after any reconnect (events during a drop are lost).
+- Not yet done: LISTEN/NOTIFY bus (P1-1 step 3). Until step 3, do not add workers
+  or replicas (DEPLOY.md §5).

@@ -119,6 +119,7 @@ describe("invalidationFor", () => {
       "outbox",
       "w",
     ]);
+    expect(invalidationFor({ type: "resync", data: {} })).toContainEqual(["dialogs"]);
     expect(invalidationFor({ type: "something_new", data: {} })).toEqual([]);
   });
 });
@@ -173,6 +174,40 @@ describe("useEventStream", () => {
     spy.mockClear();
     vi.advanceTimersByTime(15000);
     expect(spy).toHaveBeenCalledWith({ queryKey: ["dialogs"] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["notifications"] });
+  });
+
+  it("refetches lists after a reconnect, but not on the first open", () => {
+    vi.useFakeTimers();
+    const queryClient = new QueryClient();
+    const spy = vi.spyOn(queryClient, "invalidateQueries");
+    renderHook(queryClient);
+
+    act(() => {
+      FakeEventSource.instances[0].onopen?.();
+    });
+    expect(spy).not.toHaveBeenCalled();
+
+    act(() => {
+      FakeEventSource.instances[0].fail();
+      vi.runOnlyPendingTimers();
+    });
+    act(() => {
+      FakeEventSource.instances[FakeEventSource.instances.length - 1].onopen?.();
+    });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["dialogs"] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["tasks"] });
+  });
+
+  it("refetches lists on a resync event from the server", () => {
+    const queryClient = new QueryClient();
+    const spy = vi.spyOn(queryClient, "invalidateQueries");
+    renderHook(queryClient);
+
+    act(() => {
+      FakeEventSource.instances[0].emit("resync", {});
+    });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["board"] });
     expect(spy).toHaveBeenCalledWith({ queryKey: ["notifications"] });
   });
 

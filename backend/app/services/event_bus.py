@@ -8,7 +8,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Per-subscriber queue depth. Publishers never block: when a slow consumer
-# falls behind, the oldest buffered event is dropped in favor of the newest.
+# falls behind, its backlog is replaced by a single `resync` event (see _resync).
 MAX_QUEUE_SIZE = 100
 
 
@@ -40,16 +40,23 @@ class EventBus:
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
-                try:
-                    queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
-                try:
-                    queue.put_nowait(event)
-                except asyncio.QueueFull:
-                    continue
+                self._resync(queue, event["at"])
             reached += 1
         return reached
+
+    @staticmethod
+    def _resync(queue: asyncio.Queue[dict[str, Any]], at: str) -> None:
+        """Replace a backlog that overflowed with one resync marker.
+
+        Dropped events are not replayed: the client refetches its lists on
+        `resync`, which covers them, and a partial backlog would be misleading.
+        """
+        while True:
+            try:
+                queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+        queue.put_nowait({"type": "resync", "data": {}, "at": at})
 
     def subscriber_count(self) -> int:
         return len(self._subscribers)

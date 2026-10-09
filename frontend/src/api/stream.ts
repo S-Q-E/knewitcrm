@@ -19,6 +19,7 @@ export const KNOWN_STREAM_EVENTS = [
   "notification",
   "bot_paused",
   "outbox_status",
+  "resync",
 ] as const;
 
 const MAX_SSE_FAILURES = 5;
@@ -46,6 +47,8 @@ export function invalidationFor(event: StreamEvent): string[][] {
     }
     case "bot_event":
       return [["timeline"], ["board"]];
+    case "resync":
+      return FALLBACK_POLL_KEYS;
     case "deal_moved":
     case "deal_updated":
       return [["board"], ["deals"], ["deal"], ["timeline"]];
@@ -138,6 +141,8 @@ export function useEventStream() {
     let source: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
+    // Events published while the stream was down are lost: refetch on reconnect.
+    let lostConnection = false;
 
     const invalidate = (keys: string[][]) => {
       for (const key of keys) {
@@ -195,12 +200,17 @@ export function useEventStream() {
       next.onopen = () => {
         failures = 0;
         setStreamStatus({ connected: true, fallback: false });
+        if (lostConnection) {
+          lostConnection = false;
+          invalidate(FALLBACK_POLL_KEYS);
+        }
       };
       next.onerror = () => {
         stopSource();
         if (disposed) {
           return;
         }
+        lostConnection = true;
         setStreamStatus({ connected: false, fallback: false });
         failures += 1;
         if (failures > MAX_SSE_FAILURES) {

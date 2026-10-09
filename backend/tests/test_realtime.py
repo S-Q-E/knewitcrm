@@ -154,12 +154,16 @@ def test_bus_fanout_and_backpressure():
     assert local.publish("ping", {"n": 1}) == 2
     assert first.get_nowait()["type"] == "ping"
     assert second.get_nowait()["data"] == {"n": 1}
-    # A slow consumer never blocks the publisher: oldest is dropped.
+    # A slow consumer never blocks the publisher: an overflowing backlog is
+    # replaced by one resync marker, so the client refetches instead of guessing.
     local.publish("a", {})
     local.publish("b", {})
-    local.publish("c", {})
     assert first.qsize() == 2
-    assert [first.get_nowait()["type"], first.get_nowait()["type"]] == ["b", "c"]
+    local.publish("c", {})
+    assert first.qsize() == 1
+    assert first.get_nowait()["type"] == "resync"
+    local.publish("d", {})
+    assert first.get_nowait()["type"] == "d"
     local.unsubscribe(first)
     local.unsubscribe(second)
     assert local.subscriber_count() == 0
