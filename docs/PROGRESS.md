@@ -310,6 +310,31 @@
 - Not done in stage 1: B-05 to B-14, FE-03, FE-04, FE-06, FE-07, FE-09 (stage 2 and later).
 - Note: the PROMPT asked for «Step 18». Step 18 was already used for P3-2, so this is Step 19.
 
+## Step 20 — Audit fixes, stage 2 (branch fix/audit-p1-p2, 2026-10-09)
+- [x] Backend: B-05, B-06, B-07, B-08, B-09, B-10, B-11, B-12, B-13, B-14 (one commit each)
+  - B-05 reminders not re-created after read (`already_notified`)
+  - B-08 bot_stage_blocked logged only when the target changes
+  - B-06 savepoints per automation, deal and notify stage; tag/owner checks; 422 at save (D35)
+  - B-07 /api/metrics accepts METRICS_TOKEN bearer without a session (two tests updated on purpose)
+  - B-09 whatsapp_id moved safely; conflict 409; IntegrityError 409 (D33)
+  - B-10 stage delete counts and moves trashed deals; FK conflict 409
+  - B-11 realtime poller start retried in the loop; unexpected background task ends logged
+  - B-12 read/patch require a bot lead (404 LEAD_NOT_FOUND)
+  - B-13 stream re-checks its session every minute (D34)
+  - B-14 admin password reset revokes sessions, keeps the admin's current one (D34)
+- [x] Frontend: FE-03 kanban pagination, FE-04 sortable columns, FE-06 note refresh,
+  FE-07 contact tags refresh, FE-09 datetime-local conversion
+- [x] Full suite on fix_scratch: 244 passed, 0 failed (before the docs commit).
+- [x] Audit probes: fixed behaviour shown for B-01/B-05/B-06/B-07/B-08/B-09/B-10/B-11/B-12/B-02/B-04.
+  Five probe assertions still encode the old behaviour (metrics needed a session, locked-stage
+  rows grew, reminder was re-created, exports leaked, messages returned oldest): expected.
+- [x] Frontend: tsc, eslint src, vitest 15 files / 45 tests (two green runs), vite build.
+  The board pagination test needed explicit timeouts under load (fixed in its own commit).
+- Known flake seen during stage 2: test_dialogs_list_paginates_in_sql_under_200ms failed once in
+  the group (0.208 s) and once alone (0.207 s), then passed twice on rerun (load average ~4).
+  The threshold was not changed.
+- Not done: B-15…B-19 and the other P3 items, by PROMPT rules.
+
 ## Step 16 — Final audit [todo]
 
 ## Deferred

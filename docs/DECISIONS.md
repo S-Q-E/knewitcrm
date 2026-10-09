@@ -717,3 +717,31 @@ Why: protects against accidental data loss, keeps audit trail.
   not paused (as before).
 - Existing deals: those already in МЕНЕДЖЕР with a task (done or not) are treated as handed
   over and get nothing new. Deals with no task yet get one on the next pass.
+
+## D33. Contact merge and WhatsApp chat (B-09, audit fix)
+- Rule: two different `whatsapp_id` values on winner and loser are a conflict. The merge is
+  refused with 409 `MERGE_WHATSAPP_CONFLICT` before anything changes. This is the answer to the
+  audit's open question (b): the chat is never silently re-attached.
+- If only the loser has a `whatsapp_id`, it is cleared on the loser and flushed first, then
+  moved to the winner (the column is unique). The bot chat keeps reaching the merged contact.
+- Any `IntegrityError` during the merge (flush or commit) is rolled back and returned as
+  409 `MERGE_CONFLICT`, never 500.
+
+## D34. Event stream re-checks its session (B-13, B-14 related)
+- The stream checks, once a minute (`SESSION_RECHECK_SECONDS`), that its session is still
+  active: not revoked, not expired, user active (`session_middleware.session_still_active`).
+  It closes when the check fails, and the per-stream owner cache is cleared at the same time.
+- The check runs on loop iterations, so a closed stream can keep going for up to one heartbeat
+  after the minute mark. Accepted.
+- B-14: an admin password reset revokes all of the user's sessions. An admin who changes their
+  own password keeps the current session only.
+
+## D35. Notify cycle isolation (B-06)
+- Each automation runs in its own savepoint; within it, each deal runs in a savepoint too. A
+  failure rolls back only that automation or deal and is logged.
+- The notify cycle wraps each stage (overdue, due-soon, unanswered, paused, automations) in a
+  savepoint. A failing stage does not undo the others.
+- `add_tag` skips a tag the deal already has. `assign_owner` skips a missing or inactive user.
+  The automations API rejects unknown `tag_id` and `user_id` with 422 at save time.
+- Behaviour change: an existing test that saved an automation with a made-up tag now creates a
+  real tag first (test_automations.py::test_no_activity_automation).
