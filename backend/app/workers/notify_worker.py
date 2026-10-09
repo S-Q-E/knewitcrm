@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..models import CrmTask
 from ..services.automations import evaluate_automations
-from ..services.notifications import notify, publish_pending
+from ..services.notifications import already_notified, notify, publish_pending
 from ..services.paused import notify_long_paused
 from ..services.unanswered import notify_unanswered
 
@@ -64,16 +64,15 @@ async def _remind_overdue(session: AsyncSession) -> tuple[int, list[dict]]:
     ).all()
     pending: list[dict] = []
     for task_id, assignee_id, title in rows:
+        key = f"task-overdue:{task_id}:{now.date().isoformat()}"
+        if await already_notified(session, assignee_id, "task_overdue", key):
+            continue
         pending.extend(
             await notify(
                 session,
                 [assignee_id],
                 "task_overdue",
-                {
-                    "task_id": str(task_id),
-                    "title": title,
-                    "dedupe_key": f"task-overdue:{task_id}:{now.date().isoformat()}",
-                },
+                {"task_id": str(task_id), "title": title, "dedupe_key": key},
             )
         )
     return len(pending), pending
@@ -94,16 +93,15 @@ async def _remind_due_soon(session: AsyncSession) -> tuple[int, list[dict]]:
     ).all()
     pending: list[dict] = []
     for task_id, assignee_id, title in rows:
+        key = f"task-due-soon:{task_id}:{now.date().isoformat()}"
+        if await already_notified(session, assignee_id, "task_due_soon", key):
+            continue
         pending.extend(
             await notify(
                 session,
                 [assignee_id],
                 "task_due_soon",
-                {
-                    "task_id": str(task_id),
-                    "title": title,
-                    "dedupe_key": f"task-due-soon:{task_id}:{now.date().isoformat()}",
-                },
+                {"task_id": str(task_id), "title": title, "dedupe_key": key},
             )
         )
     return len(pending), pending

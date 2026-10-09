@@ -66,6 +66,26 @@ async def notify(
     return pending
 
 
+async def already_notified(
+    session: AsyncSession, user_id: uuid.UUID, type: str, dedupe_key: str
+) -> bool:
+    """True when the user has a notification with this key, read or not.
+
+    ``notify()`` dedupes only unread rows, so periodic workers check this first to
+    avoid re-creating a reminder after it was read.
+    """
+    row = (
+        await session.execute(
+            text(
+                "SELECT 1 FROM crm_notifications"
+                " WHERE user_id = :user_id AND type = :type AND dedupe_key = :key LIMIT 1"
+            ),
+            {"user_id": user_id, "type": type, "key": dedupe_key},
+        )
+    ).scalar_one_or_none()
+    return row is not None
+
+
 def publish_pending(events: Iterable[BusEvent]) -> None:
     """Fan out events collected by notify() — call only after commit."""
     for event in events:

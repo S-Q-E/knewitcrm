@@ -330,3 +330,62 @@ async def test_notification_endpoints(client, settings, app):
                 await session.execute(text("DELETE FROM crm_notifications"))
                 await session.commit()
             await engine.dispose()
+
+
+async def test_overdue_reminder_not_recreated_after_read(client, settings):
+    from datetime import UTC, datetime, timedelta
+
+    from backend.app.workers.notify_worker import run_notify_cycle
+
+    engine, factory = engine_factory(settings)
+    token = await admin_csrf(client, settings)
+    manager = await make_manager(client, token)
+    task_id = str(uuid.uuid4())
+    try:
+        async with factory() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO crm_tasks (id, title, type, due_at, assignee_id)"
+                    " VALUES (:id, 'B05 overdue', 'message', :due, :assignee)"
+                ),
+                {
+                    "id": task_id,
+                    "due": datetime.now(UTC) - timedelta(hours=1),
+                    "assignee": manager["user"]["id"],
+                },
+            )
+            await session.commit()
+
+        await run_notify_cycle(factory)
+        async with factory() as session:
+            await session.execute(
+                text(
+                    "UPDATE crm_notifications SET read_at = now()"
+                    " WHERE type = 'task_overdue' AND payload->>'task_id' = :id"
+                ),
+                {"id": task_id},
+            )
+            await session.commit()
+        await run_notify_cycle(factory)
+        await run_notify_cycle(factory)
+
+        async with factory() as session:
+            count = (
+                await session.execute(
+                    text(
+                        "SELECT COUNT(*) FROM crm_notifications"
+                        " WHERE type = 'task_overdue' AND payload->>'task_id' = :id"
+                    ),
+                    {"id": task_id},
+                )
+            ).scalar_one()
+        assert count == 1
+    finally:
+        async with factory() as session:
+            await session.execute(
+                text("DELETE FROM crm_notifications WHERE payload->>'task_id' = :id"),
+                {"id": task_id},
+            )
+            await session.execute(text("DELETE FROM crm_tasks WHERE id = :id"), {"id": task_id})
+            await session.commit()
+        await engine.dispose()
