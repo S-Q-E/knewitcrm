@@ -29,16 +29,20 @@ async def evaluate_automations(session: AsyncSession) -> AutomationStats:
     """Run all active automations once. Each fires at most once per deal."""
     stats = AutomationStats()
     automations = (
-        await session.execute(select(CrmAutomation).where(CrmAutomation.is_active.is_(True)))
-    ).scalars()
+        (await session.execute(select(CrmAutomation).where(CrmAutomation.is_active.is_(True))))
+        .scalars()
+        .all()
+    )
     for automation in automations:
         stats.evaluated += 1
         try:
-            fired, events = await _evaluate(session, automation)
-            stats.fired += fired
-            stats.events.extend(events)
+            async with session.begin_nested():
+                fired, events = await _evaluate(session, automation)
         except Exception:
             logger.exception("automation failed id=%s", automation.id)
+            continue
+        stats.fired += fired
+        stats.events.extend(events)
     return stats
 
 
@@ -51,15 +55,21 @@ async def _evaluate(
     for deal_id in deals:
         if await _already_fired(session, automation.id, deal_id):
             continue
-        events.extend(await _apply_actions(session, automation, deal_id))
-        await log_activity(
-            session,
-            None,
-            "deal",
-            deal_id,
-            AUTOMATION_FIRED_ACTION,
-            {"automation_id": str(automation.id)},
-        )
+        try:
+            async with session.begin_nested():
+                deal_events = await _apply_actions(session, automation, deal_id)
+                await log_activity(
+                    session,
+                    None,
+                    "deal",
+                    deal_id,
+                    AUTOMATION_FIRED_ACTION,
+                    {"automation_id": str(automation.id)},
+                )
+        except Exception:
+            logger.exception("automation failed id=%s deal=%s", automation.id, deal_id)
+            continue
+        events.extend(deal_events)
         fired += 1
     if fired:
         logger.info("automation fired id=%s deals=%d", automation.id, fired)
@@ -116,7 +126,7 @@ async def _already_fired(
 async def _apply_actions(
     session: AsyncSession, automation: CrmAutomation, deal_id: uuid.UUID
 ) -> list[dict[str, Any]]:
-    from ..models import CrmEntityTag, CrmTag, CrmTask
+    from ..models import CrmEntityTag, CrmTag, CrmTask, CrmUser
 
     events: list[dict[str, Any]] = []
     actions = automation.actions or []
@@ -150,6 +160,14 @@ async def _apply_actions(
                 new_owner = uuid.UUID(str(action.get("user_id")))
             except (ValueError, TypeError):
                 continue
+            active = (
+                await session.execute(
+                    select(CrmUser.id).where(CrmUser.id == new_owner, CrmUser.is_active.is_(True))
+                )
+            ).scalar_one_or_none()
+            if active is None:
+                logger.warning("automation id=%s: owner user is missing or inactive", automation.id)
+                continue
             deal.owner_id = new_owner
         elif kind == "add_tag":
             try:
@@ -161,7 +179,17 @@ async def _apply_actions(
             ).scalar_one_or_none()
             if exists is None:
                 continue
-            session.add(CrmEntityTag(tag_id=tag_id, entity="deal", entity_id=deal.id))
+            linked = (
+                await session.execute(
+                    select(CrmEntityTag.id).where(
+                        CrmEntityTag.tag_id == tag_id,
+                        CrmEntityTag.entity == "deal",
+                        CrmEntityTag.entity_id == deal.id,
+                    )
+                )
+            ).first()
+            if linked is None:
+                session.add(CrmEntityTag(tag_id=tag_id, entity="deal", entity_id=deal.id))
         elif kind == "notify":
             text_body = str(action.get("text") or automation.name)
             targets = await _notify_targets(session, action, deal)

@@ -20,7 +20,10 @@ NOTIFY_INTERVAL_SECONDS = 60
 
 
 async def run_notify_cycle(session_factory: async_sessionmaker[AsyncSession]) -> dict:
-    """Reminders for overdue/due-soon tasks plus automation evaluation."""
+    """Reminders, unanswered and paused alerts, and automations, one savepoint per stage.
+
+    A failing stage rolls back only its own writes; the other stages still commit.
+    """
     async with session_factory() as session:
         async with session.begin():
             got_lock = (
@@ -30,27 +33,58 @@ async def run_notify_cycle(session_factory: async_sessionmaker[AsyncSession]) ->
             ).scalar()
             if not got_lock:
                 return {"skipped": True}
-            stats: dict[str, int] = {"overdue": 0, "due_soon": 0}
-            overdue, overdue_events = await _remind_overdue(session)
-            due_soon, due_soon_events = await _remind_due_soon(session)
-            stats["overdue"] = overdue
-            stats["due_soon"] = due_soon
-            unanswered_events = await notify_unanswered(session, datetime.now(UTC))
-            stats["unanswered"] = len(unanswered_events)
-            paused_events = await notify_long_paused(session, datetime.now(UTC))
-            stats["paused_long"] = len(paused_events)
-            auto = await evaluate_automations(session)
-            stats["automations_evaluated"] = auto.evaluated
-            stats["automations_fired"] = auto.fired
-            pending = (
-                overdue_events + due_soon_events + unanswered_events + paused_events + auto.events
-            )
+            stats: dict[str, int] = {
+                "overdue": 0,
+                "due_soon": 0,
+                "unanswered": 0,
+                "paused_long": 0,
+                "automations_evaluated": 0,
+                "automations_fired": 0,
+            }
+            pending: list[dict] = []
+            for name, stage in (
+                ("overdue", _remind_overdue),
+                ("due_soon", _remind_due_soon),
+                ("unanswered", _unanswered_stage),
+                ("paused_long", _paused_stage),
+                ("automations", _automation_stage),
+            ):
+                counts, events = await _run_stage(session, name, stage)
+                stats.update(counts)
+                pending.extend(events)
         publish_pending(pending)
     logger.info("notify cycle done %s", stats)
     return stats
 
 
-async def _remind_overdue(session: AsyncSession) -> tuple[int, list[dict]]:
+async def _run_stage(session: AsyncSession, name: str, stage) -> tuple[dict[str, int], list[dict]]:
+    try:
+        async with session.begin_nested():
+            return await stage(session)
+    except Exception:
+        logger.exception("notify stage failed stage=%s", name)
+        return {}, []
+
+
+async def _unanswered_stage(session: AsyncSession) -> tuple[dict[str, int], list[dict]]:
+    events = await notify_unanswered(session, datetime.now(UTC))
+    return {"unanswered": len(events)}, events
+
+
+async def _paused_stage(session: AsyncSession) -> tuple[dict[str, int], list[dict]]:
+    events = await notify_long_paused(session, datetime.now(UTC))
+    return {"paused_long": len(events)}, events
+
+
+async def _automation_stage(session: AsyncSession) -> tuple[dict[str, int], list[dict]]:
+    auto = await evaluate_automations(session)
+    return {
+        "automations_evaluated": auto.evaluated,
+        "automations_fired": auto.fired,
+    }, auto.events
+
+
+async def _remind_overdue(session: AsyncSession) -> tuple[dict[str, int], list[dict]]:
     now = datetime.now(UTC)
     rows = (
         await session.execute(
@@ -75,10 +109,10 @@ async def _remind_overdue(session: AsyncSession) -> tuple[int, list[dict]]:
                 {"task_id": str(task_id), "title": title, "dedupe_key": key},
             )
         )
-    return len(pending), pending
+    return {"overdue": len(pending)}, pending
 
 
-async def _remind_due_soon(session: AsyncSession) -> tuple[int, list[dict]]:
+async def _remind_due_soon(session: AsyncSession) -> tuple[dict[str, int], list[dict]]:
     now = datetime.now(UTC)
     rows = (
         await session.execute(
@@ -104,7 +138,7 @@ async def _remind_due_soon(session: AsyncSession) -> tuple[int, list[dict]]:
                 {"task_id": str(task_id), "title": title, "dedupe_key": key},
             )
         )
-    return len(pending), pending
+    return {"due_soon": len(pending)}, pending
 
 
 async def notify_loop(

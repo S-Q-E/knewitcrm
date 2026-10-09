@@ -329,13 +329,20 @@ async def test_no_activity_automation(client, settings):
                 headers=csrf_headers(token),
             )
         ).json()
+        tag = (
+            await client.post(
+                "/api/tags",
+                json={"name": f"stale-{uuid.uuid4().hex[:8]}"},
+                headers=csrf_headers(token),
+            )
+        ).json()
         created = await client.post(
             "/api/automations",
             json={
                 "name": "Stale nudge",
                 "trigger_type": "no_activity_hours",
                 "trigger_config": {"hours": 1, "pipeline_id": pipe["id"]},
-                "actions": [{"type": "add_tag", "tag_id": str(uuid.uuid4())}],
+                "actions": [{"type": "add_tag", "tag_id": tag["id"]}],
             },
             headers=csrf_headers(token),
         )

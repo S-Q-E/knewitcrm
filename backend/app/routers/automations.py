@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth_deps import CurrentUser, require_role, require_user
 from ..deps import get_session, pagination
 from ..errors import ApiError
-from ..models import CrmAutomation
+from ..models import CrmAutomation, CrmTag, CrmUser
 from ..services.activity import diff_payload, log_activity, slim
 
 router = APIRouter(prefix="/api/automations", tags=["automations"])
@@ -57,6 +57,38 @@ class AutomationUpdate(BaseModel):
     actions: list[AutomationAction] | None = Field(default=None, max_length=10)
 
 
+async def _validate_actions(session: AsyncSession, actions: list[AutomationAction]) -> None:
+    """Reject references to missing tags or users at save time, not when the rule runs."""
+    for action in actions:
+        if action.type == "add_tag":
+            tag_id = _as_uuid(action.model_dump().get("tag_id"))
+            found = None
+            if tag_id is not None:
+                found = (
+                    await session.execute(select(CrmTag.id).where(CrmTag.id == tag_id))
+                ).first()
+            if found is None:
+                raise ApiError("INVALID_ACTION", "add_tag needs an existing tag_id", 422)
+        elif action.type == "assign_owner":
+            user_id = _as_uuid(action.model_dump().get("user_id"))
+            found = None
+            if user_id is not None:
+                found = (
+                    await session.execute(
+                        select(CrmUser.id).where(CrmUser.id == user_id, CrmUser.is_active.is_(True))
+                    )
+                ).first()
+            if found is None:
+                raise ApiError("INVALID_ACTION", "assign_owner needs an active user_id", 422)
+
+
+def _as_uuid(raw: object) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(str(raw))
+    except (ValueError, TypeError):
+        return None
+
+
 def _out(automation: CrmAutomation) -> AutomationOut:
     return AutomationOut(
         id=automation.id,
@@ -93,6 +125,7 @@ async def create_automation(
     admin: CurrentUser = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
+    await _validate_actions(session, payload.actions)
     automation = CrmAutomation(
         name=payload.name.strip(),
         is_active=payload.is_active,
@@ -134,6 +167,7 @@ async def update_automation(
     if payload.trigger_config is not None:
         automation.trigger_config = payload.trigger_config
     if payload.actions is not None:
+        await _validate_actions(session, payload.actions)
         automation.actions = [action.model_dump() for action in payload.actions]
     await session.commit()
     await session.refresh(automation)
