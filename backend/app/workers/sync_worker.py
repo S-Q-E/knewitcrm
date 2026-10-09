@@ -649,6 +649,25 @@ def _resolve_target(
     return stage, deal_status
 
 
+async def _last_blocked_target(session: AsyncSession, deal_id: uuid.UUID) -> str | None:
+    """Target stage of the latest bot_stage_blocked entry, to log each change once."""
+    row = (
+        await session.execute(
+            select(CrmActivityLog.diff)
+            .where(
+                CrmActivityLog.entity == "deal",
+                CrmActivityLog.entity_id == deal_id,
+                CrmActivityLog.action == "bot_stage_blocked",
+            )
+            .order_by(CrmActivityLog.created_at.desc(), CrmActivityLog.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if not isinstance(row, dict):
+        return None
+    return row.get("target_stage_id")
+
+
 async def _sync_existing_deal(
     session: AsyncSession,
     funnel: _Funnel,
@@ -671,22 +690,23 @@ async def _sync_existing_deal(
         )
         return
     if deal.stage_locked:
-        session.add(
-            CrmActivityLog(
-                actor_id=None,
-                entity="deal",
-                entity_id=deal.id,
-                action="bot_stage_blocked",
-                diff={
-                    "lead_status": lead.get("status"),
-                    "lead_stage": lead.get("current_stage"),
-                    "target_stage_id": str(target_stage.id),
-                    "deal_stage_id": str(deal.stage_id),
-                },
+        if await _last_blocked_target(session, deal.id) != str(target_stage.id):
+            session.add(
+                CrmActivityLog(
+                    actor_id=None,
+                    entity="deal",
+                    entity_id=deal.id,
+                    action="bot_stage_blocked",
+                    diff={
+                        "lead_status": lead.get("status"),
+                        "lead_stage": lead.get("current_stage"),
+                        "target_stage_id": str(target_stage.id),
+                        "deal_stage_id": str(deal.stage_id),
+                    },
+                )
             )
-        )
-        stats.blocked += 1
-        await _notify_locked(session, deal, target_stage.id, manager_ids, stats)
+            stats.blocked += 1
+            await _notify_locked(session, deal, target_stage.id, manager_ids, stats)
         await _maybe_handover(
             session, lead, deal, state, manager_ids, auto_pause, handed_over, stats
         )

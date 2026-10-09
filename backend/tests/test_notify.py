@@ -389,3 +389,44 @@ async def test_overdue_reminder_not_recreated_after_read(client, settings):
             await session.execute(text("DELETE FROM crm_tasks WHERE id = :id"), {"id": task_id})
             await session.commit()
         await engine.dispose()
+
+
+async def test_bot_stage_blocked_logged_once_per_target(client, settings):
+    from backend.app.workers.sync_worker import run_sync_cycle
+
+    engine, factory = engine_factory(settings)
+    wa = _wa()
+    try:
+        await admin_csrf(client, settings)
+        await _insert_lead(factory, wa)
+        await run_sync(factory)
+        deal_id = await _deal_id(factory, wa)
+        async with factory() as session:
+            await session.execute(
+                text("UPDATE crm_deals SET stage_locked = TRUE WHERE id = :id"), {"id": deal_id}
+            )
+            await session.execute(
+                text(
+                    "UPDATE knewit_leads SET current_stage = 'ЗАПИСЬ', updated_at = now()"
+                    " WHERE whatsapp_id = :wa"
+                ),
+                {"wa": wa},
+            )
+            await session.commit()
+        for _ in range(5):
+            await run_sync_cycle(factory, force_full=True)
+        async with factory() as session:
+            count = (
+                await session.execute(
+                    text(
+                        "SELECT COUNT(*) FROM crm_activity_log"
+                        " WHERE entity = 'deal' AND entity_id = :id"
+                        " AND action = 'bot_stage_blocked'"
+                    ),
+                    {"id": deal_id},
+                )
+            ).scalar_one()
+        assert count == 1
+    finally:
+        await _purge_lead(factory, wa)
+        await engine.dispose()
