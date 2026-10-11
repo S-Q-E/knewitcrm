@@ -84,6 +84,17 @@ export function useDeleteTask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.del(`/api/tasks/${id}`),
+    onSuccess: (_data, id) => {
+      queryClient.setQueriesData<{ items: Task[]; total: number }>(
+        { queryKey: ["tasks"] },
+        (old) =>
+          old && {
+            ...old,
+            items: old.items.filter((task) => task.id !== id),
+            total: Math.max(0, old.total - 1),
+          },
+      );
+    },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
       void queryClient.invalidateQueries({ queryKey: ["timeline"] });
