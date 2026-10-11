@@ -76,7 +76,7 @@ async def _notifications(factory, email: str) -> list[dict]:
         return [dict(row) for row in rows]
 
 
-async def test_handover_creates_task_and_notification(client, settings):
+async def test_handover_notifies_without_task(client, settings):
     engine, factory = engine_factory(settings)
     wa = _wa()
     try:
@@ -96,7 +96,6 @@ async def test_handover_creates_task_and_notification(client, settings):
                     text("SELECT id FROM crm_deals WHERE contact_id = :id"), {"id": contact_id}
                 )
             ).scalar_one()
-            # Drop the unassigned first-pass task so the owned pass recreates it.
             await session.execute(
                 text("DELETE FROM crm_tasks WHERE deal_id = :id"), {"id": deal_id}
             )
@@ -121,8 +120,7 @@ async def test_handover_creates_task_and_notification(client, settings):
                 .mappings()
                 .all()
             )
-            assert [t["title"] for t in tasks] == ["Ответить клиенту"]
-            assert str(tasks[0]["assignee_id"]) == owner["user"]["id"]
+            assert tasks == []
             paused = (
                 await session.execute(
                     text("SELECT bot_paused FROM crm_conversation_state WHERE whatsapp_id = :wa"),
@@ -140,7 +138,7 @@ async def test_handover_creates_task_and_notification(client, settings):
         ]
         assert len(handovers) == 1 and not handovers[0]["read"]
 
-        # Idempotent: rerun creates no duplicate task or notification.
+        # Idempotent: rerun creates no task and no duplicate notification.
         await run_sync(factory)
         async with factory() as session:
             count = (
@@ -148,7 +146,7 @@ async def test_handover_creates_task_and_notification(client, settings):
                     text("SELECT COUNT(*) FROM crm_tasks WHERE deal_id = :id"), {"id": deal_id}
                 )
             ).scalar()
-            assert count == 1
+            assert count == 0
         notes = await _notifications(factory, owner["email"])
         handovers = [
             n

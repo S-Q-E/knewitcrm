@@ -28,7 +28,6 @@ from ..models import (
     CrmDealStageHistory,
     CrmPipeline,
     CrmStage,
-    CrmTask,
 )
 from ..services.event_bus import bus
 from ..services.notifications import active_managers, notify
@@ -422,11 +421,6 @@ async def _sync_batch(
     tops: dict[uuid.UUID, Any] = {}
     if pending:
         tops = await _stage_tops(session, list({target.id for _, _, target, _ in pending}))
-    open_tasks = (
-        await _open_handover_tasks(session, [deal.id for deal in managed.values()])
-        if managed
-        else set()
-    )
 
     new_contact_ids: set[uuid.UUID] = set()
     if pending:
@@ -487,7 +481,6 @@ async def _sync_batch(
                 states[lead["whatsapp_id"]],
                 manager_ids,
                 auto_pause,
-                open_tasks,
                 stats,
             )
 
@@ -507,7 +500,6 @@ async def _sync_batch(
             stats,
             manager_ids,
             auto_pause,
-            open_tasks,
         )
 
 
@@ -604,24 +596,6 @@ async def _stage_tops(session: AsyncSession, stage_ids: list[uuid.UUID]) -> dict
     return {stage_id: top for top, stage_id in rows}
 
 
-async def _open_handover_tasks(session: AsyncSession, deal_ids: list[uuid.UUID]) -> set[uuid.UUID]:
-    if not deal_ids:
-        return set()
-    return set(
-        (
-            await session.execute(
-                select(CrmTask.deal_id).where(
-                    CrmTask.deal_id.in_(deal_ids),
-                    CrmTask.done_at.is_(None),
-                    CrmTask.title == "Ответить клиенту",
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-
-
 def _resolve_target(
     funnel: _Funnel, status: str | None, current_stage: str | None
 ) -> tuple[CrmStage, str]:
@@ -653,7 +627,6 @@ async def _sync_existing_deal(
     stats: SyncStats,
     manager_ids: list[uuid.UUID],
     auto_pause: Any,
-    open_tasks: set[uuid.UUID],
 ) -> None:
     target_stage, target_status = _resolve_target(
         funnel, lead.get("status"), lead.get("current_stage")
@@ -661,9 +634,7 @@ async def _sync_existing_deal(
     deal.custom = _merge_bot_custom(deal.custom, lead)
     _sync_deal_trial(deal, lead.get("trial_datetime"))
     if deal.stage_id == target_stage.id and deal.status == target_status:
-        await _maybe_handover(
-            session, lead, deal, state, manager_ids, auto_pause, open_tasks, stats
-        )
+        await _maybe_handover(session, lead, deal, state, manager_ids, auto_pause, stats)
         return
     if deal.stage_locked:
         session.add(
@@ -682,9 +653,7 @@ async def _sync_existing_deal(
         )
         stats.blocked += 1
         await _notify_locked(session, deal, target_stage.id, manager_ids, stats)
-        await _maybe_handover(
-            session, lead, deal, state, manager_ids, auto_pause, open_tasks, stats
-        )
+        await _maybe_handover(session, lead, deal, state, manager_ids, auto_pause, stats)
         return
 
     from_stage_id = deal.stage_id
@@ -713,7 +682,7 @@ async def _sync_existing_deal(
         }
     )
     _count_terminal(stats, target_status)
-    await _maybe_handover(session, lead, deal, state, manager_ids, auto_pause, open_tasks, stats)
+    await _maybe_handover(session, lead, deal, state, manager_ids, auto_pause, stats)
 
 
 def _count_terminal(stats: SyncStats, status: str) -> None:
@@ -762,24 +731,11 @@ async def _maybe_handover(
     state: CrmConversationState,
     manager_ids: list[uuid.UUID],
     auto_pause: Any,
-    open_tasks: set[uuid.UUID],
     stats: SyncStats,
 ) -> None:
-    """D5: on МЕНЕДЖЕР status create an urgent task + notify; pause only if set."""
+    """On МЕНЕДЖЕР status notify managers; pause only if set. No automatic task."""
     if lead.get("status") != STATUS_MANAGER:
         return
-    if deal.id not in open_tasks:
-        session.add(
-            CrmTask(
-                deal_id=deal.id,
-                contact_id=deal.contact_id,
-                assignee_id=deal.owner_id,
-                type="message",
-                title="Ответить клиенту",
-                due_at=datetime.now(UTC) + timedelta(hours=1),
-            )
-        )
-        open_tasks.add(deal.id)
     if deal.owner_id is not None:
         targets = [deal.owner_id]
     else:
