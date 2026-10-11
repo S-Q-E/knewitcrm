@@ -108,10 +108,12 @@ class RealtimePoller:
                 .mappings()
                 .all()
             )
+        fresh: list[int] = []
         for row in messages:
             if row["id"] in self._seen_messages:
                 continue
             self._seen_messages.add(row["id"])
+            fresh.append(row["id"])
             self._last_message_id = max(self._last_message_id, row["id"])
             self._bus.publish(
                 "new_message",
@@ -123,6 +125,8 @@ class RealtimePoller:
                 },
             )
             stats["messages"] += 1
+        if fresh:
+            await self._refresh_dialog_state(fresh)
         for row in events:
             if row["id"] in self._seen_events:
                 continue
@@ -143,6 +147,28 @@ class RealtimePoller:
         self._seen_events = {i for i in self._seen_events if i > _floor(self._last_event_id)}
         await self._maybe_save()
         return stats
+
+    async def _refresh_dialog_state(self, message_ids: list[int]) -> None:
+        """Keep dialog preview and order in step with new messages, incl. manager's phone."""
+        async with self._factory() as session:
+            await session.execute(
+                text(
+                    "UPDATE crm_conversation_state AS s"
+                    " SET last_message_at = m.created_at,"
+                    "     last_message_direction = m.direction,"
+                    "     last_message_preview = LEFT(m.content, 200)"
+                    " FROM ("
+                    "   SELECT DISTINCT ON (whatsapp_id) whatsapp_id, direction,"
+                    "     content, created_at"
+                    "   FROM knewit_messages WHERE id = ANY(:ids)"
+                    "   ORDER BY whatsapp_id, created_at DESC, id DESC"
+                    " ) AS m"
+                    " WHERE s.whatsapp_id = m.whatsapp_id"
+                    "   AND (s.last_message_at IS NULL OR s.last_message_at <= m.created_at)"
+                ),
+                {"ids": message_ids},
+            )
+            await session.commit()
 
     async def _maybe_save(self) -> None:
         if not self._persist:
