@@ -79,15 +79,27 @@ export function DealsPage() {
   const contacts = useQuery({
     queryKey: ["contacts-map"],
     queryFn: () =>
-      api.get<{ items: { id: string; name: string | null; phone: string | null }[] }>(
-        "/api/contacts?limit=500",
-      ),
+      api.get<{
+        items: {
+          id: string;
+          name: string | null;
+          phone: string | null;
+          whatsapp_id: string | null;
+        }[];
+      }>("/api/contacts?limit=500"),
     staleTime: 60_000,
   });
   const contactsById = useMemo(() => {
-    const map = new Map<string, { name: string | null; phone: string | null }>();
+    const map = new Map<
+      string,
+      { name: string | null; phone: string | null; whatsappId: string | null }
+    >();
     for (const contact of contacts.data?.items ?? []) {
-      map.set(contact.id, { name: contact.name, phone: contact.phone });
+      map.set(contact.id, {
+        name: contact.name,
+        phone: contact.phone,
+        whatsappId: contact.whatsapp_id,
+      });
     }
     return map;
   }, [contacts.data]);
@@ -164,7 +176,10 @@ export function DealsPage() {
           onQuickCreate={setCreateStageId}
           onOpen={(deal) => setOpenDealId(deal.id)}
           onNote={setNoteDeal}
-          onWrite={(deal) => navigate(`/dialogs?deal=${deal.id}`)}
+          onWrite={(deal) => {
+            const whatsappId = contactsById.get(deal.contact_id)?.whatsappId;
+            navigate(whatsappId ? `/dialogs?wa=${encodeURIComponent(whatsappId)}` : "/dialogs");
+          }}
         />
       ) : (
         <DealsListView
