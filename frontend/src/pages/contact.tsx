@@ -12,6 +12,7 @@ import {
 import { useCreateNote, useCustomFields, useTags, useUsersLite } from "@/api/deals";
 import { api } from "@/api/client";
 import { toastError, useToast } from "@/components/toast";
+import { ItemBody } from "@/components/deals/timeline";
 import { Button } from "@/components/ui/button";
 
 export function ContactPage() {
@@ -221,13 +222,7 @@ export function ContactPage() {
                 key={item.key}
                 className="rounded border border-slate-100 p-2 dark:border-slate-800"
               >
-                <span className="mr-2 rounded bg-slate-100 px-1 text-xs dark:bg-slate-800">
-                  {item.kind}
-                </span>
-                <span className="text-slate-500">{new Date(item.at).toLocaleString("ru-RU")}</span>
-                <pre className="mt-1 max-h-24 overflow-auto text-xs">
-                  {JSON.stringify(item.data, null, 1)}
-                </pre>
+                <ItemBody item={item} />
               </li>
             ))}
             {timeline.data.items.length === 0 && <li className="text-slate-500">Пока пусто.</li>}

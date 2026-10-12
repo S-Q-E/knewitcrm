@@ -6,8 +6,54 @@ import { Button } from "@/components/ui/button";
 import { formatDate, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-function ItemBody({ item }: { item: TimelineItem }) {
-  const data = item.data as Record<string, unknown>;
+const EVENT_LABELS: Record<string, string> = {
+  stage_entered: "Вход в этап",
+  stage_exited: "Выход из этапа",
+  transferred_to_manager: "Передан менеджеру",
+  trial_booked: "Запись на пробный",
+  objection_raised: "Возражение",
+  followup_sent: "Отправлен фоллоу-ап",
+  lead_lost: "Лид потерян",
+  sale_won: "Оплата получена",
+};
+
+const ACTIVITY_LABELS: Record<string, string> = {
+  bot_paused: "Бот поставлен на паузу",
+  bot_resumed: "Бот возобновлён",
+  bot_stage_blocked: "Бот не смог сменить этап: стадия закреплена",
+  deal_created: "Сделка создана",
+  deal_updated: "Сделка изменена",
+  deal_assigned: "Назначен ответственный",
+  deal_deleted: "Сделка удалена",
+  deal_restored: "Сделка восстановлена",
+  deal_unlocked: "Стадия разблокирована",
+  contact_created: "Контакт создан",
+  contact_updated: "Контакт изменён",
+  contact_merged: "Контакты объединены",
+  contact_deleted: "Контакт удалён",
+  contact_restored: "Контакт восстановлен",
+  dialog_updated: "Диалог изменён",
+  note_created: "Заметка добавлена",
+  note_updated: "Заметка изменена",
+  note_deleted: "Заметка удалена",
+  task_created: "Задача создана",
+  task_updated: "Задача изменена",
+  task_deleted: "Задача удалена",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  bot: "бот",
+  manual: "вручную",
+  system: "система",
+};
+
+function humanize(code: string): string {
+  const text = code.replace(/_/g, " ").trim();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+export function ItemBody({ item }: { item: { kind: string; at: string; data?: unknown } }) {
+  const data = (item.data ?? {}) as Record<string, unknown>;
   switch (item.kind) {
     case "message": {
       const incoming = data.direction === "in";
@@ -38,7 +84,10 @@ function ItemBody({ item }: { item: TimelineItem }) {
     case "event":
       return (
         <p className="text-sm">
-          <span className="font-medium">{String(data.event_type)}</span>
+          <span className="font-medium">
+            {EVENT_LABELS[String(data.event_type)] ??
+              humanize(String(data.event_type ?? "событие"))}
+          </span>
           {data.from_stage || data.to_stage ? (
             <span className="text-slate-500">
               {" "}
@@ -53,10 +102,12 @@ function ItemBody({ item }: { item: TimelineItem }) {
       const from = data.from_stage as { name?: string } | null;
       return (
         <p className="text-sm">
-          Стадия: <span className="font-medium">{to?.name ?? "—"}</span>
+          {from?.name ? "Стадия: " : "Сделка создана: "}
+          <span className="font-medium">{to?.name ?? "—"}</span>
           {from?.name ? <span className="text-slate-500"> (была: {from.name})</span> : null}{" "}
           <span className="text-xs text-slate-400">
-            · {String(data.source)} · {String(data.changed_by_name ?? "бот")}
+            · {SOURCE_LABELS[String(data.source)] ?? String(data.source ?? "")} ·{" "}
+            {String(data.changed_by_name ?? "бот")}
           </span>
         </p>
       );
@@ -88,7 +139,7 @@ function ItemBody({ item }: { item: TimelineItem }) {
     default:
       return (
         <p className="text-sm text-slate-500">
-          {String(data.action ?? item.kind)}{" "}
+          {ACTIVITY_LABELS[String(data.action)] ?? humanize(String(data.action ?? item.kind))}{" "}
           <span className="text-xs text-slate-400">{String(data.actor_name ?? "")}</span>
         </p>
       );
