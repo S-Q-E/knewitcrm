@@ -215,7 +215,8 @@ function TaskRow({ task, onEdit }: { task: Task; onEdit: (task: Task) => void })
       <button
         type="button"
         aria-label={`Удалить ${task.title}`}
-        className="shrink-0 text-xs text-slate-400 hover:text-red-600"
+        disabled={remove.isPending}
+        className="shrink-0 text-xs text-slate-400 hover:text-red-600 disabled:opacity-50"
         onClick={() => remove.mutate(task.id, { onError: (error) => toastError(push, error) })}
       >
         ×

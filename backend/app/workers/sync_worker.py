@@ -26,12 +26,9 @@ from ..models import (
     CrmConversationState,
     CrmDeal,
     CrmDealStageHistory,
-    CrmNotification,
     CrmPipeline,
     CrmStage,
-    CrmTask,
 )
-from ..services.activity import log_activity
 from ..services.event_bus import bus
 from ..services.notifications import active_managers, notify
 
@@ -48,7 +45,6 @@ BATCH_SIZE = 500
 # a full reconciliation runs when the last full pass is older than this.
 OVERLAP_WINDOW = timedelta(minutes=2)
 FULL_RESCAN_INTERVAL = timedelta(minutes=10)
-HANDOVER_ACTION = "handover_triggered"
 
 # knewit_leads columns mirrored into contact/deal custom payloads.
 # Only these keys are written by the sync; any other custom keys belong to
@@ -425,11 +421,6 @@ async def _sync_batch(
     tops: dict[uuid.UUID, Any] = {}
     if pending:
         tops = await _stage_tops(session, list({target.id for _, _, target, _ in pending}))
-    handed_over = (
-        await _handed_over_deal_ids(session, [deal.id for deal in managed.values()])
-        if managed
-        else set()
-    )
 
     new_contact_ids: set[uuid.UUID] = set()
     if pending:
@@ -490,7 +481,6 @@ async def _sync_batch(
                 states[lead["whatsapp_id"]],
                 manager_ids,
                 auto_pause,
-                handed_over,
                 stats,
             )
 
@@ -510,7 +500,6 @@ async def _sync_batch(
             stats,
             manager_ids,
             auto_pause,
-            handed_over,
         )
 
 
@@ -607,26 +596,6 @@ async def _stage_tops(session: AsyncSession, stage_ids: list[uuid.UUID]) -> dict
     return {stage_id: top for top, stage_id in rows}
 
 
-async def _handed_over_deal_ids(session: AsyncSession, deal_ids: list[uuid.UUID]) -> set[uuid.UUID]:
-    """Deals already handed over, ever: a handover task (done or not) or a log entry."""
-    if not deal_ids:
-        return set()
-    tasks = await session.execute(
-        select(CrmTask.deal_id).where(
-            CrmTask.deal_id.in_(deal_ids),
-            CrmTask.title == "Ответить клиенту",
-        )
-    )
-    logged = await session.execute(
-        select(CrmActivityLog.entity_id).where(
-            CrmActivityLog.entity == "deal",
-            CrmActivityLog.action == HANDOVER_ACTION,
-            CrmActivityLog.entity_id.in_(deal_ids),
-        )
-    )
-    return set(tasks.scalars().all()) | set(logged.scalars().all())
-
-
 def _resolve_target(
     funnel: _Funnel, status: str | None, current_stage: str | None
 ) -> tuple[CrmStage, str]:
@@ -677,7 +646,6 @@ async def _sync_existing_deal(
     stats: SyncStats,
     manager_ids: list[uuid.UUID],
     auto_pause: Any,
-    handed_over: set[uuid.UUID],
 ) -> None:
     target_stage, target_status = _resolve_target(
         funnel, lead.get("status"), lead.get("current_stage")
@@ -685,9 +653,7 @@ async def _sync_existing_deal(
     deal.custom = _merge_bot_custom(deal.custom, lead)
     _sync_deal_trial(deal, lead.get("trial_datetime"))
     if deal.stage_id == target_stage.id and deal.status == target_status:
-        await _maybe_handover(
-            session, lead, deal, state, manager_ids, auto_pause, handed_over, stats
-        )
+        await _maybe_handover(session, lead, deal, state, manager_ids, auto_pause, stats)
         return
     if deal.stage_locked:
         if await _last_blocked_target(session, deal.id) != str(target_stage.id):
@@ -707,9 +673,7 @@ async def _sync_existing_deal(
             )
             stats.blocked += 1
             await _notify_locked(session, deal, target_stage.id, manager_ids, stats)
-        await _maybe_handover(
-            session, lead, deal, state, manager_ids, auto_pause, handed_over, stats
-        )
+        await _maybe_handover(session, lead, deal, state, manager_ids, auto_pause, stats)
         return
 
     from_stage_id = deal.stage_id
@@ -738,7 +702,7 @@ async def _sync_existing_deal(
         }
     )
     _count_terminal(stats, target_status)
-    await _maybe_handover(session, lead, deal, state, manager_ids, auto_pause, handed_over, stats)
+    await _maybe_handover(session, lead, deal, state, manager_ids, auto_pause, stats)
 
 
 def _count_terminal(stats: SyncStats, status: str) -> None:
@@ -787,68 +751,27 @@ async def _maybe_handover(
     state: CrmConversationState,
     manager_ids: list[uuid.UUID],
     auto_pause: Any,
-    handed_over: set[uuid.UUID],
     stats: SyncStats,
 ) -> None:
-    """D5/D15: the first МЕНЕДЖЕР status of a deal creates one urgent task and notifies once.
-
-    Later passes do nothing for the deal, even after the task is done or read.
-    The notification is also skipped when a notification with the same key already
-    exists for the recipient, read or not.
-    """
+    """On МЕНЕДЖЕР status notify managers; pause only if set. No automatic task."""
     if lead.get("status") != STATUS_MANAGER:
         return
-    if deal.id not in handed_over:
-        session.add(
-            CrmTask(
-                deal_id=deal.id,
-                contact_id=deal.contact_id,
-                assignee_id=deal.owner_id,
-                type="message",
-                title="Ответить клиенту",
-                due_at=datetime.now(UTC) + timedelta(hours=1),
-            )
-        )
-        await log_activity(
+    if deal.owner_id is not None:
+        targets = [deal.owner_id]
+    else:
+        targets = list(manager_ids)
+    stats.events.extend(
+        await notify(
             session,
-            None,
-            "deal",
-            deal.id,
-            HANDOVER_ACTION,
-            {"whatsapp_id": lead["whatsapp_id"]},
+            targets,
+            "manager_handover",
+            {
+                "deal_id": str(deal.id),
+                "whatsapp_id": lead["whatsapp_id"],
+                "dedupe_key": f"handover:{deal.id}",
+            },
         )
-        handed_over.add(deal.id)
-        if deal.owner_id is not None:
-            targets = [deal.owner_id]
-        else:
-            targets = list(manager_ids)
-        dedupe_key = f"handover:{deal.id}"
-        already = set(
-            (
-                await session.execute(
-                    select(CrmNotification.user_id).where(
-                        CrmNotification.type == "manager_handover",
-                        CrmNotification.dedupe_key == dedupe_key,
-                        CrmNotification.user_id.in_(targets),
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        targets = [user_id for user_id in targets if user_id not in already]
-        stats.events.extend(
-            await notify(
-                session,
-                targets,
-                "manager_handover",
-                {
-                    "deal_id": str(deal.id),
-                    "whatsapp_id": lead["whatsapp_id"],
-                    "dedupe_key": dedupe_key,
-                },
-            )
-        )
+    )
     if auto_pause is True and not state.bot_paused:
         state.bot_paused = True
         state.paused_at = datetime.now(UTC)

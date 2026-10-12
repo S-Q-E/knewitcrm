@@ -76,15 +76,35 @@ async def _notifications(factory, email: str) -> list[dict]:
         return [dict(row) for row in rows]
 
 
-async def test_handover_creates_task_and_notification(client, settings):
+async def test_handover_notifies_without_task(client, settings):
     engine, factory = engine_factory(settings)
     wa = _wa()
     try:
         token = await admin_csrf(client, settings)
         owner = await make_manager(client, token)
         await _insert_lead(factory, wa, "МЕНЕДЖЕР")
+        # Owner is unknown before sync; assign after backfill, then resync.
         await run_sync(factory)
-        deal_id = await _deal_id(factory, wa)
+        async with factory() as session:
+            contact_id = (
+                await session.execute(
+                    text("SELECT id FROM crm_contacts WHERE whatsapp_id = :wa"), {"wa": wa}
+                )
+            ).scalar_one()
+            deal_id = (
+                await session.execute(
+                    text("SELECT id FROM crm_deals WHERE contact_id = :id"), {"id": contact_id}
+                )
+            ).scalar_one()
+            await session.execute(
+                text("DELETE FROM crm_tasks WHERE deal_id = :id"), {"id": deal_id}
+            )
+            await session.execute(
+                text("UPDATE crm_deals SET owner_id = :owner WHERE id = :id"),
+                {"owner": owner["user"]["id"], "id": deal_id},
+            )
+            await session.commit()
+        await run_sync(factory)
 
         async with factory() as session:
             tasks = (
@@ -100,8 +120,7 @@ async def test_handover_creates_task_and_notification(client, settings):
                 .mappings()
                 .all()
             )
-            assert [t["title"] for t in tasks] == ["Ответить клиенту"]
-            assert tasks[0]["assignee_id"] is None
+            assert tasks == []
             paused = (
                 await session.execute(
                     text("SELECT bot_paused FROM crm_conversation_state WHERE whatsapp_id = :wa"),
@@ -119,7 +138,7 @@ async def test_handover_creates_task_and_notification(client, settings):
         ]
         assert len(handovers) == 1 and not handovers[0]["read"]
 
-        # Idempotent: rerun creates no duplicate task or notification.
+        # Idempotent: rerun creates no task and no duplicate notification.
         await run_sync(factory)
         async with factory() as session:
             count = (
@@ -127,7 +146,7 @@ async def test_handover_creates_task_and_notification(client, settings):
                     text("SELECT COUNT(*) FROM crm_tasks WHERE deal_id = :id"), {"id": deal_id}
                 )
             ).scalar()
-            assert count == 1
+            assert count == 0
         notes = await _notifications(factory, owner["email"])
         handovers = [
             n
@@ -201,7 +220,7 @@ async def test_handover_once_per_deal_after_task_done_and_read(client, settings)
                 .mappings()
                 .all()
             )
-        assert task_count == 1
+        assert task_count == 0
         assert per_user and all(row["n"] == 1 for row in per_user)
         assert str(owner["user"]["id"]) in {str(row["user_id"]) for row in per_user}
     finally:
