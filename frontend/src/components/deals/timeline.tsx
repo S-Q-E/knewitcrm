@@ -52,6 +52,19 @@ function humanize(code: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+function outgoingLabel(data: Record<string, unknown>): string {
+  if ((data.direction as string) === "in") {
+    return "входящее";
+  }
+  // author_kind comes from the backend ('manager' only for message_type='manager'
+  // rows, i.e. CRM outbox mirrors). Anything else outgoing keeps the old label:
+  // phone-sent rows are indistinguishable from bot replies (both 'out'/'chat').
+  if ((data.author_kind as string) === "manager") {
+    return "менеджер";
+  }
+  return "бот";
+}
+
 export function ItemBody({ item }: { item: { kind: string; at: string; data?: unknown } }) {
   const data = (item.data ?? {}) as Record<string, unknown>;
   switch (item.kind) {
@@ -67,8 +80,7 @@ export function ItemBody({ item }: { item: { kind: string; at: string; data?: un
           )}
         >
           <p className="mb-1 text-[11px] opacity-70">
-            {String(data.author_name ?? "")} ·{" "}
-            {(data.direction as string) === "in" ? "входящее" : "бот"}
+            {String(data.author_name ?? "")} · {outgoingLabel(data)}
             {data.stage_at_moment ? ` · ${String(data.stage_at_moment)}` : ""}
           </p>
           <p className="whitespace-pre-wrap">{String(data.body ?? "")}</p>
