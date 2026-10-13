@@ -17,9 +17,9 @@ const buttonVariants = cva(
         danger: "bg-red-600 text-white hover:bg-red-500",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 px-3 text-xs",
-        icon: "h-9 w-9",
+        default: "h-11 px-4 py-2 md:h-9",
+        sm: "h-9 px-3 text-xs md:h-8",
+        icon: "h-11 w-11 md:h-9 md:w-9",
       },
     },
     defaultVariants: { variant: "default", size: "default" },

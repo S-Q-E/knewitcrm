@@ -63,7 +63,7 @@ function CustomValueInput({
       <select
         value={typeof value === "string" ? value : ""}
         onChange={(event) => onChange(event.target.value || null)}
-        className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+        className="h-11 md:h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
       >
         <option value="">—</option>
         {field.options.map((option) => (
@@ -292,7 +292,7 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
           <select
             value={(draft?.owner_id as string) ?? deal.owner_id ?? ""}
             onChange={(event) => edit("owner_id", event.target.value || null)}
-            className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+            className="h-11 md:h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
           >
             <option value="">Без ответственного</option>
             {users.data?.items.map((user) => (
@@ -451,7 +451,7 @@ function StageSelect({ deal, onChange }: { deal: Deal; onChange: (stageId: strin
     <select
       value={deal.stage_id}
       onChange={(event) => onChange(event.target.value)}
-      className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+      className="h-11 md:h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
     >
       <StageOptions pipelineId={deal.pipeline_id} />
     </select>

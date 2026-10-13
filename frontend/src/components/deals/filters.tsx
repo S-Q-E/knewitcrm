@@ -75,7 +75,7 @@ export function DealFiltersBar({ filters, onChange }: FiltersProps) {
         aria-label="Ответственный"
         value={filters.owner_id ?? ""}
         onChange={(event) => set({ owner_id: event.target.value || undefined })}
-        className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+        className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
       >
         <option value="">Все ответственные</option>
         {users.data?.items.map((user) => (
@@ -88,7 +88,7 @@ export function DealFiltersBar({ filters, onChange }: FiltersProps) {
         aria-label="Тег"
         value={filters.tag?.[0] ?? ""}
         onChange={(event) => set({ tag: event.target.value ? [event.target.value] : [] })}
-        className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+        className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
       >
         <option value="">Все теги</option>
         {tags.data?.items.map((tag) => (
@@ -101,7 +101,7 @@ export function DealFiltersBar({ filters, onChange }: FiltersProps) {
         aria-label="Источник"
         value={filters.contact_source ?? ""}
         onChange={(event) => set({ contact_source: event.target.value || undefined })}
-        className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+        className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
       >
         <option value="">Все источники</option>
         <option value="bot">Бот</option>

@@ -155,7 +155,7 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
             aria-label="Массово: стадия"
             value={bulkStage}
             onChange={(event) => setBulkStage(event.target.value)}
-            className="h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
+            className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
           >
             <option value="">Стадия…</option>
             {[...stagesById.values()].map((stage) => (
@@ -168,7 +168,7 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
             aria-label="Массово: ответственный"
             value={bulkOwner}
             onChange={(event) => setBulkOwner(event.target.value)}
-            className="h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
+            className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
           >
             <option value="">Ответственный…</option>
             {users.data?.items.map((user) => (
@@ -181,7 +181,7 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
             aria-label="Массово: тег"
             value={bulkTag}
             onChange={(event) => setBulkTag(event.target.value)}
-            className="h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
+            className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
           >
             <option value="">Тег…</option>
             {tags.data?.items.map((tag) => (
@@ -194,7 +194,7 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
             aria-label="Массово: закрыть как отказ"
             value={bulkReason}
             onChange={(event) => setBulkReason(event.target.value)}
-            className="h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
+            className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
           >
             <option value="">Закрыть как отказ…</option>
             {reasons.data?.items.map((reason) => (

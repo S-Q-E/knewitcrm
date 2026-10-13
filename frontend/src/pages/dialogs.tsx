@@ -242,7 +242,7 @@ export function DialogsPage() {
                 aria-label="Ответственный"
                 value={dialog.data.assigned_to ?? ""}
                 onChange={(event) => assign(dialog.data.whatsapp_id, event.target.value)}
-                className="h-8 rounded-md border border-slate-200 bg-white px-1 text-xs dark:border-slate-700 dark:bg-slate-900"
+                className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 text-base md:text-xs dark:border-slate-700 dark:bg-slate-900"
               >
                 <option value="">Без ответственного</option>
                 {users.data?.items.map((user) => (

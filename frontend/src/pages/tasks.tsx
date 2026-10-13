@@ -118,7 +118,7 @@ function TaskModal({ task, onClose }: { task?: Task; onClose: () => void }) {
             Тип
             <select
               {...form.register("type")}
-              className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className="mt-1 h-11 md:h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
             >
               {Object.entries(TYPE_LABEL).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -136,7 +136,7 @@ function TaskModal({ task, onClose }: { task?: Task; onClose: () => void }) {
           Исполнитель
           <select
             {...form.register("assignee_id")}
-            className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+            className="mt-1 h-11 md:h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
           >
             <option value="">Без исполнителя</option>
             {users.data?.items.map((user) => (

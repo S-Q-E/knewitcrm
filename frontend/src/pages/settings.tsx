@@ -9,7 +9,7 @@ import { ProfileTab } from "@/pages/settings_profile";
 import { cn } from "@/lib/utils";
 
 export const inputClass =
-  "h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900";
+  "h-11 md:h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900";
 
 export function ModalShell({
   title,

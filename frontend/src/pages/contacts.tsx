@@ -201,13 +201,13 @@ function ContactsList() {
             setParams(next);
             setOffset(0);
           }}
-          className="h-9 w-72 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+          className="h-11 md:h-9 w-72 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
         />
         <select
           aria-label="Ответственный"
           value={ownerId}
           onChange={(e) => setOwnerId(e.target.value)}
-          className="h-9 rounded-md border border-slate-200 bg-white px-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+          className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-1 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
         >
           <option value="">Все ответственные</option>
           {users.data?.items.map((u) => (
@@ -220,7 +220,7 @@ function ContactsList() {
           aria-label="Источник"
           value={source}
           onChange={(e) => setSource(e.target.value)}
-          className="h-9 rounded-md border border-slate-200 bg-white px-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+          className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-1 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
         >
           <option value="">Все источники</option>
           <option value="bot">Бот</option>
@@ -278,7 +278,7 @@ function ContactsList() {
           placeholder="Название вида…"
           value={viewName}
           onChange={(e) => setViewName(e.target.value)}
-          className="h-8 w-40 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+          className="h-11 md:h-8 w-40 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
         />
         <Button size="sm" variant="secondary" onClick={() => void saveView()}>
           Сохранить вид
@@ -306,7 +306,7 @@ function ContactsList() {
             aria-label="Массово: ответственный"
             value={bulkOwner}
             onChange={(e) => setBulkOwner(e.target.value)}
-            className="h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
+            className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
           >
             <option value="">Ответственный…</option>
             {users.data?.items.map((u) => (
@@ -319,7 +319,7 @@ function ContactsList() {
             aria-label="Массово: тег"
             value={bulkTag}
             onChange={(e) => setBulkTag(e.target.value)}
-            className="h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
+            className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
           >
             <option value="">Тег…</option>
             {tags.data?.items.map((t) => (
@@ -640,7 +640,7 @@ function ImportView() {
               <select
                 value={mapping[col] ?? "ignore"}
                 onChange={(e) => setMapping((prev) => ({ ...prev, [col]: e.target.value }))}
-                className="h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
+                className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
               >
                 {IMPORT_FIELDS.map((f) => (
                   <option key={f} value={f}>

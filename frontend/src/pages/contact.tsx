@@ -87,7 +87,7 @@ export function ContactPage() {
               <input
                 defaultValue={String(c[field] ?? "")}
                 onChange={(e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))}
-                className="h-9 rounded-md border border-slate-200 bg-white px-2 dark:border-slate-700 dark:bg-slate-900"
+                className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-2 dark:border-slate-700 dark:bg-slate-900"
               />
             </label>
           ))}
@@ -96,7 +96,7 @@ export function ContactPage() {
             <select
               defaultValue={c.owner_id ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, owner_id: e.target.value }))}
-              className="h-9 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
+              className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
             >
               <option value="">—</option>
               {users.data?.items.map((u) => (
@@ -117,7 +117,7 @@ export function ContactPage() {
                   onChange={(e) =>
                     setCustomForm((prev) => ({ ...prev, [def.key]: e.target.value }))
                   }
-                  className="h-9 rounded-md border border-slate-200 bg-white px-2 dark:border-slate-700 dark:bg-slate-900"
+                  className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-2 dark:border-slate-700 dark:bg-slate-900"
                 />
               </label>
             ))}
@@ -192,7 +192,7 @@ export function ContactPage() {
             value={noteBody}
             onChange={(e) => setNoteBody(e.target.value)}
             placeholder="Новая заметка…"
-            className="h-9 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+            className="h-11 md:h-9 flex-1 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
           />
           <Button
             size="sm"

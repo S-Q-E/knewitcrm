@@ -135,7 +135,7 @@ export function DealsPage() {
           aria-label="Воронка"
           value={activePipelineId}
           onChange={(event) => setPipelineId(event.target.value)}
-          className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm font-medium dark:border-slate-700 dark:bg-slate-900"
+          className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm font-medium dark:border-slate-700 dark:bg-slate-900"
         >
           {pipelines.data?.map((pipeline) => (
             <option key={pipeline.id} value={pipeline.id}>

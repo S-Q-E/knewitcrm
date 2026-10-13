@@ -49,7 +49,7 @@ export function LostReasonModal({
         aria-label="Причина отказа"
         value={reasonId}
         onChange={(event) => setReasonId(event.target.value)}
-        className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+        className="h-11 md:h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
       >
         <option value="">Выберите причину…</option>
         {reasons.data?.items.map((reason) => (

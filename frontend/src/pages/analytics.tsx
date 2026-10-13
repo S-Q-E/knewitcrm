@@ -354,7 +354,7 @@ export function AnalyticsPage() {
         <select
           value={pipelineId}
           onChange={(e) => setPipelineId(e.target.value)}
-          className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+          className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
           title="Воронка"
         >
           <option value="">Все воронки</option>
@@ -367,7 +367,7 @@ export function AnalyticsPage() {
         <select
           value={ownerId}
           onChange={(e) => setOwnerId(e.target.value)}
-          className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+          className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
           title="Ответственный"
         >
           <option value="">Все менеджеры</option>
