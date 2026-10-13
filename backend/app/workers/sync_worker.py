@@ -30,7 +30,7 @@ from ..models import (
     CrmStage,
 )
 from ..services.event_bus import bus
-from ..services.notifications import active_managers, notify
+from ..services.notifications import active_managers, already_notified, notify
 
 logger = logging.getLogger(__name__)
 
@@ -760,18 +760,25 @@ async def _maybe_handover(
         targets = [deal.owner_id]
     else:
         targets = list(manager_ids)
-    stats.events.extend(
-        await notify(
-            session,
-            targets,
-            "manager_handover",
-            {
-                "deal_id": str(deal.id),
-                "whatsapp_id": lead["whatsapp_id"],
-                "dedupe_key": f"handover:{deal.id}",
-            },
+    dedupe_key = f"handover:{deal.id}"
+    targets = [
+        user_id
+        for user_id in targets
+        if not await already_notified(session, user_id, "manager_handover", dedupe_key)
+    ]
+    if targets:
+        stats.events.extend(
+            await notify(
+                session,
+                targets,
+                "manager_handover",
+                {
+                    "deal_id": str(deal.id),
+                    "whatsapp_id": lead["whatsapp_id"],
+                    "dedupe_key": dedupe_key,
+                },
+            )
         )
-    )
     if auto_pause is True and not state.bot_paused:
         state.bot_paused = True
         state.paused_at = datetime.now(UTC)
