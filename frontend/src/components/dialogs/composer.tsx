@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,19 @@ export function ChatComposer({
   onSend,
 }: ChatComposerProps) {
   const [touched, setTouched] = useState(false);
+  // На тачскринах Enter переносит строку, отправка только кнопкой,
+  // иначе виртуальная клавиатура мешает набирать многострочные тексты.
+  const [coarsePointer, setCoarsePointer] = useState(false);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") {
+      return;
+    }
+    const query = window.matchMedia("(pointer: coarse)");
+    const update = () => setCoarsePointer(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   const trimmed = draft.trim();
   const showWarning = !botPaused && touched && trimmed.length > 0;
 
@@ -45,26 +58,36 @@ export function ChatComposer({
           aria-label="Сообщение клиенту"
           value={draft}
           rows={2}
-          placeholder="Сообщение клиенту… (Enter — отправить, Shift+Enter — перенос)"
+          placeholder={
+            coarsePointer
+              ? "Сообщение клиенту…"
+              : "Сообщение клиенту… (Enter — отправить, Shift+Enter — перенос)"
+          }
           disabled={sending}
           onChange={(event) => {
             setTouched(true);
             onDraftChange(event.target.value);
           }}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
+            if (event.key === "Enter" && !event.shiftKey && !coarsePointer) {
               event.preventDefault();
               submit();
             }
           }}
           className={cn(
-            "min-h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm",
+            "min-h-11 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-base",
             "placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400",
             "disabled:cursor-not-allowed disabled:opacity-60",
             "dark:border-slate-700 dark:bg-slate-900",
+            "md:min-h-9 md:text-sm",
           )}
         />
-        <Button type="button" onClick={submit} disabled={sending || trimmed.length === 0}>
+        <Button
+          type="button"
+          onClick={submit}
+          disabled={sending || trimmed.length === 0}
+          className="shrink-0 self-end"
+        >
           {sending ? "Отправка…" : "Отправить"}
         </Button>
       </div>
