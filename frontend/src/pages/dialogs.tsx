@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -32,7 +33,9 @@ export function DialogsPage() {
   const [params, setParams] = useSearchParams();
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<string | null>(params.get("wa"));
+  // Выбранный диалог живёт в URL (?wa=), поэтому системная кнопка «назад»
+  // возвращает к списку, а ссылка /dialogs?wa= со сделки открывает чат.
+  const selected = params.get("wa");
   const [draft, setDraft] = useState("");
   const [older, setOlder] = useState<{
     whatsappId: string;
@@ -71,15 +74,20 @@ export function DialogsPage() {
   useEffect(() => {
     if (selected) {
       markRead.mutate(selected);
-      setParams(selected ? { wa: selected } : {}, { replace: true });
     }
-    // Mark read once per opened dialog; params sync keeps deep links working.
+    // Mark read once per opened dialog.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
   const open = (whatsappId: string) => {
     setDraft("");
-    setSelected(whatsappId);
+    // Push, а не replace: системная кнопка «назад» вернёт к списку.
+    setParams({ wa: whatsappId });
+  };
+
+  const back = () => {
+    setDraft("");
+    setParams({});
   };
 
   const assign = (whatsappId: string, userId: string) => {
@@ -144,9 +152,9 @@ export function DialogsPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-9rem)] flex-col gap-3 md:flex-row">
-      <aside className="flex w-full flex-col gap-2 md:max-w-xs">
-        <div className="flex flex-wrap gap-1">
+    <div className="flex h-[calc(100dvh-14rem-env(safe-area-inset-bottom))] flex-col gap-3 md:h-[calc(100vh-9rem)] md:flex-row">
+      <aside className={cn("w-full flex-col gap-2 md:flex md:max-w-xs", selected ? "hidden" : "flex")}>
+        <div className="flex flex-nowrap gap-1 overflow-x-auto pb-1">
           {(
             [
               ["all", "Все"],
@@ -161,7 +169,7 @@ export function DialogsPage() {
               type="button"
               onClick={() => setFilter(id)}
               className={cn(
-                "rounded-full px-2.5 py-1 text-xs",
+                "min-h-9 shrink-0 rounded-full px-2.5 py-1 text-xs",
                 filter === id
                   ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
                   : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
@@ -223,12 +231,27 @@ export function DialogsPage() {
         </div>
       </aside>
 
-      <section className="flex min-h-0 flex-1 flex-col rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <section
+        className={cn(
+          "min-h-0 flex-1 flex-col rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900",
+          selected ? "flex" : "hidden md:flex",
+        )}
+      >
         {!selected || !dialog.data ? (
-          <p className="m-auto text-sm text-slate-500">Выберите диалог слева.</p>
+          <p className="m-auto hidden text-sm text-slate-500 md:block">Выберите диалог слева.</p>
         ) : (
           <>
             <header className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3 dark:border-slate-800">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Назад к списку"
+                onClick={back}
+                className="md:hidden"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">
                   {dialog.data.contact_name ?? dialog.data.whatsapp_id}
@@ -338,7 +361,7 @@ export function DialogsPage() {
                 ))}
             </div>
 
-            <div className="border-t border-slate-200 p-3 dark:border-slate-800">
+            <div className="border-t border-slate-200 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] dark:border-slate-800 md:pb-3">
               {quickReplies.data && quickReplies.data.items.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-1">
                   {quickReplies.data.items.map((reply) => (
