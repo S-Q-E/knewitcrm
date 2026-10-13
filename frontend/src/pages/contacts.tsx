@@ -78,9 +78,9 @@ export function ContactsPage() {
   };
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-xl font-bold">Контакты</h1>
-        <nav className="ml-4 flex gap-1 text-sm">
+        <nav className="flex flex-wrap gap-1 text-sm md:ml-4">
           {[
             ["list", "Список"],
             ["duplicates", "Дубликаты"],
@@ -201,7 +201,7 @@ function ContactsList() {
             setParams(next);
             setOffset(0);
           }}
-          className="h-11 md:h-9 w-72 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
+          className="h-11 w-full rounded-md border border-slate-200 bg-white px-2 text-base dark:border-slate-700 dark:bg-slate-900 sm:w-72 md:h-9 md:text-sm"
         />
         <select
           aria-label="Ответственный"

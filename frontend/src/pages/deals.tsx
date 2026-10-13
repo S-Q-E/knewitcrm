@@ -106,7 +106,7 @@ export function DealsPage() {
 
   if (pipelines.isPending) {
     return (
-      <div className="flex gap-3" aria-label="Загрузка">
+      <div className="flex gap-3 overflow-x-auto pb-4" aria-label="Загрузка">
         {[0, 1, 2].map((index) => (
           <div
             key={index}
