@@ -745,3 +745,36 @@ Why: protects against accidental data loss, keeps audit trail.
   The automations API rejects unknown `tag_id` and `user_id` with 422 at save time.
 - Behaviour change: an existing test that saved an automation with a made-up tag now creates a
   real tag first (test_automations.py::test_no_activity_automation).
+
+## D36. Outgoing messages from the manager's phone (no CRM code change)
+- Facts: n8n now captures phone-sent messages into `knewit_messages` as
+  `direction='out'`. The Chatflow payload (`outgoing_message.md`, untracked) carries
+  `wh_type='outgoing_message_phone'`, `is_me=true`, `from_where='phone'`, key `chatId`
+  and `type='chat'` — so a captured row is most likely `message_type='chat'`,
+  indistinguishable from a bot reply by CRM-visible columns.
+- Verified on a scratch DB (probe in `/tmp/opencode/phone_probe.py`, not committed):
+  unanswered logic, dialog preview/order (sync + realtime poller), realtime fan-out and
+  the SSE toast rule (only `direction='in'` pings) all key on `direction`, so phone
+  outgoing clears "ждёт ответа", refreshes the preview and never pings — no change needed.
+  Handover stays status-driven; analytics first response counts any later `out` as a reply.
+- Incremental sync refreshes a dialog only when the lead row is touched
+  (`GREATEST(updated_at, last_message_at)`); a capture that inserts only the message row
+  is picked up by the realtime poller (preview/direction, within seconds) and by the full
+  rescan (10 min), but not by the incremental pass. If the capture workflow also bumps the
+  lead timestamps like the incoming path, incremental sync stays prompt (owner question).
+- NOT done: mirror dedup. If the capture also logs CRM-originated API sends, the timeline
+  shows two rows (the CRM mirror `message_type='manager'` + the n8n row). Skipping the
+  mirror on a content/time match is unsafe: two genuinely identical manager messages inside
+  the window would collapse into one and lose the sender link. No heuristic without an
+  external message id column (n8n-side); left as a proposal for the owner.
+- NOT done: auto-pause on phone sends. Pausing on every new `out` row would also pause on
+  bot replies (same `out`/`chat` shape) — worse than not pausing. Needs the actual
+  `message_type`/payload mapping of the capture workflow first.
+
+## D37. Deal/contact timeline labels manager outgoing as manager
+- `ItemBody` (`frontend/src/components/deals/timeline.tsx`, shared with the contact
+  timeline) labeled every outgoing message "бот", including CRM manager sends whose
+  `author_kind` is already `'manager'`. The label now follows `author_kind` for outgoing
+  rows (`manager` → "менеджер", `bot` → "бот"); incoming stays "входящее".
+- Phone-sent rows still read as "бот": with `message_type='chat'` the backend cannot tell
+  them from bot replies, and the label does not invent a distinction.

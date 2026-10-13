@@ -335,6 +335,18 @@
   The threshold was not changed.
 - Not done: B-15…B-19 and the other P3 items, by PROMPT rules.
 
+## Step 21 — outgoing from phone (branch fix/phone-outgoing, 2026-10-13)
+- Note: the task asked for «Step 19», but Steps 19–20 are taken (audit fixes), so this is Step 21.
+- Проверено на fix_scratch2 (зонд `/tmp/opencode/phone_probe.py`, не коммитится):
+  дубли зеркало+n8n (2 строки при логировании API-отправок), sync/poller превью и
+  направление, сброс needs_reply, realtime-события, author_kind='bot' для phone-строк,
+  инкрементальный sync пропускает лид без bump меток (leads_seen=0).
+- Исправлено: подпись исходящих менеджера в ленте сделки/контакта («бот» → «менеджер»
+  по author_kind; `timeline.tsx::outgoingLabel` + `timeline.test.tsx`, падал до фикса).
+- Не делалось (см. D36): эвристический дедуп зеркала, автопауза по phone-строкам,
+  переразметка phone-строк как менеджера в backend.
+- [ ] Открытые вопросы владельцу — в итоговом отчёте.
+
 ## Step 16 — Final audit [todo]
 
 ## Deferred
