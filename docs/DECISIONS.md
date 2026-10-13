@@ -701,6 +701,20 @@ Why: protects against accidental data loss, keeps audit trail.
 - Open before any change: payloads for an operator message from the phone, a CRM send, an
   API send, and a bot reply (roadmap P0-1′), plus owner permission to add a workflow or a
   column in the n8n database. Live n8n is not changed.
+- Уточнение 2026-10-13 (тесты владельца, ветка fix/phone-outgoing): захват писем с
+  телефона в n8n работает — все сообщения, включая отправленные менеджером с телефона,
+  попадают в `knewit_messages`, т.е. полная переписка в CRM есть (см. ниже D36). Payload
+  phone-события: `event_type`/`wh_type='outgoing_message_phone'`, `is_me=true`,
+  `from_where='phone'`, `type='chat'`, `chat_id` и `_raw.chatId` — ID чата клиента,
+  `from` — номер бизнеса, `message_id` — внешний ID (например `2AFB4628A26060C1ED32`),
+  поля `operator_takeover`/`ai_pause_triggered` в тесте false/пустые. `message_type`
+  таких строк в `knewit_messages` неизвестен (вероятно `'chat'`), поэтому в CRM они не
+  отличаются от ответов бота. Предложение (открыто, без решения владельца в CRM не
+  делать): n8n пишет отдельное значение (например `'operator'` — `varchar(20)` без
+  check, схема позволяет), тогда CRM подпишет «менеджер с телефона» и сможет ставить
+  автопаузу. Открыт и вопрос, что означают `operator_takeover`/`ai_pause_triggered`
+  (Chatflow, возможно, сам определяет перехват оператором; не проверено). Тест паузы:
+  кнопка «Пауза» в CRM останавливает бота (владелец подтвердил).
 
 ## D32. Handover once per deal (B-01, audit fix)
 - Decision: a deal is handed over to a manager once, the first time its bot status becomes
@@ -715,6 +729,10 @@ Why: protects against accidental data loss, keeps audit trail.
   key `handover:<deal_id>`, read or not.
 - Not changed: the `auto_pause_on_manager` pause still runs on each pass while the bot is
   not paused (as before).
+- Починка 2026-10-13 (ветка fix/phone-outgoing, коммит «B-01: дедуп …»): `notify()`
+  дедупит только непрочитанные (частичный unique-индекс `WHERE read_at IS NULL`),
+  поэтому `_maybe_handover` теперь заранее отсекает получателей через
+  `already_notified` (все уведомления, в т.ч. прочитанные); автопауза без изменений.
 - Existing deals: those already in МЕНЕДЖЕР with a task (done or not) are treated as handed
   over and get nothing new. Deals with no task yet get one on the next pass.
 
@@ -770,6 +788,13 @@ Why: protects against accidental data loss, keeps audit trail.
 - NOT done: auto-pause on phone sends. Pausing on every new `out` row would also pause on
   bot replies (same `out`/`chat` shape) — worse than not pausing. Needs the actual
   `message_type`/payload mapping of the capture workflow first.
+- Уточнение 2026-10-13 (тесты владельца): Chatflow Trigger НЕ подписан на события
+  «исходящее через API» — сообщения CRM и ответы бота повторно через n8n не приходят,
+  риск дублей «зеркало+n8n» снимается. Захват с телефона работает (все сообщения,
+  включая менеджера с телефона, попадают в `knewit_messages`); тест паузы пройден —
+  кнопка «Пауза» в CRM останавливает бота. Открыто: предложение писать для phone-строк
+  отдельное `message_type` (например `'operator'`) и вопрос по `operator_takeover`
+  (см. уточнение D31).
 
 ## D37. Deal/contact timeline labels manager outgoing as manager
 - `ItemBody` (`frontend/src/components/deals/timeline.tsx`, shared with the contact
@@ -778,3 +803,6 @@ Why: protects against accidental data loss, keeps audit trail.
   rows (`manager` → "менеджер", `bot` → "бот"); incoming stays "входящее".
 - Phone-sent rows still read as "бот": with `message_type='chat'` the backend cannot tell
   them from bot replies, and the label does not invent a distinction.
+- Уточнение 2026-10-13: различие появится, только если n8n начнёт писать для phone-строк
+  отдельное `message_type` (предложение `'operator'`, открыто, см. D31) — тогда подпись
+  «менеджер с телефона» и автопауза делаются в CRM по этому значению.
