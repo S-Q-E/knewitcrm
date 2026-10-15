@@ -363,9 +363,9 @@ async def create_deal(
         owner_id = await pick_assignee(session)
     definitions = await load_definitions(session, ENTITY_DEAL)
     validate_custom_values(ENTITY_DEAL, payload.custom, definitions)
-    top = (
+    bottom = (
         await session.execute(
-            select(func.max(CrmDeal.position)).where(
+            select(func.min(CrmDeal.position)).where(
                 CrmDeal.stage_id == stage.id, CrmDeal.deleted_at.is_(None)
             )
         )
@@ -380,7 +380,7 @@ async def create_deal(
         owner_id=owner_id,
         status=DEAL_STATUS_OPEN,
         trial_at=payload.trial_at,
-        position=(top or Decimal(0)) + 1,
+        position=(bottom - 1) if bottom is not None else Decimal(0),
         custom=payload.custom,
     )
     session.add(deal)

@@ -6,6 +6,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, select, text
@@ -420,14 +421,22 @@ async def _sync_batch(
         pending.append((lead, contact, target_stage, target_status))
     tops: dict[uuid.UUID, Any] = {}
     if pending:
-        tops = await _stage_tops(session, list({target.id for _, _, target, _ in pending}))
+        bottoms = await _stage_tops(session, list({target.id for _, _, target, _ in pending}))
+        # Next free position per stage: one below the current minimum, so a
+        # new card lands on top of its column. Empty stages start at 0.
+        for stage_id, bottom in bottoms.items():
+            tops[stage_id] = bottom - 1
 
     new_contact_ids: set[uuid.UUID] = set()
     if pending:
         for lead, contact, target_stage, target_status in pending:
             new_contact_ids.add(contact.id)
-            position = (tops.get(target_stage.id) or 0) + 1
-            tops[target_stage.id] = position
+            if target_stage.id in tops:
+                position = tops[target_stage.id]
+                tops[target_stage.id] = position - 1
+            else:
+                position = Decimal(0)
+                tops[target_stage.id] = Decimal(-1)
             session.add(
                 CrmDeal(
                     contact_id=contact.id,
@@ -584,16 +593,17 @@ async def _unread_counts(session: AsyncSession, wa_ids: list[str]) -> dict[str, 
 
 
 async def _stage_tops(session: AsyncSession, stage_ids: list[uuid.UUID]) -> dict[uuid.UUID, Any]:
+    """Current minimum position per stage (new cards go one below it)."""
     if not stage_ids:
         return {}
     rows = (
         await session.execute(
-            select(func.max(CrmDeal.position), CrmDeal.stage_id)
+            select(func.min(CrmDeal.position), CrmDeal.stage_id)
             .where(CrmDeal.stage_id.in_(stage_ids), CrmDeal.deleted_at.is_(None))
             .group_by(CrmDeal.stage_id)
         )
     ).all()
-    return {stage_id: top for top, stage_id in rows}
+    return {stage_id: bottom for bottom, stage_id in rows}
 
 
 def _resolve_target(
