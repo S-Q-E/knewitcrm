@@ -419,24 +419,25 @@ async def _sync_batch(
             funnel, lead.get("status"), lead.get("current_stage")
         )
         pending.append((lead, contact, target_stage, target_status))
-    tops: dict[uuid.UUID, Any] = {}
+    next_pos: dict[uuid.UUID, Any] = {}
     if pending:
         bottoms = await _stage_tops(session, list({target.id for _, _, target, _ in pending}))
-        # Next free position per stage: one below the current minimum, so a
-        # new card lands on top of its column. Empty stages start at 0.
-        for stage_id, bottom in bottoms.items():
-            tops[stage_id] = bottom - 1
+        # Сколько новых карточек получит каждая стадия в этой пачке, чтобы
+        # первая созданная оказалась сверху, а остальные — по порядку создания.
+        counts: dict[uuid.UUID, int] = {}
+        for _, _, target, _ in pending:
+            counts[target.id] = counts.get(target.id, 0) + 1
+        for stage_id, count in counts.items():
+            bottom = bottoms.get(stage_id)
+            # Стадия с карточками заканчивается на min-1, пустая — на 0.
+            next_pos[stage_id] = (bottom - count) if bottom is not None else Decimal(-(count - 1))
 
     new_contact_ids: set[uuid.UUID] = set()
     if pending:
         for lead, contact, target_stage, target_status in pending:
             new_contact_ids.add(contact.id)
-            if target_stage.id in tops:
-                position = tops[target_stage.id]
-                tops[target_stage.id] = position - 1
-            else:
-                position = Decimal(0)
-                tops[target_stage.id] = Decimal(-1)
+            position = next_pos[target_stage.id]
+            next_pos[target_stage.id] = position + 1
             session.add(
                 CrmDeal(
                     contact_id=contact.id,
