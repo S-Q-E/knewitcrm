@@ -818,3 +818,25 @@ Why: protects against accidental data loss, keeps audit trail.
 - Раскладка диалогов на dvh/flex с `min-h-0` вместо `h-[calc(100vh-9rem)]`, нижние
   панели учитывают `safe-area-inset-bottom`; композер на coarse-pointer отправляет
   только кнопкой (Enter — перенос строки), на десктопе Enter отправляет.
+
+## D39. New deals appear on top of their kanban column
+- Creation assigns `position = min(stage) - 1` (empty stage starts at 0), so the
+  board (`position ASC, id ASC`) shows the newest card first in every stage it
+  lands in. A sync batch with N new cards in one stage takes `min-N .. min-1`
+  in creation order, so the first created stays on top and the rest follow in
+  order; a later sync (or manual creation) lands above everything before it.
+  `Numeric(20,10)` already allows negative/fractional values, no schema change.
+- Manual DnD is unchanged: the frontend keeps sending explicit `positionBetween`
+  values (negative-safe), same-column reorder and cross-column moves behave as
+  before. Moves without an explicit position still append at `max + 1`
+  (`deal_flow._append_position` — a moved card is not a new card). Board cursor
+  pagination (`position > pos OR (position = pos AND id > last)`) is
+  sign-agnostic and covered with negative positions; the deals list
+  (`-created_at`) is untouched; no frontend change was needed.
+- One-off backfill (migration `0020_board_new_on_top`, `crm_*` only): the first
+  open stage of every pipeline (`kind = 'open'`, minimal `sort`, tie-break by
+  `name`) gets `ROW_NUMBER() OVER (PARTITION BY stage_id ORDER BY created_at
+  DESC, id)` over live deals, so «Новые лиды» reads freshest-first. Working
+  columns keep their manual order. Downgrade is a deliberate no-op: the old
+  positions were never saved anywhere, so there is nothing faithful to restore,
+  and re-sorting would destroy the backfill plus any manual moves made after.
