@@ -18,6 +18,7 @@ from ..models import ENTITY_CONTACT, CrmContact, CrmEntityTag
 from ..schemas.contacts import ContactCreate, ContactListOut, ContactOut, ContactUpdate
 from ..schemas.meta import TagOut, TagSetIn
 from ..services.activity import diff_payload, log_activity, slim
+from ..services.assignment import set_contact_owner
 from ..services.custom_fields import load_definitions, validate_custom_values
 from ..services.tags import detach_entity_tags, entity_tags_map, replace_entity_tags
 from ..services.visibility import (
@@ -225,7 +226,7 @@ async def update_contact(
 
             if await session.get(CrmUser, payload.owner_id) is None:
                 raise ApiError("UNKNOWN_OWNER", "Owner not found", 422)
-        contact.owner_id = payload.owner_id
+        await set_contact_owner(session, contact, payload.owner_id)
     for field in ("name", "phone", "email", "source"):
         value = getattr(payload, field)
         if value is not None:

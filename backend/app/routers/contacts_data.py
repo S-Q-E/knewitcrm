@@ -29,6 +29,7 @@ from ..schemas.contacts_data import (
 )
 from ..schemas.deals import DealListOut
 from ..services.activity import log_activity
+from ..services.assignment import set_contact_owner
 from ..services.deals_serialize import deals_out
 from ..services.duplicates import find_duplicate_groups, merge_contacts
 from ..services.tags import entity_tags_map
@@ -136,9 +137,9 @@ async def bulk_update_contacts(
                 {"ids": [str(contact.id)]},
             )
         if payload.unassign_owner:
-            contact.owner_id = None
+            await set_contact_owner(session, contact, None)
         elif payload.set_owner_id is not None:
-            contact.owner_id = payload.set_owner_id
+            await set_contact_owner(session, contact, payload.set_owner_id)
         if add_tag is not None:
             from ..models import CrmEntityTag
 

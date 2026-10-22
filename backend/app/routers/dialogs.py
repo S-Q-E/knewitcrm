@@ -13,6 +13,7 @@ from ..deps import get_session, pagination
 from ..errors import ApiError
 from ..models import CrmContact, CrmConversationState, CrmDeal, CrmUser
 from ..services.activity import log_activity
+from ..services.assignment import set_contact_owner
 from ..services.unanswered import cutoff as unanswered_cutoff
 from ..services.unanswered import is_unanswered, unanswered_clause
 from ..services.visibility import (
@@ -269,11 +270,17 @@ async def update_dialog(
     if state is None:
         state = CrmConversationState(whatsapp_id=whatsapp_id)
         session.add(state)
+        await session.flush()
     if "assigned_to" in payload.model_fields_set:
         if payload.assigned_to is not None:
             assignee = await session.get(CrmUser, payload.assigned_to)
             if assignee is None:
                 raise ApiError("UNKNOWN_USER", "User not found", 422)
+        contact = (
+            await session.execute(select(CrmContact).where(CrmContact.whatsapp_id == whatsapp_id))
+        ).scalar_one_or_none()
+        if contact is not None:
+            await set_contact_owner(session, contact, payload.assigned_to)
         state.assigned_to = payload.assigned_to
     if payload.bot_paused is not None:
         state.bot_paused = payload.bot_paused

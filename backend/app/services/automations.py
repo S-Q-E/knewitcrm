@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import CrmAutomation, CrmDeal
 from .activity import log_activity
+from .assignment import set_deal_owner
 from .notifications import active_managers, notify
 
 logger = logging.getLogger(__name__)
@@ -168,7 +169,7 @@ async def _apply_actions(
             if active is None:
                 logger.warning("automation id=%s: owner user is missing or inactive", automation.id)
                 continue
-            deal.owner_id = new_owner
+            await set_deal_owner(session, deal, new_owner)
         elif kind == "add_tag":
             try:
                 tag_id = uuid.UUID(str(action.get("tag_id")))

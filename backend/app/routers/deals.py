@@ -43,7 +43,7 @@ from ..schemas.deals import (
 )
 from ..schemas.meta import TagOut, TagSetIn
 from ..services.activity import diff_payload, log_activity, slim
-from ..services.assignment import pick_assignee
+from ..services.assignment import pick_assignee, set_deal_owner
 from ..services.custom_fields import load_definitions, validate_custom_values
 from ..services.deal_flow import apply_deal_stage
 from ..services.event_bus import bus
@@ -385,6 +385,8 @@ async def create_deal(
     )
     session.add(deal)
     await session.flush()
+    if owner_id is not None:
+        await set_deal_owner(session, deal, owner_id)
     pending: list[dict] = []
     if owner_id is not None and owner_id != user.id:
         pending.extend(
@@ -463,7 +465,7 @@ async def update_deal(
     if "owner_id" in payload.model_fields_set:
         if payload.owner_id is not None and await session.get(CrmUser, payload.owner_id) is None:
             raise ApiError("UNKNOWN_OWNER", "Owner not found", 422)
-        deal.owner_id = payload.owner_id
+        await set_deal_owner(session, deal, payload.owner_id)
     if payload.trial_at is not None:
         deal.trial_at = payload.trial_at
     if payload.lost_reason_id is not None:
@@ -711,9 +713,9 @@ async def bulk_update_deals(
     for deal in by_id.values():
         ensure_visible(is_visible(deal.owner_id, user, restricted))
         if payload.unassign_owner:
-            deal.owner_id = None
+            await set_deal_owner(session, deal, None)
         elif payload.set_owner_id is not None:
-            deal.owner_id = payload.set_owner_id
+            await set_deal_owner(session, deal, payload.set_owner_id)
         if target_stage is not None:
             contact = contacts.get(deal.contact_id)
             await apply_deal_stage(
