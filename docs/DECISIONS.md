@@ -840,3 +840,40 @@ Why: protects against accidental data loss, keeps audit trail.
   columns keep their manual order. Downgrade is a deliberate no-op: the old
   positions were never saved anywhere, so there is nothing faithful to restore,
   and re-sorting would destroy the backfill plus any manual moves made after.
+
+## D40. One responsible manager: deal is the source of truth
+- `crm_deals.owner_id` is the source of truth. Every assignment writes the deal
+  first, then mirrors the owner into `crm_contacts.owner_id` and
+  `crm_conversation_state.assigned_to`. Both helpers live in
+  `services/assignment.py` and never commit: `set_deal_owner(session, deal, owner)`
+  writes the deal, its contact and the dialog; `set_contact_owner(session, contact,
+  owner)` routes the assignment into the contact's most recently updated live deal
+  (same rule as `visibility.lead_owner`), or writes only contact + dialog when the
+  contact has no live deal.
+- All mutation paths go through these helpers: deal create/update/bulk, the
+  `assign_owner` automation, contact update/bulk, and dialog PATCH. The dialog
+  endpoint falls back to the old `state.assigned_to` write only when no contact
+  exists for the `whatsapp_id`. A freshly created conversation-state row is
+  flushed before the raw `INSERT ... ON CONFLICT`, otherwise the ORM insert and
+  the sync query would collide in one transaction.
+- `crm_conversation_state` rows are created/updated only for bot leads: `_sync_state`
+  runs `INSERT ... SELECT ... WHERE EXISTS (SELECT 1 FROM knewit_leads ...)`, so a
+  manual contact with a `whatsapp_id` but no bot lead never gets a dialog row.
+  `knewit_*` tables stay read-only for the CRM (rule 1).
+- Migration `0021_sync_owner` (crm_* only) aligns existing data: (A) a managed deal
+  without an owner takes the dialog assignee, then the contact owner; (B) the deal
+  owner is copied into the contact; (C) the deal owner is copied into existing
+  conversation-state rows (no new rows). Downgrade is a deliberate no-op: the old
+  values were not stored anywhere, and re-running the old assignment would destroy
+  managers' manual changes made after the upgrade.
+- Manual assignment has one place in the UI: the deal card. The contact card and
+  the dialog header show the owner read-only with the hint «Меняется в карточке
+  сделки»; the deal card save invalidates contact and dialog queries so all screens
+  refresh at once. Bulk assignment on the contacts list stays: the backend mirrors
+  it through `set_contact_owner`.
+- Kanban card: the avatar and name are the responsible manager («Не назначен» when
+  empty, grey); the phone line uses `contact.phone`, else the digits of
+  `contact.whatsapp_id` (`...@c.us` stripped) via `formatPhone`.
+- The chat is one component now (`components/dialogs/chat-panel.tsx::ChatPanel`),
+  shared by the «Диалоги» page and the deal card's «Переписка» tab; «История» keeps
+  the previous `Timeline`. The panel owns the status row and the pause button.

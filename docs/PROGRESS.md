@@ -391,6 +391,40 @@
 - [x] Полный `backend/tests` на fix_scratch5: 250 passed, 0 failed (~7 мин); ruff
   check + format чистые; scratch-БД после прогона дропнута
 
+## Step 24 — Единый ответственный, плитка канбана, чат в карточке (2026-10-22)
+- [x] Источник правды — сделка: `services/assignment.py::set_deal_owner` пишет owner в
+  сделку, контакт и `crm_conversation_state`; `set_contact_owner` (карточка контакта,
+  диалог, массовое назначение) идёт в самую свежую живую сделку контакта, а без живых
+  сделок — только в контакт и диалог. Обе функции без `commit`; state пишется только
+  при наличии строки в `knewit_leads` (сырой `INSERT ... ON CONFLICT`), `knewit_*`
+  не меняются
+- [x] Подключено везде, где меняется ответственный: `create_deal`, `update_deal`,
+  `bulk_update_deals`, автоматизация `assign_owner`, `update_contact`,
+  `bulk_update_contacts`, `update_dialog` (при наличии контакта; новая строка state
+  флашится до raw-SQL, чтобы не конфликтовать с ORM-insert)
+- [x] Миграция `0021_sync_owner` (только `crm_*`): A — сделке без owner берёт из
+  диалога, затем из контакта; B — owner сделки в контакт; C — owner сделки в
+  существующие строки `crm_conversation_state`; downgrade — осознанный no-op
+- [x] `backend/tests/test_owner_sync.py` (8 тестов): сделка → контакт+диалог, сброс
+  owner, bulk (назначить/снять), диалог → сделка+контакт, контакт → сделка+диалог,
+  контакт без бот-лида не создаёт state, SQL миграции 0021, downgrade no-op.
+  Прогон: 8 passed; соседние наборы (deals, dialogs, automations, automation_isolation,
+  contacts, contacts_data, round_robin, visibility_matrix) — 38 passed
+- [x] Канбан: на плитке имя ответственного (или «Не назначен») и телефон клиента;
+  `formatPhone` берёт `phone`, иначе цифры `whatsapp_id` (`...@c.us` отрезается)
+- [x] Чат вынесен из страницы «Диалоги» в `components/dialogs/chat-panel.tsx`
+  (`ChatPanel`): история с «Показать более ранние», отправка, outbox и повторы,
+  быстрые ответы, пауза/возврат бота. Страница «Диалоги» использует его же,
+  ответственный в шапке — только для чтения
+- [x] Карточка сделки: вкладки «Переписка» (тот же `ChatPanel`, высота 60vh/min 320px)
+  и «История» (прежний `Timeline`); после сохранения сделки инвалидируются контакт
+  и диалоги (`useUpdateDeal`)
+- [x] Селектор ответственного в карточке контакта заменён на текст «Меняется в карточке
+  сделки»; `owner_id` не отправляется при сохранении контакта. Массовое назначение
+  в списке контактов сохранено (бэкенд синхронизирует три места)
+- [x] Проверки: ruff check/format чистые; backend targeted 8 + 38 passed; frontend
+  tsc / eslint / vitest (16 файлов, 52 теста) / vite build — зелёные
+
 ## Step 16 — Final audit [todo]
 
 ## Deferred
