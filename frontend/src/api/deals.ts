@@ -138,6 +138,11 @@ export function useUpdateDeal() {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["board"] });
       void queryClient.invalidateQueries({ queryKey: ["deals"] });
+      // The owner is mirrored into the contact and the dialog (D40).
+      void queryClient.invalidateQueries({ queryKey: ["contact"] });
+      void queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      void queryClient.invalidateQueries({ queryKey: ["dialog"] });
+      void queryClient.invalidateQueries({ queryKey: ["dialogs"] });
     },
   });
 }

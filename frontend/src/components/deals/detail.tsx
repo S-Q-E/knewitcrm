@@ -16,6 +16,7 @@ import {
 } from "@/api/deals";
 import { useCreateTask } from "@/api/timeline";
 import { Timeline } from "@/components/deals/timeline";
+import { ChatPanel } from "@/components/dialogs/chat-panel";
 import { LostReasonModal, NoteModal, WonConfirmModal } from "@/components/deals/modals";
 import { useToast, toastError } from "@/components/toast";
 import { Button } from "@/components/ui/button";
@@ -153,6 +154,7 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
   const [showNote, setShowNote] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDue, setTaskDue] = useState("");
+  const [tab, setTab] = useState<"chat" | "history">("chat");
 
   if (dealQuery.isPending) {
     return (
@@ -400,8 +402,38 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
       </div>
 
       <div className="min-w-0 flex-1">
-        <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500">Лента</h3>
-        <Timeline dealId={deal.id} />
+        <div className="mb-2 flex gap-1">
+          {(
+            [
+              ["chat", "Переписка"],
+              ["history", "История"],
+            ] as ["chat" | "history", string][]
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={
+                tab === id
+                  ? "rounded-full bg-slate-900 px-2.5 py-1 text-xs text-white dark:bg-slate-100 dark:text-slate-900"
+                  : "rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {tab === "chat" ? (
+          contact?.whatsapp_id ? (
+            <div className="h-[60vh] min-h-[320px] rounded-lg border border-slate-200 dark:border-slate-800">
+              <ChatPanel whatsappId={contact.whatsapp_id} contactName={contact.name} />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">У клиента нет WhatsApp-чата.</p>
+          )
+        ) : (
+          <Timeline dealId={deal.id} />
+        )}
         <div className="mt-3 flex flex-col gap-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
           <p className="text-sm font-medium">Быстрая задача</p>
           <div className="flex flex-col gap-2 md:flex-row">
