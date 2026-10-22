@@ -42,7 +42,8 @@ export function ContactPage() {
   const save = async () => {
     const patch: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(form)) {
-      if (v !== "") patch[k] = v;
+      // The owner is changed in the deal card only (D40).
+      if (k !== "owner_id" && v !== "") patch[k] = v;
     }
     if (Object.keys(customForm).length > 0) {
       patch.custom = { ...c.custom, ...customForm };
@@ -91,21 +92,13 @@ export function ContactPage() {
               />
             </label>
           ))}
-          <label className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1">
             <span className="text-xs text-slate-500">Ответственный</span>
-            <select
-              defaultValue={c.owner_id ?? ""}
-              onChange={(e) => setForm((prev) => ({ ...prev, owner_id: e.target.value }))}
-              className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
-            >
-              <option value="">—</option>
-              {users.data?.items.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
-          </label>
+            <p className="px-1 py-1.5 text-sm">
+              {users.data?.items.find((u) => u.id === c.owner_id)?.name ?? "Не назначен"}
+            </p>
+            <span className="text-[11px] text-slate-400">Меняется в карточке сделки</span>
+          </div>
         </div>
         {customDefs.data && customDefs.data.items.length > 0 && (
           <div className="mt-3 grid max-w-2xl grid-cols-2 gap-2 text-sm">
