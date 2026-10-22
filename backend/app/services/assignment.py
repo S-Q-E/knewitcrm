@@ -4,9 +4,10 @@ import json
 import logging
 import uuid
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..models import CrmContact, CrmDeal
 from .notifications import active_managers
 
 logger = logging.getLogger(__name__)
@@ -64,3 +65,52 @@ async def pick_assignee(session: AsyncSession) -> uuid.UUID | None:
     )
     logger.info("round-robin assigned user=%s", picked)
     return picked
+
+
+async def _sync_state(
+    session: AsyncSession, whatsapp_id: str | None, owner_id: uuid.UUID | None
+) -> None:
+    """Записать ответственного в crm_conversation_state (только для ботовых лидов)."""
+    if not whatsapp_id:
+        return
+    await session.execute(
+        text(
+            "INSERT INTO crm_conversation_state (whatsapp_id, assigned_to)"
+            " SELECT :wa, CAST(:owner AS uuid)"
+            " WHERE EXISTS (SELECT 1 FROM knewit_leads WHERE whatsapp_id = :wa)"
+            " ON CONFLICT (whatsapp_id) DO UPDATE SET assigned_to = EXCLUDED.assigned_to"
+        ),
+        {"wa": whatsapp_id, "owner": str(owner_id) if owner_id else None},
+    )
+
+
+async def set_deal_owner(session: AsyncSession, deal: CrmDeal, owner_id: uuid.UUID | None) -> None:
+    """Сделка = источник правды. Пишет owner в сделку, контакт и диалог. Без commit."""
+    deal.owner_id = owner_id
+    contact = await session.get(CrmContact, deal.contact_id)
+    if contact is None:
+        return
+    contact.owner_id = owner_id
+    await _sync_state(session, contact.whatsapp_id, owner_id)
+
+
+async def set_contact_owner(
+    session: AsyncSession, contact: CrmContact, owner_id: uuid.UUID | None
+) -> None:
+    """Назначение из контакта/диалога: идёт в самую свежую живую сделку контакта.
+
+    Если у контакта нет живых сделок, пишем только в контакт и диалог.
+    """
+    deal = (
+        await session.execute(
+            select(CrmDeal)
+            .where(CrmDeal.contact_id == contact.id, CrmDeal.deleted_at.is_(None))
+            .order_by(CrmDeal.updated_at.desc(), CrmDeal.id)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if deal is not None:
+        await set_deal_owner(session, deal, owner_id)
+    else:
+        contact.owner_id = owner_id
+        await _sync_state(session, contact.whatsapp_id, owner_id)
