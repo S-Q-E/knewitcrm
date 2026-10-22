@@ -11,7 +11,11 @@ import { cn } from "@/lib/utils";
 interface ColumnProps {
   column: BoardColumn;
   color: string;
-  contactsById: Map<string, { name: string | null; phone: string | null }>;
+  contactsById: Map<
+    string,
+    { name: string | null; phone: string | null; whatsappId?: string | null }
+  >;
+  ownerNamesById: Map<string, string>;
   activeStageId: string | null;
   loadingMore: boolean;
   onShowMore: (stageId: string) => void;
@@ -25,6 +29,7 @@ export function BoardColumnView({
   column,
   color,
   contactsById,
+  ownerNamesById,
   activeStageId,
   loadingMore,
   onShowMore,
@@ -73,6 +78,8 @@ export function BoardColumnView({
                 deal={deal}
                 contactName={contact?.name ?? null}
                 contactPhone={contact?.phone ?? null}
+                contactWhatsappId={contact?.whatsappId ?? null}
+                ownerName={deal.owner_id ? (ownerNamesById.get(deal.owner_id) ?? null) : null}
                 stageId={column.stage_id}
                 onOpen={onOpen}
                 onNote={onNote}

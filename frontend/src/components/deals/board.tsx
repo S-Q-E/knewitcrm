@@ -25,7 +25,11 @@ interface BoardProps {
   stageKind: Map<string, "open" | "won" | "lost">;
   stageColor: Map<string, string>;
   filters: DealFilters;
-  contactsById: Map<string, { name: string | null; phone: string | null }>;
+  contactsById: Map<
+    string,
+    { name: string | null; phone: string | null; whatsappId?: string | null }
+  >;
+  ownerNamesById: Map<string, string>;
   onQuickCreate: (stageId: string) => void;
   onOpen: (deal: Deal) => void;
   onNote: (deal: Deal) => void;
@@ -44,6 +48,7 @@ export function DealsBoard({
   stageKind,
   stageColor,
   contactsById,
+  ownerNamesById,
   onQuickCreate,
   onOpen,
   onNote,
@@ -256,6 +261,7 @@ export function DealsBoard({
               column={column}
               color={stageColor.get(column.stage_id) ?? "#94a3b8"}
               contactsById={contactsById}
+              ownerNamesById={ownerNamesById}
               activeStageId={activeStageId}
               loadingMore={loadingMore === column.stage_id}
               onShowMore={showMore}

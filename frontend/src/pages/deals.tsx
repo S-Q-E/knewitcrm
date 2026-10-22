@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { api } from "@/api/client";
 import type { Deal, DealFilters, Stage } from "@/api/deals";
-import { usePipelines } from "@/api/deals";
+import { usePipelines, useUsersLite } from "@/api/deals";
 import { DealsBoard } from "@/components/deals/board";
 import { DealFiltersBar } from "@/components/deals/filters";
 import { DealDetail } from "@/components/deals/detail";
@@ -39,6 +39,7 @@ export function DealsPage() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const pipelines = usePipelines();
+  const users = useUsersLite();
   const [pipelineId, setPipelineId] = useState<string | null>(null);
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [createStageId, setCreateStageId] = useState<string | null>(null);
@@ -89,6 +90,14 @@ export function DealsPage() {
       }>("/api/contacts?limit=500"),
     staleTime: 60_000,
   });
+  const ownerNamesById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const user of users.data?.items ?? []) {
+      map.set(user.id, user.name);
+    }
+    return map;
+  }, [users.data]);
+
   const contactsById = useMemo(() => {
     const map = new Map<
       string,
@@ -173,6 +182,7 @@ export function DealsPage() {
           stageColor={stageColor}
           filters={filters}
           contactsById={contactsById}
+          ownerNamesById={ownerNamesById}
           onQuickCreate={setCreateStageId}
           onOpen={(deal) => setOpenDealId(deal.id)}
           onNote={setNoteDeal}

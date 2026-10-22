@@ -31,6 +31,23 @@ export function formatDate(iso: string | null | undefined): string {
   }).format(new Date(iso));
 }
 
+/** Phone for a card: the contact phone, else the digits of the WhatsApp id. */
+export function formatPhone(
+  phone: string | null | undefined,
+  whatsappId?: string | null,
+): string | null {
+  const fromPhone = (phone ?? "").replace(/\D/g, "");
+  const fromWhatsapp = (whatsappId ?? "").split("@")[0].replace(/\D/g, "");
+  const digits = fromPhone || fromWhatsapp;
+  if (!digits) {
+    return null;
+  }
+  if (digits.length === 11 && digits.startsWith("7")) {
+    return `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 9)} ${digits.slice(9, 11)}`;
+  }
+  return `+${digits}`;
+}
+
 export function initials(name: string | null | undefined): string {
   if (!name) {
     return "?";

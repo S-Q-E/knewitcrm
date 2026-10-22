@@ -3,13 +3,15 @@ import { CSS } from "@dnd-kit/utilities";
 import { CalendarClock, Lock, MessageSquarePlus, StickyNote } from "lucide-react";
 
 import type { Deal } from "@/api/deals";
-import { formatDate, formatMoney, formatRelative, initials } from "@/lib/format";
+import { formatDate, formatMoney, formatPhone, formatRelative, initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 interface DealCardProps {
   deal: Deal;
   contactName: string | null;
   contactPhone: string | null;
+  contactWhatsappId?: string | null;
+  ownerName?: string | null;
   stageId: string;
   onOpen: (deal: Deal) => void;
   onNote: (deal: Deal) => void;
@@ -20,6 +22,8 @@ export function DealCard({
   deal,
   contactName,
   contactPhone,
+  contactWhatsappId = null,
+  ownerName = null,
   stageId,
   onOpen,
   onNote,
@@ -29,6 +33,7 @@ export function DealCard({
     id: deal.id,
     data: { deal, stageId },
   });
+  const phone = formatPhone(contactPhone, contactWhatsappId);
 
   return (
     <article
@@ -52,6 +57,9 @@ export function DealCard({
         )}
       </div>
       <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">{deal.title}</p>
+      {phone && (
+        <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">{phone}</p>
+      )}
       <p className="mt-1 text-sm font-semibold">{formatMoney(deal.amount, deal.currency)}</p>
 
       {deal.tags.length > 0 && (
@@ -70,9 +78,18 @@ export function DealCard({
       <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
         <span
           title={deal.owner_id ? "Ответственный" : "Без ответственного"}
-          className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold dark:bg-slate-700"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold dark:bg-slate-700"
         >
-          {initials(contactName)}
+          {initials(ownerName)}
+        </span>
+        <span
+          title={deal.owner_id ? "Ответственный" : "Без ответственного"}
+          className={cn(
+            "max-w-[110px] truncate",
+            !ownerName && "text-slate-400 dark:text-slate-500",
+          )}
+        >
+          {ownerName ?? "Не назначен"}
         </span>
         <span title="Последняя активность">{formatRelative(deal.updated_at)}</span>
         {deal.trial_at && (

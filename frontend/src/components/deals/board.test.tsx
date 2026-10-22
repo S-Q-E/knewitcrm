@@ -77,6 +77,7 @@ describe("DealsBoard pagination", () => {
             stageColor={new Map([[STAGE, "#888"]])}
             filters={{}}
             contactsById={new Map()}
+            ownerNamesById={new Map()}
             onQuickCreate={vi.fn()}
             onOpen={vi.fn()}
             onNote={vi.fn()}

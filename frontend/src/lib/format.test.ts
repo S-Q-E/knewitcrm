@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatMoney, initials, positionBetween } from "@/lib/format";
+import { formatMoney, formatPhone, initials, positionBetween } from "@/lib/format";
 
 describe("formatMoney", () => {
   it("formats KZT without decimals", () => {
@@ -12,6 +12,23 @@ describe("formatMoney", () => {
   it("renders a dash for missing amounts", () => {
     expect(formatMoney(null)).toBe("—");
     expect(formatMoney(undefined)).toBe("—");
+  });
+});
+
+describe("formatPhone", () => {
+  it("uses the contact phone when present", () => {
+    expect(formatPhone("+7 707 966 76 03")).toBe("+7 707 966 76 03");
+  });
+
+  it("falls back to the digits of the WhatsApp id", () => {
+    expect(formatPhone(null, "77079667603@c.us")).toBe("+7 707 966 76 03");
+    expect(formatPhone("", "77079667603@c.us")).toBe("+7 707 966 76 03");
+  });
+
+  it("returns null when there is nothing to format", () => {
+    expect(formatPhone(null, null)).toBeNull();
+    expect(formatPhone(undefined, "")).toBeNull();
+    expect(formatPhone("—")).toBeNull();
   });
 });
 
