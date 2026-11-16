@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   Bar,
@@ -15,11 +15,12 @@ import {
   YAxis,
 } from "recharts";
 
-import type { AnalyticsFilters, AnalyticsSection, FunnelStage } from "@/api/analytics";
+import type { AnalyticsFilters, AnalyticsSection, BotStats, FunnelStage } from "@/api/analytics";
 import { downloadAnalyticsCsv, useAnalyticsOverview, useDrillDeals } from "@/api/analytics";
 import { usePipelines, useUsersLite } from "@/api/deals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { estimateSavings } from "@/lib/savings";
 import { cn } from "@/lib/utils";
 
 type Preset = "today" | "7" | "30" | "90" | "custom";
@@ -99,6 +100,114 @@ function Kpi({ label, value, hint }: { label: string; value: string; hint?: stri
       <p className="mt-1 text-2xl font-bold">{value}</p>
       {hint && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{hint}</p>}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------- savings card
+
+const SAVINGS_KEY = "tcs-demo-savings-assumptions";
+
+interface SavingsAssumptions {
+  minutesPerInquiry: number;
+  hourlyCostUsd: number;
+  baselineMinutes: number;
+}
+
+const DEFAULT_ASSUMPTIONS: SavingsAssumptions = {
+  minutesPerInquiry: 8,
+  hourlyCostUsd: 25,
+  baselineMinutes: 120,
+};
+
+function loadAssumptions(): SavingsAssumptions {
+  try {
+    const raw = localStorage.getItem(SAVINGS_KEY);
+    if (!raw) return DEFAULT_ASSUMPTIONS;
+    const parsed = JSON.parse(raw) as Partial<SavingsAssumptions>;
+    return {
+      minutesPerInquiry: Number(parsed.minutesPerInquiry) || 0,
+      hourlyCostUsd: Number(parsed.hourlyCostUsd) || 0,
+      baselineMinutes: Number(parsed.baselineMinutes) || 0,
+    };
+  } catch {
+    return DEFAULT_ASSUMPTIONS;
+  }
+}
+
+function EstimatedSavingsCard({ bot }: { bot: BotStats }) {
+  const [assumptions, setAssumptions] = useState<SavingsAssumptions>(loadAssumptions);
+  useEffect(() => {
+    try {
+      localStorage.setItem(SAVINGS_KEY, JSON.stringify(assumptions));
+    } catch {
+      // Private mode or full storage: estimates still work for this session.
+    }
+  }, [assumptions]);
+
+  const result = estimateSavings({
+    automatedDialogs: bot.closed_without_manager,
+    avgResponseMs: bot.avg_response_time_ms,
+    ...assumptions,
+  });
+
+  function update(key: keyof SavingsAssumptions) {
+    return (event: ChangeEvent<HTMLInputElement>) => {
+      const value = event.target.value === "" ? 0 : Number(event.target.value);
+      if (Number.isNaN(value)) return;
+      setAssumptions((prev) => ({ ...prev, [key]: value }));
+    };
+  }
+
+  return (
+    <Card title="Estimated savings">
+      <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Kpi
+          label="Leasing rep time saved"
+          value={`${result.hoursSaved.toFixed(1)} h`}
+          hint={`${number.format(bot.closed_without_manager)} dialogs closed without a manager`}
+        />
+        <Kpi
+          label="Money saved (estimate)"
+          value={formatMoney(Math.round(result.moneySavedUsd), "USD")}
+          hint="Hours saved × hourly cost"
+        />
+        <Kpi
+          label="Bot responds in"
+          value={result.botSeconds === null ? "—" : `${result.botSeconds.toFixed(1)} s`}
+        />
+        <Kpi
+          label="Times faster than a rep"
+          value={result.speedupX === null ? "—" : `${number.format(Math.round(result.speedupX))}×`}
+          hint="Compared to a human response"
+        />
+      </div>
+      <div className="flex flex-wrap items-end gap-4">
+        {(
+          [
+            ["minutesPerInquiry", "Minutes per inquiry (rep)"],
+            ["hourlyCostUsd", "Hourly cost ($/hour)"],
+            ["baselineMinutes", "Human response time (min)"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key} className="text-xs text-slate-500 dark:text-slate-400">
+            {label}
+            <Input
+              type="number"
+              min={0}
+              className="mt-1 w-28"
+              value={assumptions[key]}
+              onChange={update(key)}
+            />
+          </label>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+        Assumption: replace with TCS numbers
+      </p>
+      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        Estimate based on editable assumptions, not measured results
+      </p>
+    </Card>
   );
 }
 
@@ -777,6 +886,8 @@ export function AnalyticsPage() {
               </div>
             </div>
           </Card>
+
+          <EstimatedSavingsCard bot={data.bot} />
 
           <Card title="Tags">
             <div className="mb-2 flex justify-end">
