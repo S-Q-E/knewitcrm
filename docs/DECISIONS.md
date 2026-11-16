@@ -877,3 +877,36 @@ Why: protects against accidental data loss, keeps audit trail.
 - The chat is one component now (`components/dialogs/chat-panel.tsx::ChatPanel`),
   shared by the «Диалоги» page and the deal card's «Переписка» tab; «История» keeps
   the previous `Timeline`. The panel owns the status row and the pause button.
+
+## D41. TCS demo seed and its guardrails (Phase 2)
+
+- `scripts/seed_tcs_demo.py` (not Alembic) fills the TCS demo: funnel
+  «TCS Leasing» (single default), `tcs_units` (14 units, 2 leased),
+  30 fictional leads over 30 days in `tcs_leads` / `tcs_messages` / `tcs_events`
+  with `source = 'demo'`, `crm_settings.unanswered_after_minutes = 2` (JSON number).
+- Guardrails: refuses to run without `DEMO_DB_CONFIRM=I_UNDERSTAND_THIS_IS_A_DEMO_DB`,
+  refuses when `tcs_leads` has rows with `source = 'whatsapp'` (production bot data);
+  `--reset` deletes ONLY rows with `source = 'demo'` and their messages/events/followups/metrics.
+  Never TRUNCATE.
+- Bot field text lands directly in fields the CRM already displays
+  (`sync_worker` unchanged): `direction` = «2BR · Demo Residences A · $2,150»,
+  `goal` = «Move in by Jan 1 · budget $2,200», `preferred_format` = «2BR»,
+  `preferred_time` = «Weekday evenings». `experience_level` stays empty;
+  `phone` and `lead_data` are seeded in the bot DB but never shown in the CRM.
+- Demo data shape: 30 leads / 30 days, 12 of 30 first messages outside
+  Mon–Fri 09:00–17:00 ET (after-hours capture story), 2–6 messages each,
+  outgoing messages carry `response_time_ms` 3000–12000 and `tokens_used`;
+  12 viewings (6 done, 2 no-shows, 1 cancelled, 3 future in 2–5 days);
+  exactly one unanswered dialog (last message incoming ~30 min old, bot live);
+  2 leads transferred to a manager (status `МЕНЕДЖЕР`).
+- Deal detail labels: `direction` → «Unit of interest», `goal` →
+  «Move-in & budget», `preferred_format` → «Bedrooms», `preferred_time` →
+  «Viewing preference», `last_objection` → «Objection»; `experience_level`
+  removed from the display.
+- The legacy funnel «Продажи Knewit» stays in the DB but is not opened during
+  the demo (see DEMO_SCRIPT.md).
+- Fresh-DB caveat: Alembic migration `0015_dialogs_list` backfills from
+  `tcs_messages` without an existence guard (unlike 0009), so on a brand-new
+  database migrations must run AFTER the bot schema exists. For the demo DB we
+  apply `tests/fixtures/tcs_schema.sql` first, then `alembic upgrade head`,
+  then the seed. To revisit before the Railway demo deploy.
