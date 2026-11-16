@@ -877,3 +877,17 @@ Why: protects against accidental data loss, keeps audit trail.
 - The chat is one component now (`components/dialogs/chat-panel.tsx::ChatPanel`),
   shared by the «Диалоги» page and the deal card's «Переписка» tab; «История» keeps
   the previous `Timeline`. The panel owns the status row and the pause button.
+- Lost alembic revision tombstoned (2026-11-16). Production (Railway) DB has
+  `0022_sync_contact_fields` in `crm_alembic_version`, but no migration with
+  that revision was ever committed (checked `git log --all -S` and all
+  branches), and the file is unrecoverable from disk. Someone ran the lost
+  migration against the production DB from an uncommitted working copy, so
+  the DB was ahead of the code and every deploy crashed on
+  `alembic upgrade head` (`Can't locate revision ...`). Fix: stub
+  `backend/alembic/versions/0022_sync_contact_fields.py` with
+  `down_revision = "0021_sync_owner"` and a no-op `upgrade()`; new migrations
+  must chain from it. Caveats: (1) any schema changes the lost migration made
+  exist in production only — do not autogenerate DROPs against prod without
+  checking; (2) it is unverified whether 0021's data alignment actually ran
+  on production; 0021 is a pure data migration, so this can be re-run
+  manually later if owners look unaligned.
