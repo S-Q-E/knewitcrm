@@ -481,6 +481,8 @@ async def seed_demo_leads(conn: asyncpg.Connection) -> None:
             direction = "in" if m % 2 == 0 else "out"
             if m == n_messages - 1:
                 direction = "in" if i == unanswered_index else "out"
+                if i == unanswered_index:
+                    at = now - timedelta(minutes=30)  # spec: unanswered ~30 min
             content = rng.choice(IN_CONTENT if direction == "in" else OUT_CONTENT)
             tokens = rng.randint(40, 400) if direction == "out" else None
             response_ms = rng.randint(3000, 12000) if direction == "out" else None

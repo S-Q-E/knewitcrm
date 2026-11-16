@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import asyncpg
@@ -122,6 +123,18 @@ async def test_seed_idempotent_and_complete(conn):
     )
     incoming = [row["whatsapp_id"] for row in last_directions if row["direction"] == "in"]
     assert incoming == ["tg:900000004"]
+
+    # ...and that unanswered message is ~30 minutes old (spec).
+    last_in = await conn.fetchval(
+        """
+        SELECT m.created_at FROM tcs_leads l
+        JOIN tcs_messages m ON m.whatsapp_id = l.whatsapp_id
+        WHERE l.source = 'demo' AND l.whatsapp_id = 'tg:900000004'
+        ORDER BY m.created_at DESC LIMIT 1
+        """
+    )
+    age_minutes = (datetime.now(UTC) - last_in).total_seconds() / 60
+    assert 25 <= age_minutes <= 40, age_minutes
 
     # 12 viewings: 9 past + 3 future.
     trials = await conn.fetch(
