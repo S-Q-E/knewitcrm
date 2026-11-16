@@ -90,6 +90,8 @@ class AbandonedRow(BaseModel):
 class BotOut(BaseModel):
     messages_in: int
     messages_out: int
+    after_hours_leads: int
+    after_hours_share: float | None
     avg_response_time_ms: float | None
     tokens_total: int
     tokens_by_day: list[TokensBucket]

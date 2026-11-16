@@ -327,6 +327,10 @@ async def test_overview_matches_hand_computed_values(client, settings):
         assert bot["handover_share"] == 0.25
         assert bot["closed_without_manager"] == 3
         assert bot["closed_without_manager_share"] == 0.75
+        # Leads of the fixed dataset: 01:00-06:00 UTC on Wed/Thu, all before
+        # 09:00 in the test timezone (UTC) -> all are after-hours.
+        assert bot["after_hours_leads"] == 4
+        assert bot["after_hours_share"] == 1.0
         assert bot["top_objections"][0] == {"objection": "Дорого", "count": 2}
         assert sum(r["count"] for r in bot["abandoned_by_stage"]) == 4
 
@@ -343,6 +347,47 @@ async def test_overview_matches_hand_computed_values(client, settings):
         await purge_rows(factory, "crm_tasks", extra_ids["tasks"])
         await purge_rows(factory, "crm_tags", extra_ids["tags"])
         await purge_rows(factory, "crm_lost_reasons", extra_ids["reasons"])
+        await engine.dispose()
+
+
+async def test_bot_after_hours_boundaries(client, settings):
+    """after_hours_leads/share: Mon-Fri 09:00-17:00 app timezone boundaries."""
+    engine, factory = engine_factory(settings)
+    was: list[str] = []
+    try:
+        await admin_csrf(client, settings)  # log in as admin
+        # 2026-02-11 is a Wednesday, 2026-02-14 a Saturday (all UTC in tests).
+        rows = [
+            ("2026-02-11 10:00", False),  # Wed 10:00 -> business hours
+            ("2026-02-11 08:59", True),  # before 09:00
+            ("2026-02-11 16:59", False),  # still inside
+            ("2026-02-11 17:00", True),  # 17:00 exactly -> outside
+            ("2026-02-14 12:00", True),  # Saturday noon
+        ]
+        async with factory() as session:
+            for at, _after_hours in rows:
+                wa = _wa()
+                was.append(wa)
+                await session.execute(
+                    text(
+                        "INSERT INTO tcs_leads"
+                        " (whatsapp_id, name, current_stage, status, created_at, updated_at)"
+                        " VALUES (:wa, 'Bot Lead', 'NEW_INQUIRY', 'ACTIVE', :at, :at)"
+                    ),
+                    {"wa": wa, "at": _dt(at)},
+                )
+            await session.commit()
+
+        data = await _overview(client, PERIOD)
+        assert data["bot"]["after_hours_leads"] == 3
+        assert data["bot"]["after_hours_share"] == pytest.approx(0.6, abs=1e-3)
+        assert data["bot"]["closed_without_manager"] == 5  # other bot metrics unchanged
+    finally:
+        async with factory() as session:
+            await session.execute(
+                text("DELETE FROM tcs_leads WHERE whatsapp_id = ANY(:was)"), {"was": was}
+            )
+            await session.commit()
         await engine.dispose()
 
 
@@ -373,6 +418,8 @@ async def test_empty_period_and_deals_without_history(client, settings):
         assert all(b["new_leads"] == 0 for b in summary["dynamics"])
         assert data["bot"]["handover_share"] is None
         assert data["bot"]["closed_without_manager_share"] is None
+        assert data["bot"]["after_hours_leads"] == 0
+        assert data["bot"]["after_hours_share"] is None
     finally:
         await purge_contacts(factory, contact_ids)
         await engine.dispose()

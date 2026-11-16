@@ -846,9 +846,27 @@ async def bot_section(session: AsyncSession, filters: AnalyticsFilters) -> dict:
         .mappings()
         .all()
     )
+    after_hours = (
+        await session.execute(
+            text(
+                "SELECT COUNT(*) AS n FROM tcs_leads l"
+                " LEFT JOIN crm_contacts c ON c.whatsapp_id = l.whatsapp_id"
+                " AND c.deleted_at IS NULL"
+                " WHERE l.created_at >= :start AND l.created_at < :end"
+                # Outside Mon-Fri 09:00-17:00 in the app timezone.
+                " AND (EXTRACT(ISODOW FROM l.created_at AT TIME ZONE :tz) >= 6"
+                " OR EXTRACT(HOUR FROM l.created_at AT TIME ZONE :tz) NOT BETWEEN 9 AND 16)"
+                f"{lead_filter}"
+            ),
+            params,
+        )
+    ).scalar_one()
+    after_hours = int(after_hours or 0)
     return {
         "messages_in": messages_in,
         "messages_out": messages_out,
+        "after_hours_leads": after_hours,
+        "after_hours_share": round(after_hours / total, 4) if total else None,
         "avg_response_time_ms": round(float(avg_response), 1) if avg_response is not None else None,
         "tokens_total": tokens_total,
         "tokens_by_day": [
