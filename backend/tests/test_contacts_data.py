@@ -26,9 +26,10 @@ pytestmark = pytest.mark.usefixtures("db_available")
 
 
 def _wa() -> str:
-    # 4+7 digits keeps the synthetic WhatsApp id phone-shaped (11 digits),
-    # so duplicate detection does not prefer it over a real phone by length.
-    return f"7999{uuid.uuid4().hex[:7]}@c.us"
+    # 10 digits keeps the synthetic WhatsApp id strictly shorter than a real
+    # phone (11 digits), so duplicate detection always prefers the phone key
+    # no matter which characters the random suffix contains.
+    return f"79{uuid.uuid4().hex[:8]}@c.us"
 
 
 def test_normalize_phone_cases() -> None:
