@@ -58,12 +58,12 @@ class RealtimePoller:
     async def start(self) -> None:
         async with self._factory() as session:
             stored = await _load_cursors(session) if self._persist else None
-            msg_max = await _max_id(session, "knewit_messages")
-            evt_max = await _max_id(session, "knewit_events")
+            msg_max = await _max_id(session, "tcs_messages")
+            evt_max = await _max_id(session, "tcs_events")
             start_msg = _replay_start(stored, "message_id", msg_max)
             start_evt = _replay_start(stored, "event_id", evt_max)
-            self._seen_messages = await _ids_in_window(session, "knewit_messages", start_msg)
-            self._seen_events = await _ids_in_window(session, "knewit_events", start_evt)
+            self._seen_messages = await _ids_in_window(session, "tcs_messages", start_msg)
+            self._seen_events = await _ids_in_window(session, "tcs_events", start_evt)
         self._last_message_id = start_msg
         self._last_event_id = start_evt
         self._started = True
@@ -85,7 +85,7 @@ class RealtimePoller:
                     await session.execute(
                         text(
                             "SELECT id, whatsapp_id, direction, message_type"
-                            " FROM knewit_messages WHERE id > :floor"
+                            " FROM tcs_messages WHERE id > :floor"
                             " ORDER BY id LIMIT 500"
                         ),
                         {"floor": _floor(self._last_message_id)},
@@ -99,7 +99,7 @@ class RealtimePoller:
                     await session.execute(
                         text(
                             "SELECT id, whatsapp_id, event_type, from_stage, to_stage"
-                            " FROM knewit_events WHERE id > :floor"
+                            " FROM tcs_events WHERE id > :floor"
                             " ORDER BY id LIMIT 500"
                         ),
                         {"floor": _floor(self._last_event_id)},
@@ -160,7 +160,7 @@ class RealtimePoller:
                     " FROM ("
                     "   SELECT DISTINCT ON (whatsapp_id) whatsapp_id, direction,"
                     "     content, created_at"
-                    "   FROM knewit_messages WHERE id = ANY(:ids)"
+                    "   FROM tcs_messages WHERE id = ANY(:ids)"
                     "   ORDER BY whatsapp_id, created_at DESC, id DESC"
                     " ) AS m"
                     " WHERE s.whatsapp_id = m.whatsapp_id"
@@ -230,7 +230,7 @@ async def _store_cursors(session: AsyncSession, cursors: dict[str, int]) -> None
 
 # Table names cannot be bound parameters; restrict to the two bot tables
 # this poller is allowed to read (callers pass literals, never user input).
-_READABLE_TABLES = frozenset({"knewit_messages", "knewit_events"})
+_READABLE_TABLES = frozenset({"tcs_messages", "tcs_events"})
 
 
 def _checked_table(table: str) -> str:

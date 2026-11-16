@@ -1,18 +1,18 @@
 # Bot DB index recommendations (n8n-owned tables — DO NOT APPLY without the bot owner)
 
-Source: Step 14 EXPLAIN analysis on 100k synthetic `knewit_messages` / 2k leads
+Source: Step 14 EXPLAIN analysis on 100k synthetic `tcs_messages` / 2k leads
 (scripts/perf_seed_100k.sql, removed after the analysis). Per hard rule 1 the
-CRM never creates indexes (or any DDL) on `knewit_*` tables itself; apply the
+CRM never creates indexes (or any DDL) on `tcs_*` tables itself; apply the
 statements below consciously on the n8n side (e.g. via the bot project's own
 migration) after reviewing write overhead.
 
-Existing bot-side indexes (from tests/fixtures/knewit_schema.sql) already cover
+Existing bot-side indexes (from tests/fixtures/tcs_schema.sql) already cover
 the hot paths and must be kept:
-- `idx_messages_whatsapp_created ON knewit_messages (whatsapp_id, created_at)`
+- `idx_messages_whatsapp_created ON tcs_messages (whatsapp_id, created_at)`
   — dialog open, per-dialog outbox mirror lookups, timeline feeds.
-- `idx_events_whatsapp ON knewit_events (whatsapp_id)` — timeline event feeds,
+- `idx_events_whatsapp ON tcs_events (whatsapp_id)` — timeline event feeds,
   handover (`transferred_to_manager`) lookups.
-- `idx_events_type ON knewit_events (event_type)`.
+- `idx_events_type ON tcs_events (event_type)`.
 - `idx_leads_status`, `idx_leads_current_stage` — sync worker batch scans.
 
 ## Measured on 100k messages / 2k leads (local Postgres 16, warm cache)
@@ -34,22 +34,22 @@ covering all rows + 1000-row manager roster in dev) / ~120–260ms realistic
 ```sql
 -- Analytics date ranges + retention cleanup currently seq-scan.
 CREATE INDEX IF NOT EXISTS idx_messages_created_at
-  ON knewit_messages (created_at DESC);
+  ON tcs_messages (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_events_created_at
-  ON knewit_events (created_at DESC);
+  ON tcs_events (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_leads_created_at
-  ON knewit_leads (created_at DESC);
+  ON tcs_leads (created_at DESC);
 
 -- Optional: skip the small in-memory sort on per-dialog feeds
 -- (only if profiling shows it; the composite supersedes
 -- idx_messages_whatsapp_created for these queries, keep both or replace
 -- after measuring on production distribution).
 CREATE INDEX IF NOT EXISTS idx_messages_wa_created_id
-  ON knewit_messages (whatsapp_id, created_at DESC, id DESC);
+  ON tcs_messages (whatsapp_id, created_at DESC, id DESC);
 
 -- Optional: handover/event-type lookups scoped to a dialog.
 CREATE INDEX IF NOT EXISTS idx_events_wa_type
-  ON knewit_events (whatsapp_id, event_type);
+  ON tcs_events (whatsapp_id, event_type);
 ```
 
 ## Deliberately NOT recommended

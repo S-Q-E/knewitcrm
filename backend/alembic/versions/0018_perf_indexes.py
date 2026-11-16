@@ -2,7 +2,7 @@
 
 Only crm_* tables are touched (rules 1-2): the activity journal and the
 outbox journal both paginate newest-first, which seq-scans + sorts once the
-tables grow. knewit_* findings are recommendations only.
+tables grow. tcs_* findings are recommendations only.
 """
 
 from __future__ import annotations

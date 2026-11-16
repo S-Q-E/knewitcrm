@@ -44,14 +44,14 @@ async def _insert_lead(factory, wa: str) -> None:
     async with factory() as session:
         await session.execute(
             text(
-                "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+                "INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status)"
                 " VALUES (:wa, 'Scope Bot', 'НОВЫЙ_ЛИД', 'ACTIVE')"
             ),
             {"wa": wa},
         )
         await session.execute(
             text(
-                "INSERT INTO knewit_messages (whatsapp_id, direction, message_type, content)"
+                "INSERT INTO tcs_messages (whatsapp_id, direction, message_type, content)"
                 " VALUES (:wa, 'in', 'chat', 'hi')"
             ),
             {"wa": wa},
@@ -69,13 +69,13 @@ async def _purge(factory, was: list[str], contact_ids: list[str]) -> None:
             text("DELETE FROM crm_outbox WHERE whatsapp_id = ANY(:ids)"), {"ids": was}
         )
         await session.execute(
-            text("DELETE FROM knewit_messages WHERE whatsapp_id = ANY(:ids)"), {"ids": was}
+            text("DELETE FROM tcs_messages WHERE whatsapp_id = ANY(:ids)"), {"ids": was}
         )
         await session.execute(
-            text("DELETE FROM knewit_events WHERE whatsapp_id = ANY(:ids)"), {"ids": was}
+            text("DELETE FROM tcs_events WHERE whatsapp_id = ANY(:ids)"), {"ids": was}
         )
         await session.execute(
-            text("DELETE FROM knewit_leads WHERE whatsapp_id = ANY(:ids)"), {"ids": was}
+            text("DELETE FROM tcs_leads WHERE whatsapp_id = ANY(:ids)"), {"ids": was}
         )
         await session.commit()
     await purge_contacts(factory, contact_ids)

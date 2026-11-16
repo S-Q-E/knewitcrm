@@ -1419,7 +1419,7 @@ export interface paths {
         };
         /**
          * Bot Stages
-         * @description Real bot values for the stage editor dropdowns (read-only on knewit_*).
+         * @description Real bot values for the stage editor dropdowns (read-only on tcs_*).
          */
         get: operations["bot_stages_api_settings_bot_stages_get"];
         put?: never;

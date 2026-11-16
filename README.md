@@ -2,7 +2,7 @@
 
 Web CRM for managers of KnewIT (online courses). Clients arrive through a
 WhatsApp bot on n8n with an AI agent. The bot writes directly to Postgres
-(`knewit_leads`, `knewit_messages`, `knewit_events`, `knewit_followups`);
+(`tcs_leads`, `tcs_messages`, `tcs_events`, `tcs_followups`);
 the CRM lives in the same Postgres in its own `crm_*` tables and never
 migrates bot tables (see `docs/DECISIONS.md`, rules 1–2).
 
@@ -33,7 +33,7 @@ cd frontend && npm ci && npm run dev
 
 All CRM tables carry the `crm_` prefix and are created only via Alembic.
 The version table is `crm_alembic_version`; `env.py` filters everything
-except `crm_*`, so `knewit_*` and other n8n objects are never touched.
+except `crm_*`, so `tcs_*` and other n8n objects are never touched.
 
 ```bash
 alembic -c backend/alembic.ini upgrade head
@@ -72,9 +72,9 @@ alembic -c backend/alembic.ini revision -m "what changed"  # then edit upgrade()
 | Worker | Flag | Every | Does |
 |---|---|---|---|
 | sync (`workers/sync_worker.py`) | `SYNC_ENABLED` | 5s | Backfills bot leads to contacts/deals, bot-driven stage moves, stage locks, unread counts, handover tasks, dialog list cache |
-| outbox (`workers/outbox_worker.py`) | `OUTBOX_ENABLED` | 5s | POSTs queued manager messages to the n8n webhook, mirrors them into `knewit_messages` via `services/bot_bridge.py` (the only writer to `knewit_*`) |
+| outbox (`workers/outbox_worker.py`) | `OUTBOX_ENABLED` | 5s | POSTs queued manager messages to the n8n webhook, mirrors them into `tcs_messages` via `services/bot_bridge.py` (the only writer to `tcs_*`) |
 | notify (`workers/notify_worker.py`) | `NOTIFICATIONS_ENABLED` | 60s | Overdue/due-soon task reminders + automations |
-| realtime poller (`workers/realtime_poller.py`) | `REALTIME_ENABLED` | 2s | Polls `knewit_messages`/`knewit_events` by id, fans out on the event bus → SSE at `GET /api/stream` |
+| realtime poller (`workers/realtime_poller.py`) | `REALTIME_ENABLED` | 2s | Polls `tcs_messages`/`tcs_events` by id, fans out on the event bus → SSE at `GET /api/stream` |
 
 ## n8n integration
 
@@ -82,7 +82,7 @@ alembic -c backend/alembic.ini revision -m "what changed"  # then edit upgrade()
 - **Writes:** only through `backend/app/services/bot_bridge.py` — manager
   stage changes (`manual_stage_change` events) and mirrored outgoing
   messages (`direction='out'`, `message_type='manager'`). No triggers, no
-  schema changes on `knewit_*`, ever.
+  schema changes on `tcs_*`, ever.
 - **Sending:** the CRM never stores provider keys. The outbox worker POSTs
   `{outbox_id, whatsapp_id, text}` to `N8N_SEND_WEBHOOK_URL`; n8n sends via
   its own provider and dedupes on `outbox_id`. See `docs/DECISIONS.md` (D6).

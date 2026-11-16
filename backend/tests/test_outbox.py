@@ -32,7 +32,7 @@ async def _insert_lead(factory, wa: str) -> None:
     async with factory() as session:
         await session.execute(
             text(
-                "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+                "INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status)"
                 " VALUES (:wa, 'Outbox Bot', 'НОВЫЙ_ЛИД', 'ACTIVE')"
             ),
             {"wa": wa},
@@ -47,7 +47,7 @@ async def _outbox_row(factory, wa: str) -> dict | None:
                 await session.execute(
                     text(
                         "SELECT id, whatsapp_id, status, attempts, error,"
-                        " provider_message_id, knewit_message_id, sent_at,"
+                        " provider_message_id, tcs_message_id, sent_at,"
                         " next_attempt_at FROM crm_outbox"
                         " WHERE whatsapp_id = :wa ORDER BY created_at DESC LIMIT 1"
                     ),
@@ -94,11 +94,9 @@ async def _purge(factory, wa: str, user_ids: list[str]) -> None:
         # Delete the bot lead directly: purge_contacts skips lead cleanup when no
         # contact exists, and most outbox tests never run the sync that would
         # create one. Production has no FK cascade, so child rows go first.
-        await session.execute(
-            text("DELETE FROM knewit_messages WHERE whatsapp_id = :wa"), {"wa": wa}
-        )
-        await session.execute(text("DELETE FROM knewit_events WHERE whatsapp_id = :wa"), {"wa": wa})
-        await session.execute(text("DELETE FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_messages WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_events WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_leads WHERE whatsapp_id = :wa"), {"wa": wa})
         await session.commit()
     await purge_contacts(factory, [str(c) for c in contacts])
 
@@ -212,7 +210,7 @@ async def test_worker_sends_mirrors_and_is_idempotent(client, settings):
         assert row["status"] == "sent"
         assert row["provider_message_id"] == "pv-1"
         assert row["sent_at"] is not None
-        assert row["knewit_message_id"] is not None
+        assert row["tcs_message_id"] is not None
 
         async with factory() as session:
             mirrored = (
@@ -220,9 +218,9 @@ async def test_worker_sends_mirrors_and_is_idempotent(client, settings):
                     await session.execute(
                         text(
                             "SELECT direction, message_type, content, stage_at_moment,"
-                            " tokens_used FROM knewit_messages WHERE id = :id"
+                            " tokens_used FROM tcs_messages WHERE id = :id"
                         ),
-                        {"id": row["knewit_message_id"]},
+                        {"id": row["tcs_message_id"]},
                     )
                 )
                 .mappings()
@@ -242,7 +240,7 @@ async def test_worker_sends_mirrors_and_is_idempotent(client, settings):
             count = (
                 await session.execute(
                     text(
-                        "SELECT COUNT(*) FROM knewit_messages"
+                        "SELECT COUNT(*) FROM tcs_messages"
                         " WHERE whatsapp_id = :wa AND message_type = 'manager'"
                     ),
                     {"wa": wa},
@@ -664,7 +662,7 @@ async def test_mirror_failure_keeps_sent_status(client, settings, monkeypatch):
         assert queued.status_code == 202
 
         async def broken_mirror(session, whatsapp_id, body):
-            raise RuntimeError("knewit_messages is wedged")
+            raise RuntimeError("tcs_messages is wedged")
 
         monkeypatch.setattr(worker_mod, "insert_outgoing_message", broken_mirror)
         sender = _ok_sender()
@@ -676,7 +674,7 @@ async def test_mirror_failure_keeps_sent_status(client, settings, monkeypatch):
         assert row is not None
         assert row["status"] == "sent"
         assert row["sent_at"] is not None
-        assert row["knewit_message_id"] is None
+        assert row["tcs_message_id"] is None
         assert row["error"] and row["error"].startswith("mirror_failed")
     finally:
         await _purge(factory, wa, [])
@@ -719,7 +717,7 @@ async def test_parallel_cycles_send_only_once(client, settings):
             count = (
                 await session.execute(
                     text(
-                        "SELECT COUNT(*) FROM knewit_messages"
+                        "SELECT COUNT(*) FROM tcs_messages"
                         " WHERE whatsapp_id = :wa AND message_type = 'manager'"
                     ),
                     {"wa": wa},

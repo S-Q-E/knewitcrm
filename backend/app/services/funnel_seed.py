@@ -7,7 +7,7 @@ from sqlalchemy import text
 DEFAULT_PIPELINE_NAME = "Продажи Knewit"
 
 # (name, color, kind, bot_stage_key, bot_status_key) in funnel order.
-# bot_stage_key values come from docs/db_schema.md (knewit_leads.current_stage).
+# bot_stage_key values come from docs/db_schema.md (tcs_leads.current_stage).
 STAGES: tuple[tuple[str, str, str, str | None, str | None], ...] = (
     ("Новый лид", "#38BDF8", "open", "НОВЫЙ_ЛИД", None),
     ("Выявление потребности", "#818CF8", "open", "ВЫЯВЛЕНИЕ_ПОТРЕБНОСТИ", None),

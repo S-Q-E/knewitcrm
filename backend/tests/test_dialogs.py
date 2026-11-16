@@ -24,14 +24,14 @@ async def _insert_lead(factory, wa: str) -> None:
     async with factory() as session:
         await session.execute(
             text(
-                "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+                "INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status)"
                 " VALUES (:wa, 'Dialog Bot', 'НОВЫЙ_ЛИД', 'ACTIVE')"
             ),
             {"wa": wa},
         )
         await session.execute(
             text(
-                "INSERT INTO knewit_messages (whatsapp_id, direction, message_type, content)"
+                "INSERT INTO tcs_messages (whatsapp_id, direction, message_type, content)"
                 " VALUES (:wa, 'in', 'chat', 'Hello manager')"
             ),
             {"wa": wa},
@@ -56,11 +56,9 @@ async def _purge_lead(factory, wa: str) -> None:
             text("DELETE FROM crm_conversation_state WHERE whatsapp_id = :wa"), {"wa": wa}
         )
         await session.execute(text("DELETE FROM crm_outbox WHERE whatsapp_id = :wa"), {"wa": wa})
-        await session.execute(
-            text("DELETE FROM knewit_messages WHERE whatsapp_id = :wa"), {"wa": wa}
-        )
-        await session.execute(text("DELETE FROM knewit_events WHERE whatsapp_id = :wa"), {"wa": wa})
-        await session.execute(text("DELETE FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_messages WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_events WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_leads WHERE whatsapp_id = :wa"), {"wa": wa})
         await session.commit()
     await purge_contacts(factory, [str(c) for c in contacts])
 
@@ -116,7 +114,7 @@ async def test_dialogs_list_read_and_unread(client, settings):
         async with factory() as session:
             await session.execute(
                 text(
-                    "INSERT INTO knewit_messages (whatsapp_id, direction, message_type,"
+                    "INSERT INTO tcs_messages (whatsapp_id, direction, message_type,"
                     " content, created_at) VALUES (:wa, 'in', 'chat', 'Are you there?',"
                     " now() + interval '1 second')"
                 ),
@@ -125,7 +123,7 @@ async def test_dialogs_list_read_and_unread(client, settings):
             # The bot also touches the lead row, which is what the sync watches.
             await session.execute(
                 text(
-                    "UPDATE knewit_leads SET last_message_at = now(), updated_at = now()"
+                    "UPDATE tcs_leads SET last_message_at = now(), updated_at = now()"
                     " WHERE whatsapp_id = :wa"
                 ),
                 {"wa": wa},
@@ -190,14 +188,14 @@ async def test_dialog_messages_returns_newest_window_and_pages_back(client, sett
         async with factory() as session:
             await session.execute(
                 text(
-                    "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+                    "INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status)"
                     " VALUES (:wa, 'Long Bot', 'НОВЫЙ_ЛИД', 'ACTIVE')"
                 ),
                 {"wa": wa},
             )
             await session.execute(
                 text(
-                    "INSERT INTO knewit_messages"
+                    "INSERT INTO tcs_messages"
                     " (whatsapp_id, direction, message_type, content, created_at)"
                     " SELECT :wa, 'in', 'chat', 'msg-' || g,"
                     " now() - make_interval(secs => 600 - g)"

@@ -197,7 +197,7 @@ async def _seed_fixed_dataset(client, factory, token: str, pipeline: dict) -> di
         ):
             await session.execute(
                 text(
-                    "INSERT INTO knewit_leads"
+                    "INSERT INTO tcs_leads"
                     " (whatsapp_id, name, current_stage, status, last_objection,"
                     " created_at, updated_at)"
                     " VALUES (:wa, 'Bot Lead', :stage, :status, :obj, :at, :at)"
@@ -214,7 +214,7 @@ async def _seed_fixed_dataset(client, factory, token: str, pipeline: dict) -> di
         ):
             await session.execute(
                 text(
-                    "INSERT INTO knewit_messages"
+                    "INSERT INTO tcs_messages"
                     " (whatsapp_id, direction, message_type, content, tokens_used,"
                     " response_time_ms, created_at)"
                     " VALUES (:wa, :dir, 'chat', 'hi', :tokens, :rt, :at)"
@@ -223,7 +223,7 @@ async def _seed_fixed_dataset(client, factory, token: str, pipeline: dict) -> di
             )
         await session.execute(
             text(
-                "INSERT INTO knewit_events"
+                "INSERT INTO tcs_events"
                 " (whatsapp_id, event_type, from_stage, to_stage, created_at)"
                 " VALUES (:wa, 'transferred_to_manager', 'РАБОТА_С_ВОЗРАЖЕНИЕМ',"
                 " 'МЕНЕДЖЕР', '2026-02-12 01:05+00')"

@@ -86,7 +86,7 @@ async def test_migrate_creates_only_version_table(settings):
                 "crm_imports",
             }
             # Bot data untouched.
-            count = await conn.execute(text("SELECT COUNT(*) FROM knewit_leads"))
+            count = await conn.execute(text("SELECT COUNT(*) FROM tcs_leads"))
             assert count.scalar() == 6
     finally:
         await engine.dispose()

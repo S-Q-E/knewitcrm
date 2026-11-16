@@ -28,7 +28,7 @@ async def _lead_with_deal(factory, wa: str) -> tuple[str, str]:
     async with factory() as session:
         await session.execute(
             text(
-                "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+                "INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status)"
                 " VALUES (:wa, 'Iso Bot', 'НОВЫЙ_ЛИД', 'ACTIVE')"
             ),
             {"wa": wa},
@@ -66,11 +66,9 @@ async def _cleanup(factory, wa: str, automation_ids: list[str], tag_ids: list[st
         await session.execute(
             text("DELETE FROM crm_conversation_state WHERE whatsapp_id = :wa"), {"wa": wa}
         )
-        await session.execute(
-            text("DELETE FROM knewit_messages WHERE whatsapp_id = :wa"), {"wa": wa}
-        )
-        await session.execute(text("DELETE FROM knewit_events WHERE whatsapp_id = :wa"), {"wa": wa})
-        await session.execute(text("DELETE FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_messages WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_events WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_leads WHERE whatsapp_id = :wa"), {"wa": wa})
         await session.commit()
         contacts = (
             (

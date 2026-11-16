@@ -30,6 +30,11 @@ describe("formatPhone", () => {
     expect(formatPhone(undefined, "")).toBeNull();
     expect(formatPhone("—")).toBeNull();
   });
+
+  it("does not render a Telegram chat id as a phone number", () => {
+    expect(formatPhone(null, "tg:123456789")).toBeNull();
+    expect(formatPhone("+1 215 555 0100", "tg:123456789")).toBe("+12155550100");
+  });
 });
 
 describe("initials", () => {

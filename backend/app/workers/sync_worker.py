@@ -47,7 +47,7 @@ BATCH_SIZE = 500
 OVERLAP_WINDOW = timedelta(minutes=2)
 FULL_RESCAN_INTERVAL = timedelta(minutes=10)
 
-# knewit_leads columns mirrored into contact/deal custom payloads.
+# tcs_leads columns mirrored into contact/deal custom payloads.
 # Only these keys are written by the sync; any other custom keys belong to
 # the manager and are left untouched (merge, never replace).
 CUSTOM_FIELDS = (
@@ -60,16 +60,47 @@ CUSTOM_FIELDS = (
 )
 
 
+def _lead_data(lead: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the bot's JSONB ``lead_data`` payload as a dict when possible."""
+    value = lead.get("lead_data")
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+        except (TypeError, ValueError):
+            return None
+        return decoded if isinstance(decoded, dict) else None
+    return None
+
+
+def _bot_custom(lead: dict[str, Any]) -> dict[str, Any]:
+    """Build the bot-owned part of a contact/deal custom payload.
+
+    The six fixed lead columns are mirrored for historical compatibility;
+    every key from ``lead_data`` is flattened next to them so TCS-specific
+    fields (unit, budget, pets, ...) show up in the CRM without a schema
+    change. The original JSON object is kept under ``lead_data`` as well.
+    """
+    values: dict[str, Any] = {name: lead.get(name) for name in CUSTOM_FIELDS}
+    data = _lead_data(lead)
+    values["lead_data"] = data
+    if data is not None:
+        for key, value in data.items():
+            if isinstance(key, str) and key not in values:
+                values[key] = value
+    return values
+
+
 def _merge_bot_custom(existing: Any, lead: dict[str, Any]) -> dict[str, Any]:
     """Merge bot-mirrored keys into the stored custom payload.
 
-    Manager keys (anything outside CUSTOM_FIELDS) are preserved as-is;
+    Manager keys (anything outside the bot payload) are preserved as-is;
     bot keys are always refreshed from the lead (including NULL clears),
     so bot fields keep updating while manual fields survive.
     """
     base = dict(existing) if isinstance(existing, dict) else {}
-    for name in CUSTOM_FIELDS:
-        base[name] = lead.get(name)
+    base.update(_bot_custom(lead))
     return base
 
 
@@ -110,6 +141,38 @@ def _sync_contact_name(contact: CrmContact, bot_name: str | None) -> None:
             contact.name = bot_name
     # Else: manager changed the name manually -> keep it.
     contact.last_bot_name = bot_name
+
+
+def _sync_contact_phone(contact: CrmContact, bot_phone: str | None) -> None:
+    """Keep contact.phone in sync with the bot without clobbering an edit.
+
+    ``last_bot_phone`` records the last value sent by the bot. A non-NULL bot
+    phone is applied when the CRM field is empty or still equals that snapshot;
+    a value changed by a manager survives later bot syncs.
+    """
+    if bot_phone is None:
+        return
+    snapshot = contact.last_bot_phone
+    if snapshot is None:
+        if not contact.phone:
+            contact.phone = bot_phone
+    elif not contact.phone or contact.phone == snapshot:
+        contact.phone = bot_phone
+    contact.last_bot_phone = bot_phone
+
+
+def _sync_contact_source(contact: CrmContact, bot_source: str | None) -> None:
+    """Mirror the bot lead source while preserving a manual CRM override."""
+    if bot_source is None:
+        return
+    bot_source = bot_source[:32]
+    snapshot = contact.last_bot_source
+    if snapshot is None:
+        if not contact.source:
+            contact.source = bot_source
+    elif not contact.source or contact.source == snapshot:
+        contact.source = bot_source
+    contact.last_bot_source = bot_source
 
 
 def _sync_deal_trial(deal: CrmDeal, bot_trial: Any) -> None:
@@ -245,10 +308,12 @@ async def sync_all(session: AsyncSession, *, force_full: bool = False) -> SyncSt
 
 
 _LEAD_SELECT = (
-    "SELECT whatsapp_id, name, current_stage, previous_stage, status,"
+    "SELECT whatsapp_id, COALESCE(NULLIF(name, ''), client_name) AS name,"
+    " current_stage, previous_stage, status,"
     " direction, goal, experience_level, preferred_format,"
-    " preferred_time, trial_datetime, last_objection"
-    " FROM knewit_leads"
+    " preferred_time, trial_datetime, last_objection,"
+    " phone, lead_data, source"
+    " FROM tcs_leads"
 )
 
 
@@ -372,12 +437,16 @@ async def _sync_batch(
     for lead in leads:
         whatsapp_id = lead["whatsapp_id"]
         if whatsapp_id not in contacts:
+            bot_source = (lead.get("source") or CONTACT_SOURCE_BOT)[:32]
             contact = CrmContact(
                 whatsapp_id=whatsapp_id,
                 name=lead.get("name"),
-                source=CONTACT_SOURCE_BOT,
-                custom={name: lead.get(name) for name in CUSTOM_FIELDS},
+                phone=lead.get("phone"),
+                source=bot_source,
+                custom=_bot_custom(lead),
                 last_bot_name=lead.get("name"),
+                last_bot_phone=lead.get("phone"),
+                last_bot_source=bot_source,
             )
             session.add(contact)
             contacts[whatsapp_id] = contact
@@ -391,6 +460,8 @@ async def _sync_batch(
         contact = contacts[whatsapp_id]
         if contact.deleted_at is None:
             _sync_contact_name(contact, lead.get("name"))
+            _sync_contact_phone(contact, lead.get("phone"))
+            _sync_contact_source(contact, lead.get("source"))
             contact.custom = _merge_bot_custom(contact.custom, lead)
 
     live_ids = [c.id for c in contacts.values() if c.deleted_at is None]
@@ -449,7 +520,7 @@ async def _sync_batch(
                     last_bot_trial_at=lead.get("trial_datetime"),
                     closed_at=datetime.now(UTC) if target_status != DEAL_STATUS_OPEN else None,
                     position=position,
-                    custom={name: lead.get(name) for name in CUSTOM_FIELDS},
+                    custom=_bot_custom(lead),
                 )
             )
         await session.flush()
@@ -546,7 +617,7 @@ async def _refresh_last_messages(
     """Cache the latest message summary on each conversation state.
 
     The dialog list orders and renders from these columns, so it never
-    touches ``knewit_messages`` (owned by n8n, no new indexes allowed).
+    touches ``tcs_messages`` (owned by n8n, no new indexes allowed).
     """
     if not wa_ids:
         return
@@ -555,7 +626,7 @@ async def _refresh_last_messages(
             await session.execute(
                 text(
                     "SELECT DISTINCT ON (whatsapp_id) whatsapp_id, direction, content,"
-                    " created_at FROM knewit_messages WHERE whatsapp_id = ANY(:ids)"
+                    " created_at FROM tcs_messages WHERE whatsapp_id = ANY(:ids)"
                     " ORDER BY whatsapp_id, created_at DESC, id DESC"
                 ),
                 {"ids": wa_ids},
@@ -579,7 +650,7 @@ async def _unread_counts(session: AsyncSession, wa_ids: list[str]) -> dict[str, 
         await session.execute(
             text(
                 "SELECT m.whatsapp_id AS wa, COUNT(*) AS cnt"
-                " FROM knewit_messages m"
+                " FROM tcs_messages m"
                 " JOIN crm_conversation_state s ON s.whatsapp_id = m.whatsapp_id"
                 " WHERE m.whatsapp_id = ANY(:ids)"
                 " AND m.direction = 'in'"

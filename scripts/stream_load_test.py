@@ -27,7 +27,7 @@ WA = "77010000001@c.us"
 
 ENV = {
     **os.environ,
-    "DATABASE_URL": "postgresql://knewit:knewit@localhost:5432/knewit",
+    "DATABASE_URL": "postgresql://tcs:tcs@localhost:5432/tcs",
     "SECRET_KEY": "load-test-secret",
     "ADMIN_EMAIL": "admin-test@example.com",
     "ADMIN_PASSWORD": "admin-test-password-1",

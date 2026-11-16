@@ -2,10 +2,10 @@
 
 ## Step 0 — Urgent protection and audit [done]
 - [x] Temporary HTTP Basic Auth for all routes except `/api/health` (`CRM_BASIC_USER` / `CRM_BASIC_PASS`, fail fast)
-- [x] `scripts/dump_schema.py` (read-only dump of `knewit_*` into `docs/db_schema.md`)
+- [x] `scripts/dump_schema.py` (read-only dump of `tcs_*` into `docs/db_schema.md`)
 - [x] `docs/DECISIONS.md` (D1–D7) and this `docs/PROGRESS.md`
 - [x] `.env.example`
-- [x] `docker-compose.yml` + local Postgres 16 + `tests/fixtures/knewit_schema.sql` + seed
+- [x] `docker-compose.yml` + local Postgres 16 + `tests/fixtures/tcs_schema.sql` + seed
 - [x] Legacy frontend moved to `frontend-legacy/`
 
 ## Step 1 — Backend skeleton (FastAPI + SQLAlchemy + Alembic) [done]
@@ -27,7 +27,7 @@
 - [x] 47 tests (auth, users, health, legacy) + ruff clean + manual curl scenario verified
 ## Step 3 — Contacts + deals + kanban [done]
 - [x] Migration `0003_domain`: pipelines, stages, contacts, deals, stage history, lost reasons, tags, entity tags, custom fields, conversation state, settings, activity log (+ seed `Продажи Knewit`: 16 stages, 5 lost reasons)
-- [x] `services/bot_bridge.py`: `update_bot_stage` (UPDATE lead + `manual_stage_change` event in one txn); sole writer to `knewit_*`
+- [x] `services/bot_bridge.py`: `update_bot_stage` (UPDATE lead + `manual_stage_change` event in one txn); sole writer to `tcs_*`
 - [x] `workers/sync_worker.py`: lifespan asyncio task (5s, advisory-xact-lock), backfill in batches, bot moves with history, stage_locked -> activity log only, won/lost + closed_at, `last_synced_at` in settings
 - [x] 58 tests (bridge, sync, seed idempotency, lifespan worker) + ruff clean + manual run verified
 ## Step 4 — Bot sync worker + stage locks (D3) [done]
@@ -70,8 +70,8 @@
 - [x] 99 backend tests + tsc/eslint/vitest green; 3 E2E green; manual handover/task/bell curl verified
 ## Step 9 — Manager messaging via outbox + n8n webhook (D6) [done]
 - [x] Brief for this step implements the outbox half of Step 5 (SSE realtime stays [todo]); old "Step 9 — Notifications + activity log" placeholder is superseded (notifications shipped in Step 8b, activity log in Step 4b)
-- [x] Migration `0010_outbox`: `crm_outbox` (body/sent_by/status/attempts/next_attempt_at/error/provider_message_id/knewit_message_id/sent_at + due index) + `crm_quick_replies` (unique title, 3 seeded templates)
-- [x] `bot_bridge.insert_outgoing_message` (sole `knewit_messages` writer: out/manager row, lead stage stamp, tokens 0, RETURNING id)
+- [x] Migration `0010_outbox`: `crm_outbox` (body/sent_by/status/attempts/next_attempt_at/error/provider_message_id/tcs_message_id/sent_at + due index) + `crm_quick_replies` (unique title, 3 seeded templates)
+- [x] `bot_bridge.insert_outgoing_message` (sole `tcs_messages` writer: out/manager row, lead stage stamp, tokens 0, RETURNING id)
 - [x] `POST /api/chats/{wa}/messages` (202, EMPTY_BODY/LEAD_NOT_FOUND, auto-pause default true) + outbox list + `/outbox/{id}/retry` + `/bot/pause|resume` (transition-only timeline events) + quick-replies list; `httpx` promoted to production requirements
 - [x] `workers/outbox_worker.py`: advisory-locked cycles, claim via SKIP LOCKED, HTTP outside txn, CAS outcome, exp backoff to 5 attempts then failed+notify, `outbox_loop` in lifespan; 12 backend tests (queue/validation/send+mirror/idempotent double-run/retry-then-success/5-fails-notify/pause-resume-timeline/autopause on-off/retry endpoint/listing+templates/mock-server sender incl. rejection paths/manager e2e with timeline author)
 - [x] Timeline: manager messages get `author_kind='manager'` + sender name via outbox link (fallback "Менеджер")
@@ -130,7 +130,7 @@
 ## Step 10 — Realtime via SSE + event bus (D4) [done]
 - [x] Brief for this step arrives out of PROGRESS order (same as Step 9 before it); the saved-views/filter step keeps its number above and stays [todo]
 - [x] `services/event_bus.py`: process-local fan-out hub (bounded queues, drop-oldest, publishers never block, subscriber stats, test reset)
-- [x] `workers/realtime_poller.py`: 2s poll of `knewit_messages`/`knewit_events` by id (in-memory cursors from current maxima at startup), emits `new_message` + `bot_event`; `realtime_loop` wired in lifespan
+- [x] `workers/realtime_poller.py`: 2s poll of `tcs_messages`/`tcs_events` by id (in-memory cursors from current maxima at startup), emits `new_message` + `bot_event`; `realtime_loop` wired in lifespan
 - [x] `GET /api/stream` (SSE, cookie auth, per-user visibility filter, 15s heartbeat comments, disconnect cleanup)
 - [x] Publishers: `notify()` → `notification`; sync bot moves → `deal_moved` (flushed post-commit per batch); deals create/update/move/bulk → `deal_updated`/`deal_moved`; tasks create → `task_created`; chats queue/retry/pause/resume → `outbox_status`/`bot_paused`; outbox worker sent/failed → `outbox_status`
 - [x] 11 backend tests in `test_realtime.py` (bus fanout/backpressure/churn, poller once-only, auth, 2-subscriber broadcast, notification owner-only, heartbeat, sync/manager/task publish, visibility matrix); streaming tests boot real uvicorn (httpx ASGI transport cannot stream, see D16)
@@ -150,7 +150,7 @@
 - [x] Backend: `services/analytics.py` (SQL-агрегаты, см. D20), `schemas/analytics.py`,
   `routers/analytics.py` (`GET /api/analytics/overview`, `GET /api/analytics/export`),
   миграция `0017_analytics_indexes` (только `crm_*`, `IF NOT EXISTS`)
-- [x] Воронка когортная (history + `knewit_events` через `bot_stage_key` + fallback текущей
+- [x] Воронка когортная (history + `tcs_events` через `bot_stage_key` + fallback текущей
   стадии), конверсии, среднее время, узкое место; drill-down — модалка со списком сделок
   через пагинированный `GET /api/deals`
 - [x] Итоги (лиды/пробные/won+сумма+средний чек/потери по причинам), динамика день/неделя,
@@ -174,7 +174,7 @@
 - Note: brief numbering collides with the old `Step 13 — Production deploy` placeholder
   above; this step keeps the `13b` suffix like earlier out-of-order briefs, deploy stays [todo].
 - [x] Backend: `routers/settings.py` (`GET/PATCH /api/settings` с 4 курируемыми ключами,
-  `GET /api/settings/bot-stages` — живые DISTINCT из `knewit_leads` read-only,
+  `GET /api/settings/bot-stages` — живые DISTINCT из `tcs_leads` read-only,
   `GET /api/settings/integrations` — пробы БД бота + n8n URL без секрета + счётчики outbox),
   `routers/activity.py` (`GET /api/activity` с фильтрами и пагинацией + `/entities`),
   quick-reply CRUD (admin) и глобальный `GET /api/chats/outbox` в `chats.py`,
@@ -206,7 +206,7 @@
 - [x] Perf на 100k сообщений: EXPLAIN-анализ, board GROUP BY, managers GROUP BY,
   параллельные секции overview; замер: диалоги ~100мс, сообщения ~60мс, board ~250мс,
   аналитика 120–350мс; миграция `0018_perf_indexes` (только `crm_*`);
-  `docs/DB_RECOMMENDATIONS.md` (knewit_* — применять осознанно, не нами)
+  `docs/DB_RECOMMENDATIONS.md` (tcs_* — применять осознанно, не нами)
 - [x] `scripts/backup.sh` + `docs/BACKUP.md`: pg_dump nightly, ротация, restore
   smoke-тест пройден (dump → scratch restore → counts → drop)
 - [x] Полный backend-сьют зелёный; ruff + tsc/eslint/prettier/vitest/build зелёные;
@@ -268,7 +268,7 @@
 - [x] D25 в `docs/DECISIONS.md`
 ## Step 17 — Roadmap execution (2026-10-08/09) [done for listed items]
 - [x] P0-3 `/api/leads*` removed (d714f70); P1-7 H4 DB tests fail under CI (3a11d18)
-- [x] P0-4 test schema follows `schema_dump.sql` (fc2080a); contract test CRM ↔ `knewit_*` (02db6a6)
+- [x] P0-4 test schema follows `schema_dump.sql` (fc2080a); contract test CRM ↔ `tcs_*` (02db6a6)
 - [x] P1-2 SSE holds no pool connection (1b27342)
 - [x] P1-10 SSE `task_created` follows REST task visibility (7c70cdf)
 - [x] P1-1 steps 1–2: one uvicorn worker (7521852), resync on overflow and reconnect (047d195); step 3 deferred (D26)
@@ -278,7 +278,7 @@
   after restart within a 500-id gap (D29)
 - [x] P3-6 realtime status indicator in the header (D29)
 - [ ] Open items and blockers: see `docs/KNEWIT_INTEGRATION_ROADMAP.md` §1
-- Test database reproduction: `DROP/CREATE knewit_test`, then `knewit_schema.sql`, `seed.sql`,
+- Test database reproduction: `DROP/CREATE tcs_test`, then `tcs_schema.sql`, `seed.sql`,
   `alembic upgrade head`, `pytest -q -p no:cacheprovider` (password only via environment).
   Known timing flakes under machine load: `test_login_timing_equalized`,
   `test_dialogs_list_paginates_in_sql_under_200ms`, `test_load_idle_cycle_under_one_second`.
@@ -349,7 +349,7 @@
 - Уточнение 2026-10-13 (тесты владельца, та же ветка): Chatflow Trigger НЕ подписан на
   «исходящее через API» — сообщения CRM и ответы бота повторно через n8n не приходят,
   риск дублей «зеркало+n8n» из D36 снимается. Захват с телефона работает: все сообщения,
-  включая менеджера с телефона, попадают в `knewit_messages` (полная переписка есть);
+  включая менеджера с телефона, попадают в `tcs_messages` (полная переписка есть);
   кнопка «Пауза» в CRM останавливает бота (подтверждено). Открыто: предложение писать
   для phone-строк отдельное `message_type` (например `'operator'`) и вопрос по
   `operator_takeover`/`ai_pause_triggered` (см. D31).
@@ -396,7 +396,7 @@
   сделку, контакт и `crm_conversation_state`; `set_contact_owner` (карточка контакта,
   диалог, массовое назначение) идёт в самую свежую живую сделку контакта, а без живых
   сделок — только в контакт и диалог. Обе функции без `commit`; state пишется только
-  при наличии строки в `knewit_leads` (сырой `INSERT ... ON CONFLICT`), `knewit_*`
+  при наличии строки в `tcs_leads` (сырой `INSERT ... ON CONFLICT`), `tcs_*`
   не меняются
 - [x] Подключено везде, где меняется ответственный: `create_deal`, `update_deal`,
   `bulk_update_deals`, автоматизация `assign_owner`, `update_contact`,

@@ -14,7 +14,7 @@ mkdir -p "$BACKUP_DIR"
 if [ -n "${DATABASE_URL:-}" ]; then
   PGURL="$DATABASE_URL"
 else
-  PGURL="postgresql://${PGUSER:-postgres}:${PGPASSWORD:-}@${PGHOST:-localhost}:${PGPORT:-5432}/${PGDATABASE:-railway}"
+  PGURL="postgresql://${PGUSER:-tcs}:${PGPASSWORD:-}@${PGHOST:-localhost}:${PGPORT:-5432}/${PGDATABASE:-tcs}"
 fi
 
 DUMP="$BACKUP_DIR/knewitcrm-$STAMP.dump"

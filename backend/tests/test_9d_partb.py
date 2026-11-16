@@ -26,7 +26,7 @@ async def _insert_lead(factory, wa: str) -> None:
     async with factory() as session:
         await session.execute(
             text(
-                "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+                "INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status)"
                 " VALUES (:wa, 'Probe', 'НОВЫЙ_ЛИД', 'ACTIVE')"
             ),
             {"wa": wa},
@@ -37,11 +37,9 @@ async def _insert_lead(factory, wa: str) -> None:
 async def _purge(factory, wa: str) -> None:
     async with factory() as session:
         await session.execute(text("DELETE FROM crm_outbox WHERE whatsapp_id = :wa"), {"wa": wa})
-        await session.execute(
-            text("DELETE FROM knewit_messages WHERE whatsapp_id = :wa"), {"wa": wa}
-        )
-        await session.execute(text("DELETE FROM knewit_events WHERE whatsapp_id = :wa"), {"wa": wa})
-        await session.execute(text("DELETE FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_messages WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_events WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_leads WHERE whatsapp_id = :wa"), {"wa": wa})
         # Failure paths notify the sender; drop those rows too so later
         # tests counting notifications (test_outbox.py) see a clean slate.
         await session.execute(
@@ -188,7 +186,7 @@ async def test_outbox_mirror_failure_prefix_is_short(client, settings, monkeypat
         assert queued.status_code == 202
 
         async def broken_mirror(session, whatsapp_id, body):
-            raise RuntimeError("knewit_messages wedged; params {'content': 'Зеркало'}")
+            raise RuntimeError("tcs_messages wedged; params {'content': 'Зеркало'}")
 
         monkeypatch.setattr(worker_mod, "insert_outgoing_message", broken_mirror)
 

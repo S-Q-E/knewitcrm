@@ -13,7 +13,7 @@ MANUAL_STAGE_CHANGE_EVENT = "manual_stage_change"
 
 
 class BotLeadNotFoundError(LookupError):
-    """Raised when the target lead does not exist in knewit_leads."""
+    """Raised when the target lead does not exist in tcs_leads."""
 
 
 async def update_bot_stage(
@@ -24,18 +24,17 @@ async def update_bot_stage(
 ) -> bool:
     """Push a manager-driven stage change into the bot tables (D3).
 
-    Updates ``knewit_leads.current_stage``/``previous_stage`` and appends a
-    ``manual_stage_change`` row to ``knewit_events`` in the caller's
+    Updates ``tcs_leads.current_stage``/``previous_stage`` and appends a
+    ``manual_stage_change`` row to ``tcs_events`` in the caller's
     transaction (no commit here). Returns True when something changed,
     False when the lead already sits on ``stage_key``.
 
-    This module is the ONLY place allowed to write to ``knewit_*`` tables.
+    This module is the ONLY place allowed to write to ``tcs_*`` tables.
     """
     row = (
         await session.execute(
             text(
-                "SELECT current_stage FROM knewit_leads"
-                " WHERE whatsapp_id = :whatsapp_id FOR UPDATE"
+                "SELECT current_stage FROM tcs_leads" " WHERE whatsapp_id = :whatsapp_id FOR UPDATE"
             ),
             {"whatsapp_id": whatsapp_id},
         )
@@ -49,7 +48,7 @@ async def update_bot_stage(
     now = datetime.now(UTC)
     await session.execute(
         text(
-            "UPDATE knewit_leads SET previous_stage = current_stage,"
+            "UPDATE tcs_leads SET previous_stage = current_stage,"
             " current_stage = :stage_key, updated_at = :now"
             " WHERE whatsapp_id = :whatsapp_id"
         ),
@@ -58,7 +57,7 @@ async def update_bot_stage(
     payload = {"user_id": str(changed_by) if changed_by is not None else None}
     await session.execute(
         text(
-            "INSERT INTO knewit_events"
+            "INSERT INTO tcs_events"
             " (whatsapp_id, event_type, from_stage, to_stage, payload, created_at)"
             " VALUES (:whatsapp_id, :event_type, :from_stage, :to_stage,"
             " CAST(:payload AS jsonb), :now)"
@@ -80,15 +79,14 @@ async def insert_outgoing_message(session: AsyncSession, whatsapp_id: str, body:
     """Mirror a manager-sent outbox message into the bot tables (D6).
 
     Appends a ``direction='out', message_type='manager'`` row to
-    ``knewit_messages`` stamped with the lead's current stage, in the
+    ``tcs_messages`` stamped with the lead's current stage, in the
     caller's transaction (no commit here). Returns the new message id.
-    This module is the ONLY place allowed to write to ``knewit_*`` tables.
+    This module is the ONLY place allowed to write to ``tcs_*`` tables.
     """
     row = (
         await session.execute(
             text(
-                "SELECT current_stage FROM knewit_leads"
-                " WHERE whatsapp_id = :whatsapp_id FOR UPDATE"
+                "SELECT current_stage FROM tcs_leads" " WHERE whatsapp_id = :whatsapp_id FOR UPDATE"
             ),
             {"whatsapp_id": whatsapp_id},
         )
@@ -98,7 +96,7 @@ async def insert_outgoing_message(session: AsyncSession, whatsapp_id: str, body:
     message_id = (
         await session.execute(
             text(
-                "INSERT INTO knewit_messages"
+                "INSERT INTO tcs_messages"
                 " (whatsapp_id, direction, message_type, content,"
                 " stage_at_moment, tokens_used, created_at)"
                 " VALUES (:whatsapp_id, 'out', 'manager', :content,"

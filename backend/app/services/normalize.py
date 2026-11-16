@@ -21,10 +21,16 @@ def normalize_phone(value: str | None) -> str:
 
 
 def normalize_whatsapp(value: str | None) -> str:
-    """whatsapp_id like `79991234567@c.us` -> normalized digits."""
+    """whatsapp_id like `79991234567@c.us` -> normalized digits.
+
+    Telegram leads use ``tg:<chat_id>``; those ids are not phone numbers and
+    must not participate in phone-based duplicate detection.
+    """
     if not value:
         return ""
     local = value.split("@")[0].strip()
+    if local.startswith("tg:"):
+        return ""
     return normalize_phone(local)
 
 

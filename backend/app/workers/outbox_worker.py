@@ -275,7 +275,7 @@ async def _apply_success(
                 )
             else:
                 await session.execute(
-                    text("UPDATE crm_outbox SET knewit_message_id = :mid WHERE id = :id"),
+                    text("UPDATE crm_outbox SET tcs_message_id = :mid WHERE id = :id"),
                     {"mid": message_id, "id": outbox_id},
                 )
             state = await session.get(CrmConversationState, whatsapp_id)

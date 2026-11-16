@@ -31,7 +31,7 @@ def upgrade() -> None:
             " last_message_direction = m.direction,"
             " last_message_preview = LEFT(m.content, 200)"
             " FROM (SELECT DISTINCT ON (whatsapp_id) whatsapp_id, direction,"
-            " content, created_at FROM knewit_messages"
+            " content, created_at FROM tcs_messages"
             " ORDER BY whatsapp_id, created_at DESC, id DESC) m"
             " WHERE m.whatsapp_id = s.whatsapp_id"
         )

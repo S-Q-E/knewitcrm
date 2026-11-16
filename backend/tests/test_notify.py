@@ -25,7 +25,7 @@ async def _insert_lead(factory, wa: str, status: str = "ACTIVE") -> None:
     async with factory() as session:
         await session.execute(
             text(
-                "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+                "INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status)"
                 " VALUES (:wa, 'Notify Bot', 'НОВЫЙ_ЛИД', :status)"
             ),
             {"wa": wa, "status": status},
@@ -48,11 +48,9 @@ async def _purge_lead(factory, wa: str) -> None:
             text("DELETE FROM crm_conversation_state WHERE whatsapp_id = :wa"), {"wa": wa}
         )
         await session.execute(text("DELETE FROM crm_outbox WHERE whatsapp_id = :wa"), {"wa": wa})
-        await session.execute(
-            text("DELETE FROM knewit_messages WHERE whatsapp_id = :wa"), {"wa": wa}
-        )
-        await session.execute(text("DELETE FROM knewit_events WHERE whatsapp_id = :wa"), {"wa": wa})
-        await session.execute(text("DELETE FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_messages WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_events WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_leads WHERE whatsapp_id = :wa"), {"wa": wa})
         await session.commit()
     await purge_contacts(factory, [str(c) for c in contacts])
 
@@ -290,7 +288,7 @@ async def test_locked_stage_notifies_owner(client, settings):
             )
             await session.execute(
                 text(
-                    "UPDATE knewit_leads SET current_stage = 'ЗАПИСЬ', updated_at = now()"
+                    "UPDATE tcs_leads SET current_stage = 'ЗАПИСЬ', updated_at = now()"
                     " WHERE whatsapp_id = :wa"
                 ),
                 {"wa": wa},
@@ -426,7 +424,7 @@ async def test_bot_stage_blocked_logged_once_per_target(client, settings):
             )
             await session.execute(
                 text(
-                    "UPDATE knewit_leads SET current_stage = 'ЗАПИСЬ', updated_at = now()"
+                    "UPDATE tcs_leads SET current_stage = 'ЗАПИСЬ', updated_at = now()"
                     " WHERE whatsapp_id = :wa"
                 ),
                 {"wa": wa},

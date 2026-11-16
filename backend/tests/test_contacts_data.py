@@ -26,7 +26,9 @@ pytestmark = pytest.mark.usefixtures("db_available")
 
 
 def _wa() -> str:
-    return f"7999{uuid.uuid4().hex[:8]}@c.us"
+    # 4+7 digits keeps the synthetic WhatsApp id phone-shaped (11 digits),
+    # so duplicate detection does not prefer it over a real phone by length.
+    return f"7999{uuid.uuid4().hex[:7]}@c.us"
 
 
 def test_normalize_phone_cases() -> None:
@@ -36,6 +38,8 @@ def test_normalize_phone_cases() -> None:
     assert normalize_phone(None) == ""
     assert normalize_whatsapp("79991234567@c.us") == "79991234567"
     assert normalize_whatsapp("79991234567@lid") == "79991234567"
+    assert normalize_whatsapp("tg:123456789") == ""
+    assert contact_keys(None, "tg:123456789", None) == {"phone": None, "email": None}
     assert normalize_email("  AiG@Example.COM ") == "aig@example.com"
     keys = contact_keys("+7 (701) 000-11-22", None, "A@B.cC")
     assert keys == {"phone": "77010001122", "email": "a@b.cc"}

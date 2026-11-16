@@ -18,7 +18,7 @@ async def _seed_bulk(factory) -> None:
     async with factory() as session:
         await session.execute(
             text(
-                "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+                "INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status)"
                 f" SELECT '{PREFIX}' || g || '@c.us', 'Perf', 'НОВЫЙ_ЛИД', 'ACTIVE'"
                 f" FROM generate_series(1, :n) g"
             ),
@@ -26,7 +26,7 @@ async def _seed_bulk(factory) -> None:
         )
         await session.execute(
             text(
-                "INSERT INTO knewit_messages (whatsapp_id, direction, message_type,"
+                "INSERT INTO tcs_messages (whatsapp_id, direction, message_type,"
                 " content, created_at)"
                 f" SELECT '{PREFIX}' || g || '@c.us', 'in', 'chat', 'hello ' || g,"
                 " now() - (g || ' seconds')::interval"
@@ -59,7 +59,7 @@ async def _seed_bulk(factory) -> None:
     engine = factory.kw["bind"]
     async with engine.connect() as conn:
         await conn.execution_options(isolation_level="AUTOCOMMIT")
-        for table in ("crm_conversation_state", "knewit_messages", "knewit_leads"):
+        for table in ("crm_conversation_state", "tcs_messages", "tcs_leads"):
             await conn.execute(text(f"VACUUM ANALYZE {table}"))
 
 
@@ -70,11 +70,11 @@ async def _purge_bulk(factory) -> None:
             {"p": f"{PREFIX}%"},
         )
         await session.execute(
-            text("DELETE FROM knewit_messages WHERE whatsapp_id LIKE :p"),
+            text("DELETE FROM tcs_messages WHERE whatsapp_id LIKE :p"),
             {"p": f"{PREFIX}%"},
         )
         await session.execute(
-            text("DELETE FROM knewit_leads WHERE whatsapp_id LIKE :p"),
+            text("DELETE FROM tcs_leads WHERE whatsapp_id LIKE :p"),
             {"p": f"{PREFIX}%"},
         )
         await session.commit()

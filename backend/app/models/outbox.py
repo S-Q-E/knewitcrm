@@ -33,7 +33,7 @@ VALID_OUTBOX_STATUSES = (
 class CrmOutbox(Base):
     """Manager outbound message queue (D6). The outbox worker POSTs queued
     rows to the n8n webhook; on success bot_bridge mirrors the text into
-    knewit_messages. ``knewit_message_id`` links the exact mirrored row for
+    tcs_messages. ``tcs_message_id`` links the exact mirrored row for
     timeline attribution."""
 
     __tablename__ = "crm_outbox"
@@ -61,7 +61,7 @@ class CrmOutbox(Base):
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     provider_message_id: Mapped[str | None] = mapped_column(Text, nullable=True)
-    knewit_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    tcs_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

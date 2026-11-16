@@ -1,9 +1,9 @@
 """Analytics calculations (step 12).
 
 All aggregates are computed on the backend with SQL. Reads touch both
-crm_* and n8n-owned knewit_* tables; nothing here writes to knewit_*
+crm_* and n8n-owned tcs_* tables; nothing here writes to tcs_*
 (rule 1), so no bot_bridge involvement is needed. No index is created
-on knewit_* tables; hotspot crm_* columns are indexed by migration
+on tcs_* tables; hotspot crm_* columns are indexed by migration
 0017_analytics_indexes.
 
 Conventions (see D20):
@@ -255,7 +255,7 @@ async def funnel_section(session: AsyncSession, filters: AnalyticsFilters) -> di
             (
                 await session.execute(
                     text(
-                        "SELECT whatsapp_id, to_stage FROM knewit_events"
+                        "SELECT whatsapp_id, to_stage FROM tcs_events"
                         " WHERE whatsapp_id = ANY(:was)"
                     ),
                     {"was": list(wa_to_deal)},
@@ -360,7 +360,7 @@ async def summary_section(session: AsyncSession, filters: AnalyticsFilters) -> d
     new_leads = (
         await session.execute(
             text(
-                "SELECT COUNT(*) FROM knewit_leads l"
+                "SELECT COUNT(*) FROM tcs_leads l"
                 " LEFT JOIN crm_contacts c ON c.whatsapp_id = l.whatsapp_id"
                 " AND c.deleted_at IS NULL"
                 " WHERE l.created_at >= :start AND l.created_at < :end"
@@ -448,7 +448,7 @@ async def dynamics_buckets(session: AsyncSession, filters: AnalyticsFilters) -> 
             await session.execute(
                 text(
                     "SELECT DATE((l.created_at AT TIME ZONE :tz)) AS d, COUNT(*)"
-                    " FROM knewit_leads l"
+                    " FROM tcs_leads l"
                     " LEFT JOIN crm_contacts c ON c.whatsapp_id = l.whatsapp_id"
                     " AND c.deleted_at IS NULL"
                     " WHERE l.created_at >= :start AND l.created_at < :end"
@@ -697,11 +697,11 @@ async def _avg_first_response_by_owner(
             await session.execute(
                 text(
                     "WITH first_in AS ("
-                    " SELECT whatsapp_id, MIN(created_at) AS t FROM knewit_messages"
+                    " SELECT whatsapp_id, MIN(created_at) AS t FROM tcs_messages"
                     " WHERE whatsapp_id = ANY(:was) AND direction = 'in' GROUP BY 1"
                     ") SELECT f.whatsapp_id,"
                     " EXTRACT(EPOCH FROM (o.t - f.t)) / 3600 AS h FROM first_in f"
-                    " JOIN LATERAL (SELECT MIN(created_at) AS t FROM knewit_messages"
+                    " JOIN LATERAL (SELECT MIN(created_at) AS t FROM tcs_messages"
                     " WHERE whatsapp_id = f.whatsapp_id AND direction = 'out'"
                     " AND created_at >= f.t) o ON TRUE"
                 ),
@@ -738,7 +738,7 @@ async def bot_section(session: AsyncSession, filters: AnalyticsFilters) -> dict:
                     "SELECT DATE((m.created_at AT TIME ZONE :tz)) AS d, m.direction,"
                     " COUNT(*), COALESCE(SUM(m.tokens_used), 0) AS tokens,"
                     " COALESCE(SUM(m.response_time_ms), 0) AS rt_sum,"
-                    " COUNT(m.response_time_ms) AS rt_n FROM knewit_messages m"
+                    " COUNT(m.response_time_ms) AS rt_n FROM tcs_messages m"
                     f"{restriction_join}"
                     " WHERE m.created_at >= :start AND m.created_at < :end"
                     f"{restriction_where} GROUP BY 1, 2 ORDER BY 1"
@@ -777,7 +777,7 @@ async def bot_section(session: AsyncSession, filters: AnalyticsFilters) -> dict:
         (
             await session.execute(
                 text(
-                    "SELECT l.whatsapp_id, l.status FROM knewit_leads l"
+                    "SELECT l.whatsapp_id, l.status FROM tcs_leads l"
                     " LEFT JOIN crm_contacts c ON c.whatsapp_id = l.whatsapp_id"
                     " AND c.deleted_at IS NULL"
                     " WHERE l.created_at >= :start AND l.created_at < :end"
@@ -799,7 +799,7 @@ async def bot_section(session: AsyncSession, filters: AnalyticsFilters) -> dict:
             for r in (
                 await session.execute(
                     text(
-                        "SELECT DISTINCT whatsapp_id FROM knewit_events"
+                        "SELECT DISTINCT whatsapp_id FROM tcs_events"
                         " WHERE whatsapp_id = ANY(:was)"
                         " AND event_type = 'transferred_to_manager'"
                     ),
@@ -814,7 +814,7 @@ async def bot_section(session: AsyncSession, filters: AnalyticsFilters) -> dict:
         (
             await session.execute(
                 text(
-                    "SELECT l.last_objection AS objection, COUNT(*) FROM knewit_leads l"
+                    "SELECT l.last_objection AS objection, COUNT(*) FROM tcs_leads l"
                     " LEFT JOIN crm_contacts c ON c.whatsapp_id = l.whatsapp_id"
                     " AND c.deleted_at IS NULL"
                     " WHERE l.created_at >= :start AND l.created_at < :end"
@@ -831,7 +831,7 @@ async def bot_section(session: AsyncSession, filters: AnalyticsFilters) -> dict:
         (
             await session.execute(
                 text(
-                    "SELECT l.current_stage AS stage, COUNT(*) FROM knewit_leads l"
+                    "SELECT l.current_stage AS stage, COUNT(*) FROM tcs_leads l"
                     " LEFT JOIN crm_contacts c ON c.whatsapp_id = l.whatsapp_id"
                     " AND c.deleted_at IS NULL"
                     " WHERE l.created_at >= :start AND l.created_at < :end"

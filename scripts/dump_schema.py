@@ -1,4 +1,4 @@
-"""Dump knewit_* schema (read-only) into docs/db_schema.md.
+"""Dump tcs_* schema (read-only) into docs/db_schema.md.
 
 Usage:
     DATABASE_URL=postgresql://... python scripts/dump_schema.py
@@ -19,7 +19,7 @@ async def _fetch_tables(conn) -> list[str]:
     rows = await conn.fetch(
         """
         SELECT tablename FROM pg_tables
-        WHERE schemaname = 'public' AND tablename LIKE 'knewit\\_%'
+        WHERE schemaname = 'public' AND tablename LIKE 'tcs\\_%'
         ORDER BY tablename
         """
     )
@@ -106,7 +106,7 @@ async def main() -> None:
     conn = await asyncpg.connect(dsn=_dsn())
     try:
         tables = await _fetch_tables(conn)
-        lines: list[str] = ["# DB schema (knewit_*)", ""]
+        lines: list[str] = ["# DB schema (tcs_*)", ""]
         lines.append(f"Tables found: {', '.join(tables) if tables else '(none)'}")
         lines.append("")
         for table in tables:
@@ -149,19 +149,19 @@ async def main() -> None:
         stages = await _fetch_distinct(
             conn,
             "SELECT current_stage, status, COUNT(*) AS cnt "
-            "FROM knewit_leads GROUP BY current_stage, status "
+            "FROM tcs_leads GROUP BY current_stage, status "
             "ORDER BY cnt DESC",
         )
-        lines.append("### knewit_leads.current_stage + status (with counts)")
+        lines.append("### tcs_leads.current_stage + status (with counts)")
         lines.append("")
         for r in stages:
             lines.append(f"- {dict(r)}")
         lines.append("")
         statuses = await _fetch_distinct(
             conn,
-            "SELECT status, COUNT(*) AS cnt " "FROM knewit_leads GROUP BY status ORDER BY cnt DESC",
+            "SELECT status, COUNT(*) AS cnt " "FROM tcs_leads GROUP BY status ORDER BY cnt DESC",
         )
-        lines.append("### knewit_leads.status (with counts)")
+        lines.append("### tcs_leads.status (with counts)")
         lines.append("")
         for r in statuses:
             lines.append(f"- {dict(r)}")
@@ -169,9 +169,9 @@ async def main() -> None:
         events = await _fetch_distinct(
             conn,
             "SELECT event_type, COUNT(*) AS cnt "
-            "FROM knewit_events GROUP BY event_type ORDER BY cnt DESC",
+            "FROM tcs_events GROUP BY event_type ORDER BY cnt DESC",
         )
-        lines.append("### knewit_events.event_type (with counts)")
+        lines.append("### tcs_events.event_type (with counts)")
         lines.append("")
         for r in events:
             lines.append(f"- {dict(r)}")

@@ -15,7 +15,7 @@ WA = "79990000101@c.us"
 async def _insert_lead(session, whatsapp_id: str = WA, stage: str = "НОВЫЙ_ЛИД") -> None:
     await session.execute(
         text(
-            "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+            "INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status)"
             " VALUES (:wa, 'Bridge Test', :stage, 'ACTIVE')"
         ),
         {"wa": whatsapp_id, "stage": stage},
@@ -26,11 +26,9 @@ async def test_update_moves_stage_and_writes_event(tx_session):
     await _insert_lead(tx_session)
     admin_id = uuid.uuid4()
 
-    messages_before = (
-        await tx_session.execute(text("SELECT COUNT(*) FROM knewit_messages"))
-    ).scalar()
+    messages_before = (await tx_session.execute(text("SELECT COUNT(*) FROM tcs_messages"))).scalar()
     followups_before = (
-        await tx_session.execute(text("SELECT COUNT(*) FROM knewit_followups"))
+        await tx_session.execute(text("SELECT COUNT(*) FROM tcs_followups"))
     ).scalar()
 
     moved = await update_bot_stage(tx_session, WA, "ЗАПИСЬ", admin_id)
@@ -42,7 +40,7 @@ async def test_update_moves_stage_and_writes_event(tx_session):
             await tx_session.execute(
                 text(
                     "SELECT current_stage, previous_stage, status, name"
-                    " FROM knewit_leads WHERE whatsapp_id = :wa"
+                    " FROM tcs_leads WHERE whatsapp_id = :wa"
                 ),
                 {"wa": WA},
             )
@@ -61,7 +59,7 @@ async def test_update_moves_stage_and_writes_event(tx_session):
             await tx_session.execute(
                 text(
                     "SELECT event_type, from_stage, to_stage, payload"
-                    " FROM knewit_events WHERE whatsapp_id = :wa"
+                    " FROM tcs_events WHERE whatsapp_id = :wa"
                 ),
                 {"wa": WA},
             )
@@ -76,15 +74,15 @@ async def test_update_moves_stage_and_writes_event(tx_session):
     assert events[0]["payload"]["user_id"] == str(admin_id)
 
     # Bridge touched nothing else.
-    assert (await tx_session.execute(text("SELECT COUNT(*) FROM knewit_messages"))).scalar() == (
+    assert (await tx_session.execute(text("SELECT COUNT(*) FROM tcs_messages"))).scalar() == (
         messages_before
     )
     assert (
-        await tx_session.execute(text("SELECT COUNT(*) FROM knewit_followups"))
+        await tx_session.execute(text("SELECT COUNT(*) FROM tcs_followups"))
     ).scalar() == followups_before
     other = (
         await tx_session.execute(
-            text("SELECT current_stage FROM knewit_leads WHERE whatsapp_id = '77010000001@c.us'")
+            text("SELECT current_stage FROM tcs_leads WHERE whatsapp_id = '77010000001@c.us'")
         )
     ).scalar()
     assert other == "НОВЫЙ_ЛИД"
@@ -96,7 +94,7 @@ async def test_noop_when_stage_unchanged(tx_session):
     assert moved is False
     count = (
         await tx_session.execute(
-            text("SELECT COUNT(*) FROM knewit_events WHERE whatsapp_id = :wa"), {"wa": WA}
+            text("SELECT COUNT(*) FROM tcs_events WHERE whatsapp_id = :wa"), {"wa": WA}
         )
     ).scalar()
     assert count == 0

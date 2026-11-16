@@ -62,7 +62,7 @@ async def _contact_id(session: AsyncSession, whatsapp_id: str) -> uuid.UUID | No
 async def _lead_exists(session: AsyncSession, whatsapp_id: str) -> bool:
     return (
         await session.execute(
-            text("SELECT 1 FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": whatsapp_id}
+            text("SELECT 1 FROM tcs_leads WHERE whatsapp_id = :wa"), {"wa": whatsapp_id}
         )
     ).scalar_one_or_none() is not None
 

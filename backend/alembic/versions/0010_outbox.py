@@ -44,7 +44,7 @@ def upgrade() -> None:
         sa.Column("next_attempt_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column("provider_message_id", sa.Text(), nullable=True),
-        sa.Column("knewit_message_id", sa.BigInteger(), nullable=True),
+        sa.Column("tcs_message_id", sa.BigInteger(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

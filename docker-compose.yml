@@ -3,14 +3,14 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: knewit
-      POSTGRES_PASSWORD: knewit
-      POSTGRES_DB: knewit
+      POSTGRES_USER: tcs
+      POSTGRES_PASSWORD: tcs
+      POSTGRES_DB: tcs
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./tests/fixtures/knewit_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./tests/fixtures/tcs_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./tests/fixtures/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
 
 volumes:

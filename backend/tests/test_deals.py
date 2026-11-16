@@ -29,7 +29,7 @@ async def _lead_row(factory, wa: str, stage: str, status: str = "ACTIVE") -> Non
     async with factory() as session:
         await session.execute(
             text(
-                "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+                "INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status)"
                 " VALUES (:wa, 'Board Bot', :stage, :status)"
             ),
             {"wa": wa, "stage": stage, "status": status},
@@ -220,7 +220,7 @@ async def test_move_locks_and_calls_bridge(client, settings):
             assert history[-1]["by_user"] is True
             lead = (
                 await session.execute(
-                    text("SELECT current_stage FROM knewit_leads WHERE whatsapp_id = :wa"),
+                    text("SELECT current_stage FROM tcs_leads WHERE whatsapp_id = :wa"),
                     {"wa": wa},
                 )
             ).scalar_one()
@@ -229,7 +229,7 @@ async def test_move_locks_and_calls_bridge(client, settings):
                 (
                     await session.execute(
                         text(
-                            "SELECT event_type, to_stage FROM knewit_events"
+                            "SELECT event_type, to_stage FROM tcs_events"
                             " WHERE whatsapp_id = :wa ORDER BY id DESC LIMIT 1"
                         ),
                         {"wa": wa},

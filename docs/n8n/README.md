@@ -1,6 +1,6 @@
 # n8n: CRM Send Message + пауза бота (Шаг 9D, часть B)
 
-Операторская инструкция. Код CRM пишет в `knewit_*` только через
+Операторская инструкция. Код CRM пишет в `tcs_*` только через
 `backend/app/services/bot_bridge.py`; всё ниже — чтение или настройка
 самого n8n, схему бота не меняет.
 
@@ -157,11 +157,11 @@ CRM выставляет `crm_conversation_state.bot_paused` (кнопки «П�
 
 ### Куда вставить
 
-Сразу после приёма входящего сообщения и записи в `knewit_messages`,
+Сразу после приёма входящего сообщения и записи в `tcs_messages`,
 **до** вызова AI-агента:
 
 ```
-... Webhook/Trigger входящего → запись в knewit_messages →
+... Webhook/Trigger входящего → запись в tcs_messages →
 → Postgres «Is Bot Paused?» → IF «paused?» ──true──→ Stop (NoOp, конец)
                                    └─false─→ AI Agent → ...
 ```
@@ -176,7 +176,7 @@ CRM выставляет `crm_conversation_state.bot_paused` (кнопки «П�
 - Query Parameters: `{{ $json.whatsapp_id }}` (то поле, где у вас лежит
   ID чата входящего сообщения; подставьте свой путь, например
   `{{ $('Webhook').item.json.body.whatsapp_id }}`).
-- Важно: **только SELECT**. Никаких UPDATE/INSERT/TRIGGER на `knewit_*`.
+- Важно: **только SELECT**. Никаких UPDATE/INSERT/TRIGGER на `tcs_*`.
   Отсутствующая строка = бот НЕ на паузе (`false`).
 
 ### Нода IF «paused?»

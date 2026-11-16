@@ -1,7 +1,7 @@
 """Analytics indexes on crm_* tables (step 12).
 
 Only crm_* tables are touched (rule 1/2): no index is created on
-knewit_* tables owned by n8n.
+tcs_* tables owned by n8n.
 """
 
 from __future__ import annotations

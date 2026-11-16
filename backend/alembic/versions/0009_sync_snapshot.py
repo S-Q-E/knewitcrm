@@ -19,19 +19,19 @@ def upgrade() -> None:
     )
     # Backfill snapshots from the bot tables so the first new-logic sync can
     # tell "bot unchanged, manager edited" apart from "bot changed".
-    # knewit_* tables are n8n-owned and may be absent (fresh local DB):
+    # tcs_* tables are n8n-owned and may be absent (fresh local DB):
     # guard with a table-existence check inside a DO block.
     op.execute(
         sa.text(
             "DO $$ BEGIN "
             "IF EXISTS (SELECT 1 FROM information_schema.tables "
-            "WHERE table_name = 'knewit_leads') THEN "
+            "WHERE table_name = 'tcs_leads') THEN "
             "UPDATE crm_contacts c SET last_bot_name = l.name "
-            "FROM knewit_leads l "
+            "FROM tcs_leads l "
             "WHERE l.whatsapp_id = c.whatsapp_id "
             "AND c.whatsapp_id IS NOT NULL AND c.last_bot_name IS NULL; "
             "UPDATE crm_deals d SET last_bot_trial_at = l.trial_datetime "
-            "FROM knewit_leads l, crm_contacts c "
+            "FROM tcs_leads l, crm_contacts c "
             "WHERE c.id = d.contact_id AND l.whatsapp_id = c.whatsapp_id "
             "AND d.last_bot_trial_at IS NULL AND l.trial_datetime IS NOT NULL; "
             "END IF; END $$"

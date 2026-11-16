@@ -11,15 +11,15 @@ Link by `whatsapp_id`. Manager creates a new deal manually for repeat purchases.
 Why: keeps mapping simple and predictable; avoids ambiguous multi-deal sync.
 
 ## D3. Two-way stage sync
-- Bot changed stage (`knewit_leads.current_stage` / `status`) -> sync worker moves the deal to the stage with matching `bot_stage_key`.
+- Bot changed stage (`tcs_leads.current_stage` / `status`) -> sync worker moves the deal to the stage with matching `bot_stage_key`.
 - Manager moved the deal manually -> `stage_locked = true`. Further auto-moves by bot stop; bot changes are only written to history and notify the manager.
-- If the target stage has `bot_stage_key`, `bot_bridge` updates `knewit_leads.current_stage` and writes `event_type='manual_stage_change'` into `knewit_events` in one transaction. If no key is set, bot tables are not touched.
+- If the target stage has `bot_stage_key`, `bot_bridge` updates `tcs_leads.current_stage` and writes `event_type='manual_stage_change'` into `tcs_events` in one transaction. If no key is set, bot tables are not touched.
 - Manager can unlock with the "Return control to bot" button.
-Why: manager decision wins, but bot history stays auditable; writes to `knewit_*` go only through `backend/app/services/bot_bridge.py`.
+Why: manager decision wins, but bot history stays auditable; writes to `tcs_*` go only through `backend/app/services/bot_bridge.py`.
 
 ## D4. Realtime without triggers
-n8n writes to DB directly, so CRM polls `knewit_messages` / `knewit_events` (by `id > last_seen_id`, every 2-3 sec) and pushes to clients via SSE. Background workers run in-process under `pg_try_advisory_lock` so multiple Railway instances do not duplicate work.
-Why: `knewit_*` tables must not get triggers (rule 1); polling + advisory lock is the least invasive option.
+n8n writes to DB directly, so CRM polls `tcs_messages` / `tcs_events` (by `id > last_seen_id`, every 2-3 sec) and pushes to clients via SSE. Background workers run in-process under `pg_try_advisory_lock` so multiple Railway instances do not duplicate work.
+Why: `tcs_*` tables must not get triggers (rule 1); polling + advisory lock is the least invasive option.
 
 ## D5. Bot autopause
 When lead status becomes `МЕНЕДЖЕР`, CRM creates an urgent task and a notification. Bot autopause: setting `auto_pause_on_manager`, disabled by default.
@@ -28,7 +28,7 @@ Why: explicit handover without surprising the client; autopause stays opt-in.
 ## D6. Manager outbound messages go through outbox + n8n webhook
 CRM does not store WhatsApp provider keys. It calls the n8n webhook with a secret, and n8n sends via the provider already used in the bot workflow.
 Why: single sender path, no credential duplication.
-- Delivery (Step 9): a `crm_outbox` row (`queued`) is POSTed by the worker as `{outbox_id, whatsapp_id, text}` to `N8N_SEND_WEBHOOK_URL` with header `X-CRM-Secret: N8N_WEBHOOK_SECRET`. On `{"ok": true}` the row becomes `sent` (`sent_at`, `provider_message_id`) and `bot_bridge.insert_outgoing_message` mirrors it into `knewit_messages` as `direction='out', message_type='manager', tokens_used=0`, stamped with the lead's current stage. `crm_outbox.knewit_message_id` links the mirrored row so the timeline shows the sender's name.
+- Delivery (Step 9): a `crm_outbox` row (`queued`) is POSTed by the worker as `{outbox_id, whatsapp_id, text}` to `N8N_SEND_WEBHOOK_URL` with header `X-CRM-Secret: N8N_WEBHOOK_SECRET`. On `{"ok": true}` the row becomes `sent` (`sent_at`, `provider_message_id`) and `bot_bridge.insert_outgoing_message` mirrors it into `tcs_messages` as `direction='out', message_type='manager', tokens_used=0`, stamped with the lead's current stage. `crm_outbox.tcs_message_id` links the mirrored row so the timeline shows the sender's name.
 - Reliability (hotfix 9B): states are `queued -> sending -> sent|failed` (migration `0012_outbox_sending` adds `claimed_at`). The claim transaction marks rows `sending`, so a concurrent instance never picks them up; `sending` rows older than 2 minutes are reaped to `failed` with `error='delivery state unknown, check WhatsApp'` and no auto-retry. The mirror runs in a SAVEPOINT: any mirror error rolls back only the mirror, the row stays `sent` with `error='mirror_failed: ...'` and an ERROR log. Every row is wrapped in try/except, so one poisoned row never stops the cycle.
 - Retry policy (hotfix 9B): auto-retry only when the request provably never reached n8n (`httpx.ConnectError` incl. DNS, `httpx.ConnectTimeout`; transport errors propagate raw from `post_to_n8n` for classification). Read timeouts, HTTP errors and rejections fail at once (`failed` + notify, attempts+1) and wait for the manual retry button, which warns about possible double delivery. Retryable errors keep exp backoff (1m/2m/4m/8m, cap 1h) up to 5 attempts, then `failed` + `outbox_failed` notify. `outbox_id` lets n8n dedupe redeliveries.
 - `httpx` moved into production `requirements.txt` (the worker needs an HTTP client; it was dev-only before).
@@ -195,7 +195,7 @@ Why: protects against accidental data loss, keeps audit trail.
 - `services/event_bus.py` is a process-local fan-out hub (bounded per-subscriber
   queues, slow consumers drop oldest, publishers never block). Single-container
   deploy, so one event loop is enough; every worker and router shares it.
-- `workers/realtime_poller.py` polls `knewit_messages` / `knewit_events` by id
+- `workers/realtime_poller.py` polls `tcs_messages` / `tcs_events` by id
   every 2s (cursors in memory, seeded from current maxima at startup so restarts
   never replay history). It emits `new_message` and `bot_event`; CRM-side changes
   publish directly at their call sites instead: sync bot moves buffer `deal_moved`
@@ -285,7 +285,7 @@ Why: protects against accidental data loss, keeps audit trail.
   `last_message_direction`, `last_message_preview` (migration `0015`,
   backfilled), refreshed by the sync worker per batch and by the outbox
   worker on send. The list orders/filters/paginates purely in SQL
-  (20k dialogs < 200ms); no new indexes on `knewit_*` (rule 1).
+  (20k dialogs < 200ms); no new indexes on `tcs_*` (rule 1).
 - Worker flags: `OUTBOX_ENABLED`, `NOTIFICATIONS_ENABLED`,
   `REALTIME_ENABLED` (default true) gate each loop independently in
   lifespan; tests disable all four.
@@ -315,14 +315,14 @@ Why: protects against accidental data loss, keeps audit trail.
 - Funnel is cohort-based: deals created in the period in the selected pipeline
   (default pipeline when omitted). `reached` = distinct deals with a
   `crm_deal_stage_history.to_stage_id` row (any time, so late moves still count)
-  UNION bot `knewit_events.to_stage` mapped via `bot_stage_key`, with the
+  UNION bot `tcs_events.to_stage` mapped via `bot_stage_key`, with the
   current stage as fallback for deals without history. Step conversion =
   reached[i]/reached[i-1]; overall = cohort `won` deals / first-stage reached;
   `total_finished` = cohort won deals (not last-stage reach, because won/lost
   deals keep their open stage). Average time on stage uses completed stays only
   (closed by a later move); bottleneck = reached stage with the lowest step
   conversion.
-- Summary: `new_leads` from `knewit_leads.created_at`; `trials_booked` from
+- Summary: `new_leads` from `tcs_leads.created_at`; `trials_booked` from
   `deals.trial_at`; won/lost by `closed_at`; lost breakdown by reason (NULL
   reason reads as "Без причины").
 - First response (managers) = first `in` message -> first later `out` message
@@ -343,11 +343,11 @@ Why: protects against accidental data loss, keeps audit trail.
   lists active users (per-owner by construction). Aggregates are bounded
   (stages/users/tags), so no pagination: drill-down reuses the paginated
   `GET /api/deals` list (`stage_id` + created bounds) in a modal.
-- No index was created on `knewit_*` (rule 1). Migration
+- No index was created on `tcs_*` (rule 1). Migration
   `0017_analytics_indexes` adds `IF NOT EXISTS` indexes on `crm_*` hotspot
   columns only (deals created/closed/trial/status/pipeline, history
   deal+at/to-stage, contacts created/source, tasks done/due, entity-tags
-  composite). Analytics reads `knewit_*` directly; volumes are hundreds of
+  composite). Analytics reads `tcs_*` directly; volumes are hundreds of
   rows, so no materialization worker is needed (revisit if traffic grows 100x).
 - Frontend `/analytics` (recharts 2.x): period presets + custom range, funnel
   and owner filters, day/week toggle, KPI cards, funnel bar (click = drill-down
@@ -371,7 +371,7 @@ Why: protects against accidental data loss, keeps audit trail.
   `deal_assignment.mode=unassigned` (round-robin keeps its `last_index` across
   mode switches; unknown keys are rejected, never stored). PATCH logs
   `settings_updated` into the activity journal.
-- `bot-stages` returns live `DISTINCT current_stage/status` from `knewit_leads`
+- `bot-stages` returns live `DISTINCT current_stage/status` from `tcs_leads`
   (read-only; rule 1 safe) for the stage-editor dropdowns.
 - Quick replies: list stays open to all authenticated users (dialog composer
   needs it); create/update/delete are admin-only with `QUICK_REPLY_EXISTS` 409.
@@ -445,7 +445,7 @@ Why: protects against accidental data loss, keeps audit trail.
   read-only sections concurrently on separate connections (5 per overview —
   fits the default 5+5 pool; raise `DB_POOL_SIZE` if many managers open
   analytics at once). Measured wall time: dialogs ~100ms, messages ~60ms,
-  board ~250ms, analytics 120–350ms depending on period/roster. `knewit_*`
+  board ~250ms, analytics 120–350ms depending on period/roster. `tcs_*`
   index proposals live in `docs/DB_RECOMMENDATIONS.md` (never applied by us).
 - Deps: `pip-audit` clean after `fastapi 0.115.6 -> 0.134.0` (+ explicit
   `starlette==1.7.0`), `python-multipart 0.0.20 -> 0.0.32`, new
@@ -465,10 +465,10 @@ Why: protects against accidental data loss, keeps audit trail.
   own `n8n_processed_outbox` table (SQL in `docs/n8n/README.md`); bot
   schema is never touched.
 - Main bot + cron follow-up patch (same README): after the incoming write
-  to `knewit_messages`, a read-only Postgres node
+  to `tcs_messages`, a read-only Postgres node
   `SELECT bot_paused FROM crm_conversation_state WHERE whatsapp_id = $1`
   (missing row = false) gates the AI agent: `true` ends the execution,
-  `false` continues. Only SELECT, no triggers/writes to `knewit_*`.
+  `false` continues. Only SELECT, no triggers/writes to `tcs_*`.
 - Analytics visibility: `analytics_managers_visible` in `crm_settings`
   (default true), exposed via `GET/PATCH /api/settings`. When false,
   non-admin `GET /api/analytics/overview|export` answer 403; admins always
@@ -504,9 +504,9 @@ Why: protects against accidental data loss, keeps audit trail.
   and then no-op. Lock + unlock wrap the run on a dedicated connection.
 - Single DB role `crm_app` for both migrate and serve (single container,
   single `DATABASE_URL`): `CONNECT` + `CREATE` on schema public (so
-  migrations own new `crm_*` tables outright), `SELECT` on `knewit_*`,
+  migrations own new `crm_*` tables outright), `SELECT` on `tcs_*`,
   column-level `UPDATE (current_stage, previous_stage, updated_at)` on
-  `knewit_leads`, `INSERT` on `knewit_events`/`knewit_messages`, `USAGE`
+  `tcs_leads`, `INSERT` on `tcs_events`/`tcs_messages`, `USAGE`
   on their id sequences. Negative GRANT checks in `docs/DEPLOY.md` prove
   the app cannot alter bot schema even on a bug. A separate migrate-only
   role was rejected as pointless complexity for one container.
@@ -584,19 +584,19 @@ Why: protects against accidental data loss, keeps audit trail.
   not blocked. Not yet done from P1-7: CI deploy gates (H3) need owner
   decisions (a `develop` branch does not exist; `workflow_dispatch` does not
   deploy production; `production` environment reviewers must be set in GitHub).
-- Test schema for knewit_* follows production (P0-4, 2026-10-09):
-  `tests/fixtures/knewit_schema.sql` is rebuilt from `schema_dump.sql`
-  (PK `id` on leads, `whatsapp_id` UNIQUE, no FK between knewit_* tables,
+- Test schema for tcs_* follows production (P0-4, 2026-10-09):
+  `tests/fixtures/tcs_schema.sql` is rebuilt from `schema_dump.sql`
+  (PK `id` on leads, `whatsapp_id` UNIQUE, no FK between tcs_* tables,
   `updated_at` trigger, prod defaults). The old fixture had a TEXT PK and
   cascading FKs, which hid cleanup bugs. Tests that deleted leads and relied
   on cascades now delete messages/events/followups first. `docs/db_schema.md`
   is rebuilt from the dump. The composite index missing in production makes
   the idle-sync timing test borderline (~1.0 s); that is tracked under P2-6.
 - CRM ↔ n8n contract test (P0-4 tail, 2026-10-09): `tests/test_integration_contract.py`
-  checks that code only references contracted `knewit_*` tables (scan of SQL
+  checks that code only references contracted `tcs_*` tables (scan of SQL
   FROM/INTO/UPDATE/JOIN targets in `backend/app`), that the contracted columns
-  and key types exist in the test schema, that `knewit_leads.whatsapp_id` is
-  UNIQUE, and that no FKs exist between `knewit_*` tables. The contract is a
+  and key types exist in the test schema, that `tcs_leads.whatsapp_id` is
+  UNIQUE, and that no FKs exist between `tcs_*` tables. The contract is a
   hand-kept list in the test: extend it together with any new CRM query.
 
 ## D26. Single uvicorn worker until the realtime bus is cross-process (P1-1, step 1)
@@ -642,7 +642,7 @@ Why: protects against accidental data loss, keeps audit trail.
 - Only episodes from the last 24 h alert. Older unanswered dialogs stay visible in the
   filter but do not notify, so the first run after deploy does not flood managers with
   history. Check the initial count of the filter before relying on it.
-- Read-only for `knewit_*`; the only writes are `crm_notifications` rows through `notify()`.
+- Read-only for `tcs_*`; the only writes are `crm_notifications` rows through `notify()`.
 
 ## D29. Realtime poller cursor: overlap, dedupe, restart (P2-2) and header status (P3-6)
 - Defect found and fixed: the cursor was the max id seen. n8n inserts can commit out of
@@ -682,20 +682,20 @@ Why: protects against accidental data loss, keeps audit trail.
 
 ## D31. Full conversation capture (research, no code yet)
 - Facts checked in the repo:
-  - n8n writes `knewit_messages` for incoming (`direction='in'`) and bot replies
+  - n8n writes `tcs_messages` for incoming (`direction='in'`) and bot replies
     (`direction='out', message_type='chat'`) (`Log Incoming Message`, `Log Outgoing Message`).
   - CRM mirrors its own sends as `direction='out', message_type='manager'`
     (`bot_bridge.insert_outgoing_message`, called from `outbox_worker`).
   - Messages a manager sends from the phone are not captured: the Chatflow Trigger is
     subscribed to `Incoming Message` only (owner confirmed; `chatflow_docs.md`).
-  - `knewit_messages.direction` is checked to `in`/`out`. `message_type` is `varchar(20)`
+  - `tcs_messages.direction` is checked to `in`/`out`. `message_type` is `varchar(20)`
     with no check, so a new value (e.g. `operator`) needs no schema change.
-  - `knewit_messages` has no unique external message id. Deduplication needs a new column
+  - `tcs_messages` has no unique external message id. Deduplication needs a new column
     in the n8n database or a content/time match.
 - Facts from the Chatflow docs (not tested): with no events selected, the trigger receives
   all supported events. Outgoing events are `Outgoing message from API` and
   `Outgoing message from phone/operator`. Exact `wh_type` values are not documented.
-- Constraints: CRM writes `knewit_*` only through `bot_bridge` (D6). The capture writer
+- Constraints: CRM writes `tcs_*` only through `bot_bridge` (D6). The capture writer
   should be an n8n workflow, not new CRM code. The bot workflow must not reply to outgoing
   events, so the capture should be a separate workflow, not edits to the bot's `If2`.
 - Open before any change: payloads for an operator message from the phone, a CRM send, an
@@ -703,12 +703,12 @@ Why: protects against accidental data loss, keeps audit trail.
   column in the n8n database. Live n8n is not changed.
 - Уточнение 2026-10-13 (тесты владельца, ветка fix/phone-outgoing): захват писем с
   телефона в n8n работает — все сообщения, включая отправленные менеджером с телефона,
-  попадают в `knewit_messages`, т.е. полная переписка в CRM есть (см. ниже D36). Payload
+  попадают в `tcs_messages`, т.е. полная переписка в CRM есть (см. ниже D36). Payload
   phone-события: `event_type`/`wh_type='outgoing_message_phone'`, `is_me=true`,
   `from_where='phone'`, `type='chat'`, `chat_id` и `_raw.chatId` — ID чата клиента,
   `from` — номер бизнеса, `message_id` — внешний ID (например `2AFB4628A26060C1ED32`),
   поля `operator_takeover`/`ai_pause_triggered` в тесте false/пустые. `message_type`
-  таких строк в `knewit_messages` неизвестен (вероятно `'chat'`), поэтому в CRM они не
+  таких строк в `tcs_messages` неизвестен (вероятно `'chat'`), поэтому в CRM они не
   отличаются от ответов бота. Предложение (открыто, без решения владельца в CRM не
   делать): n8n пишет отдельное значение (например `'operator'` — `varchar(20)` без
   check, схема позволяет), тогда CRM подпишет «менеджер с телефона» и сможет ставить
@@ -765,7 +765,7 @@ Why: protects against accidental data loss, keeps audit trail.
   real tag first (test_automations.py::test_no_activity_automation).
 
 ## D36. Outgoing messages from the manager's phone (no CRM code change)
-- Facts: n8n now captures phone-sent messages into `knewit_messages` as
+- Facts: n8n now captures phone-sent messages into `tcs_messages` as
   `direction='out'`. The Chatflow payload (`outgoing_message.md`, untracked) carries
   `wh_type='outgoing_message_phone'`, `is_me=true`, `from_where='phone'`, key `chatId`
   and `type='chat'` — so a captured row is most likely `message_type='chat'`,
@@ -791,7 +791,7 @@ Why: protects against accidental data loss, keeps audit trail.
 - Уточнение 2026-10-13 (тесты владельца): Chatflow Trigger НЕ подписан на события
   «исходящее через API» — сообщения CRM и ответы бота повторно через n8n не приходят,
   риск дублей «зеркало+n8n» снимается. Захват с телефона работает (все сообщения,
-  включая менеджера с телефона, попадают в `knewit_messages`); тест паузы пройден —
+  включая менеджера с телефона, попадают в `tcs_messages`); тест паузы пройден —
   кнопка «Пауза» в CRM останавливает бота. Открыто: предложение писать для phone-строк
   отдельное `message_type` (например `'operator'`) и вопрос по `operator_takeover`
   (см. уточнение D31).
@@ -857,9 +857,9 @@ Why: protects against accidental data loss, keeps audit trail.
   flushed before the raw `INSERT ... ON CONFLICT`, otherwise the ORM insert and
   the sync query would collide in one transaction.
 - `crm_conversation_state` rows are created/updated only for bot leads: `_sync_state`
-  runs `INSERT ... SELECT ... WHERE EXISTS (SELECT 1 FROM knewit_leads ...)`, so a
+  runs `INSERT ... SELECT ... WHERE EXISTS (SELECT 1 FROM tcs_leads ...)`, so a
   manual contact with a `whatsapp_id` but no bot lead never gets a dialog row.
-  `knewit_*` tables stay read-only for the CRM (rule 1).
+  `tcs_*` tables stay read-only for the CRM (rule 1).
 - Migration `0021_sync_owner` (crm_* only) aligns existing data: (A) a managed deal
   without an owner takes the dialog assignee, then the contact owner; (B) the deal
   owner is copied into the contact; (C) the deal owner is copied into existing

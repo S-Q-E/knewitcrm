@@ -62,9 +62,9 @@ class Settings(BaseSettings):
     # Fallbacks used when DATABASE_URL is not set (local dev).
     pghost: str = Field(default="localhost", alias="PGHOST")
     pgport: str = Field(default="5432", alias="PGPORT")
-    pguser: str = Field(default="postgres", alias="PGUSER")
+    pguser: str = Field(default="tcs", alias="PGUSER")
     pgpassword: str = Field(default="", alias="PGPASSWORD")
-    pgdatabase: str = Field(default="railway", alias="PGDATABASE")
+    pgdatabase: str = Field(default="tcs", alias="PGDATABASE")
     pgssl: str = Field(default="", alias="PGSSL")
 
     @cached_property

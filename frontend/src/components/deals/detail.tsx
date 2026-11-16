@@ -30,6 +30,9 @@ const BOT_FIELDS: { key: string; label: string }[] = [
   { key: "preferred_format", label: "Формат" },
   { key: "preferred_time", label: "Время" },
   { key: "last_objection", label: "Возражение" },
+  { key: "budget_usd", label: "Budget (USD)" },
+  { key: "unit", label: "Unit" },
+  { key: "pets", label: "Pets" },
 ];
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

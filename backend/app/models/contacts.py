@@ -36,6 +36,11 @@ class CrmContact(Base):
     # manager edits: contact.name is overwritten only when it still matches
     # this snapshot (or is empty).
     last_bot_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Last bot-provided phone/source seen by sync_worker. Same edit-detection
+    # idea as last_bot_name: the bot value wins only while the CRM value still
+    # matches the snapshot (or is empty).
+    last_bot_phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_bot_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -128,8 +128,8 @@ async def _messages(
             text(
                 "SELECT m.id, m.direction, m.message_type, m.content, m.stage_at_moment,"
                 " m.tokens_used, m.response_time_ms, m.created_at,"
-                " o.sent_by AS outbox_sent_by FROM knewit_messages m"
-                " LEFT JOIN crm_outbox o ON o.knewit_message_id = m.id"
+                " o.sent_by AS outbox_sent_by FROM tcs_messages m"
+                " LEFT JOIN crm_outbox o ON o.tcs_message_id = m.id"
                 " WHERE m.whatsapp_id = :wa AND "
                 f"{_keyset_text('m.created_at', 0, True, cursor, 'm.id')}"
                 " ORDER BY m.created_at DESC, m.id DESC LIMIT :limit"
@@ -171,7 +171,7 @@ async def _events(
         await session.execute(
             text(
                 "SELECT id, event_type, from_stage, to_stage, payload, created_at"
-                " FROM knewit_events"
+                " FROM tcs_events"
                 f" WHERE whatsapp_id = :wa AND {_keyset_text('created_at', 1, True, cursor)}"
                 " ORDER BY created_at DESC, id DESC LIMIT :limit"
             ),

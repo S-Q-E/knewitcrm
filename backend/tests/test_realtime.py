@@ -70,7 +70,7 @@ async def _insert_lead(factory, wa: str) -> None:
     async with factory() as session:
         await session.execute(
             text(
-                "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+                "INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status)"
                 " VALUES (:wa, 'Realtime Bot', 'НОВЫЙ_ЛИД', 'ACTIVE')"
             ),
             {"wa": wa},
@@ -92,11 +92,9 @@ async def _purge_lead(factory, wa: str) -> None:
             .all()
         )
         await session.execute(text("DELETE FROM crm_outbox WHERE whatsapp_id = :wa"), {"wa": wa})
-        await session.execute(
-            text("DELETE FROM knewit_messages WHERE whatsapp_id = :wa"), {"wa": wa}
-        )
-        await session.execute(text("DELETE FROM knewit_events WHERE whatsapp_id = :wa"), {"wa": wa})
-        await session.execute(text("DELETE FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_messages WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_events WHERE whatsapp_id = :wa"), {"wa": wa})
+        await session.execute(text("DELETE FROM tcs_leads WHERE whatsapp_id = :wa"), {"wa": wa})
         await session.commit()
     await purge_contacts(factory, [str(c) for c in contacts])
 
@@ -194,14 +192,14 @@ async def test_poller_publishes_new_rows_once(settings, clean_bus):
         async with factory() as session:
             await session.execute(
                 text(
-                    "INSERT INTO knewit_messages (whatsapp_id, direction, message_type, content)"
+                    "INSERT INTO tcs_messages (whatsapp_id, direction, message_type, content)"
                     " VALUES (:wa, 'in', 'chat', 'hello realtime')"
                 ),
                 {"wa": wa},
             )
             await session.execute(
                 text(
-                    "INSERT INTO knewit_events (whatsapp_id, event_type)"
+                    "INSERT INTO tcs_events (whatsapp_id, event_type)"
                     " VALUES (:wa, 'stage_entered')"
                 ),
                 {"wa": wa},
@@ -352,7 +350,7 @@ async def test_sync_move_publishes_deal_moved(settings, clean_bus):
         async with factory() as session:
             await session.execute(
                 text(
-                    "UPDATE knewit_leads SET current_stage = 'ЗАПИСЬ', updated_at = now()"
+                    "UPDATE tcs_leads SET current_stage = 'ЗАПИСЬ', updated_at = now()"
                     " WHERE whatsapp_id = :wa"
                 ),
                 {"wa": wa},
@@ -617,7 +615,7 @@ async def _insert_message_with_id(factory, msg_id: int, wa: str) -> None:
     async with factory() as session:
         await session.execute(
             text(
-                "INSERT INTO knewit_messages (id, whatsapp_id, direction, message_type, content)"
+                "INSERT INTO tcs_messages (id, whatsapp_id, direction, message_type, content)"
                 " VALUES (:id, :wa, 'in', 'chat', 'ordered')"
             ),
             {"id": msg_id, "wa": wa},
@@ -635,7 +633,7 @@ async def test_poller_publishes_row_committed_out_of_order(settings, clean_bus):
         poller = RealtimePoller(factory, clean_bus)
         await poller.start()
         async with factory() as session:
-            base = await _max_id(session, "knewit_messages")
+            base = await _max_id(session, "tcs_messages")
 
         # id base+2 commits first and is seen; base+1 commits later, below the cursor.
         await _insert_message_with_id(factory, base + 2, wa)
@@ -667,7 +665,7 @@ async def test_poller_restores_cursor_and_replays_small_gap(settings, clean_bus)
         first = RealtimePoller(factory, clean_bus, persist_cursor=True)
         await first.start()
         async with factory() as session:
-            base = await _max_id(session, "knewit_messages")
+            base = await _max_id(session, "tcs_messages")
         await _insert_message_with_id(factory, base + 1, wa)
         assert (await first.poll_once())["messages"] == 1  # saves the cursor (first save)
         await _insert_message_with_id(factory, base + 2, wa)  # arrives while "down"

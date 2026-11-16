@@ -19,16 +19,16 @@ def test_include_object_allows_crm_tables():
 
 
 def test_include_object_blocks_bot_and_foreign_tables():
-    assert include_object(None, "knewit_leads", "table", True, None) is False
-    assert include_object(None, "knewit_messages", "table", True, None) is False
-    assert include_object(None, "knewit_events", "table", True, None) is False
-    assert include_object(None, "knewit_followups", "table", True, None) is False
+    assert include_object(None, "tcs_leads", "table", True, None) is False
+    assert include_object(None, "tcs_messages", "table", True, None) is False
+    assert include_object(None, "tcs_events", "table", True, None) is False
+    assert include_object(None, "tcs_followups", "table", True, None) is False
     assert include_object(None, "n8n_workflows", "table", True, None) is False
 
 
 def test_include_object_indexes_follow_parent_table():
     crm_index = SimpleNamespace(table=SimpleNamespace(name="crm_deals"))
-    bot_index = SimpleNamespace(table=SimpleNamespace(name="knewit_messages"))
+    bot_index = SimpleNamespace(table=SimpleNamespace(name="tcs_messages"))
     assert include_object(crm_index, "ix_crm_deals_x", "index", True, None) is True
     assert include_object(bot_index, "idx_messages_x", "index", True, None) is False
 
@@ -41,7 +41,7 @@ def test_baseline_migration_is_empty():
     assert funcs["downgrade"].body and all(isinstance(s, ast.Pass) for s in funcs["downgrade"].body)
     source = path.read_text(encoding="utf-8")
     assert "create_table" not in source
-    assert "knewit_" not in source
+    assert "tcs_" not in source
 
 
 def test_env_uses_crm_version_table_and_filter():

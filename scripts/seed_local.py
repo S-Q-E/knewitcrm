@@ -1,4 +1,4 @@
-"""Seed local DB with knewit_* schema + test data (dev only)."""
+"""Seed local DB with tcs_* schema + test data (dev only)."""
 
 from __future__ import annotations
 
@@ -10,12 +10,12 @@ from pathlib import Path
 import asyncpg
 
 ROOT = Path(__file__).resolve().parent.parent
-SCHEMA_SQL = ROOT / "tests" / "fixtures" / "knewit_schema.sql"
+SCHEMA_SQL = ROOT / "tests" / "fixtures" / "tcs_schema.sql"
 SEED_SQL = ROOT / "tests" / "fixtures" / "seed.sql"
 
 
 def _dsn() -> str:
-    url = os.getenv("DATABASE_URL", "postgresql://knewit:knewit@localhost:5432/knewit")
+    url = os.getenv("DATABASE_URL", "postgresql://tcs:tcs@localhost:5432/tcs")
     if url.startswith("postgres://"):
         url = "postgresql://" + url[len("postgres://") :]
     return url

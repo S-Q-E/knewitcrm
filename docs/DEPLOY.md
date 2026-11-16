@@ -11,18 +11,18 @@
 | Назначение | Проверка релизов перед продом | Рабочая CRM менеджеров |
 | Ветка/тег | `develop` (авто) | Тег `v*` (авто) или ручной запуск |
 | Postgres | Отдельный Railway Postgres (свой, пустой) | Продовая БД n8n (общая с ботом!) |
-| Bot-таблицы | Seed из `tests/fixtures/` (см. ниже) | Живые `knewit_*` (только чтение + `bot_bridge`) |
+| Bot-таблицы | Seed из `tests/fixtures/` (см. ниже) | Живые `tcs_*` (только чтение + `bot_bridge`) |
 | `APP_ENV` | `staging` | `production` |
 
 Staging **никогда** не подключается к продовой БД n8n: staging-backfill
-создаёт контакты/сделки, а `bot_bridge` пишет в `knewit_leads` /
-`knewit_events` / `knewit_messages` — на проде это затронуло бы живых
+создаёт контакты/сделки, а `bot_bridge` пишет в `tcs_leads` /
+`tcs_events` / `tcs_messages` — на проде это затронуло бы живых
 клиентов (см. D24).
 
 Поднять staging-БД из фикстур (одноразово, локально с проброшенным URL):
 
 ```bash
-psql "$STAGING_DATABASE_URL" -f tests/fixtures/knewit_schema.sql
+psql "$STAGING_DATABASE_URL" -f tests/fixtures/tcs_schema.sql
 psql "$STAGING_DATABASE_URL" -f tests/fixtures/seed.sql
 # crm_*-таблицы создадут миграции при первом старте контейнера.
 ```
@@ -57,7 +57,7 @@ psql "$STAGING_DATABASE_URL" -f tests/fixtures/seed.sql
 
 ## 3. Подключение БД n8n и права (production)
 
-CRM делит продовый Postgres с ботом. Схема `knewit_*` принадлежит n8n
+CRM делит продовый Postgres с ботом. Схема `tcs_*` принадлежит n8n
 (правило 1): CRM запрещено её менять, триггеры запрещены, пишет только
 `bot_bridge.py` (UPDATE трёх колонок лида + INSERT события/сообщения).
 
@@ -75,15 +75,15 @@ GRANT USAGE, CREATE ON SCHEMA public TO crm_app;
 -- и автоматически ими владеет (полные права без дополнительных GRANT).
 
 -- Чтение бота (дашборды, диалоги, аналитика, sync-worker).
-GRANT SELECT ON knewit_leads, knewit_messages, knewit_events, knewit_followups TO crm_app;
+GRANT SELECT ON tcs_leads, tcs_messages, tcs_events, tcs_followups TO crm_app;
 
 -- Запись бота — ровно то, что делает bot_bridge.py (см. D3/D6), не больше:
 -- update_bot_stage: current_stage/previous_stage/updated_at лида...
-GRANT UPDATE (current_stage, previous_stage, updated_at) ON knewit_leads TO crm_app;
+GRANT UPDATE (current_stage, previous_stage, updated_at) ON tcs_leads TO crm_app;
 -- ...+ INSERT manual_stage_change в события; insert_outgoing_message: INSERT сообщения.
-GRANT INSERT ON knewit_events, knewit_messages TO crm_app;
--- Серийные ключи новых строк событий/сообщений (имена уточнить: \ds knewit_*):
-GRANT USAGE, SELECT ON SEQUENCE knewit_events_id_seq, knewit_messages_id_seq TO crm_app;
+GRANT INSERT ON tcs_events, tcs_messages TO crm_app;
+-- Серийные ключи новых строк событий/сообщений (имена уточнить: \ds tcs_*):
+GRANT USAGE, SELECT ON SEQUENCE tcs_events_id_seq, tcs_messages_id_seq TO crm_app;
 ```
 
 `DATABASE_URL` production собирается с этой ролью:
@@ -100,11 +100,11 @@ postgresql://crm_app:<пароль>@postgres.railway.internal:5432/<prod_db>
 
 ```sql
 -- От имени crm_app (psql "postgresql://crm_app@..."):
-SELECT * FROM knewit_leads LIMIT 1;          -- ok
+SELECT * FROM tcs_leads LIMIT 1;          -- ok
 SELECT * FROM crm_users LIMIT 1;              -- ok после миграций
 CREATE TABLE crm_probe (id serial PRIMARY KEY); DROP TABLE crm_probe;  -- ok
-ALTER TABLE knewit_leads ADD COLUMN x text;   -- ДОЛЖНО упасть (permission denied)
-DROP TABLE knewit_messages;                   -- ДОЛЖНО упасть
+ALTER TABLE tcs_leads ADD COLUMN x text;   -- ДОЛЖНО упасть (permission denied)
+DROP TABLE tcs_messages;                   -- ДОЛЖНО упасть
 ```
 
 Негативные проверки обязательны: доказывают, что приложение физически не
@@ -137,7 +137,7 @@ HSTS-заголовок уже выставляется бэкендом (D22).
    пропускать: пока переменная задана, anyone with deploy access видит
    действующий пароль от учётки с полными правами.
 5. Backfill: в логах sync-worker `sync cycle done leads=N ...` — контакты
-   и сделки подъехали из `knewit_leads`. Проверить канбан глазами.
+   и сделки подъехали из `tcs_leads`. Проверить канбан глазами.
 6. Воркеры: в логах `outbox cycle done`, `notify cycle done`, realtime
    `realtime poller started from message_id=...`.
 7. Прогнать `scripts/smoke.sh` против нового домена (п. 7).

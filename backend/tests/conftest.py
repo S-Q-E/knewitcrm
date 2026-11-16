@@ -11,7 +11,7 @@ from sqlalchemy import text
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
-os.environ.setdefault("DATABASE_URL", "postgresql://knewit:knewit@localhost:5432/knewit")
+os.environ.setdefault("DATABASE_URL", "postgresql://tcs:tcs@localhost:5432/tcs")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ADMIN_EMAIL", "admin-test@example.com")
 os.environ.setdefault("ADMIN_PASSWORD", "admin-test-password-1")

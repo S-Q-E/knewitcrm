@@ -77,7 +77,7 @@ async def _sync_state(
         text(
             "INSERT INTO crm_conversation_state (whatsapp_id, assigned_to)"
             " SELECT :wa, CAST(:owner AS uuid)"
-            " WHERE EXISTS (SELECT 1 FROM knewit_leads WHERE whatsapp_id = :wa)"
+            " WHERE EXISTS (SELECT 1 FROM tcs_leads WHERE whatsapp_id = :wa)"
             " ON CONFLICT (whatsapp_id) DO UPDATE SET assigned_to = EXCLUDED.assigned_to"
         ),
         {"wa": whatsapp_id, "owner": str(owner_id) if owner_id else None},

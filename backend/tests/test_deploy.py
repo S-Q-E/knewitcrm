@@ -120,7 +120,7 @@ def test_deploy_doc_covers_production_checklist():
         "DEFAULT_TIMEZONE",
         "DEFAULT_CURRENCY",
         "crm_app",
-        "GRANT SELECT ON knewit_",
+        "GRANT SELECT ON tcs_",
         "UPDATE (current_stage, previous_stage, updated_at)",
         "permission denied",
         "Откат",

@@ -1,13 +1,13 @@
 -- Step 14 perf harness: synthetic load for EXPLAIN/latency analysis.
 -- All rows carry the perf14_ prefix and MUST be removed after the analysis:
 --   DELETE FROM crm_conversation_state WHERE whatsapp_id LIKE 'perf14\_%';
---   DELETE FROM knewit_messages WHERE whatsapp_id LIKE 'perf14\_%';
---   DELETE FROM knewit_events WHERE whatsapp_id LIKE 'perf14\_%';
---   DELETE FROM knewit_leads WHERE whatsapp_id LIKE 'perf14\_%';
+--   DELETE FROM tcs_messages WHERE whatsapp_id LIKE 'perf14\_%';
+--   DELETE FROM tcs_events WHERE whatsapp_id LIKE 'perf14\_%';
+--   DELETE FROM tcs_leads WHERE whatsapp_id LIKE 'perf14\_%';
 -- Prefix perf14_ never collides with real or fixture rows (fixtures use 7701/7999).
 BEGIN;
 
-INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status, last_objection, created_at, updated_at, last_message_at)
+INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status, last_objection, created_at, updated_at, last_message_at)
 SELECT 'perf14_' || g || '@c.us',
        'Perf ' || g,
        (ARRAY['НОВЫЙ_ЛИД','КВАЛИФИКАЦИЯ','ЗАПИСЬ','ПРОДАЖА'])[1 + (g % 4)],
@@ -19,7 +19,7 @@ SELECT 'perf14_' || g || '@c.us',
 FROM generate_series(1, 2000) g;
 
 -- 100k messages, ~50 per lead, spread over ~70 days, mixed directions.
-INSERT INTO knewit_messages (whatsapp_id, direction, message_type, content, stage_at_moment, tokens_used, response_time_ms, created_at)
+INSERT INTO tcs_messages (whatsapp_id, direction, message_type, content, stage_at_moment, tokens_used, response_time_ms, created_at)
 SELECT 'perf14_' || (1 + (g % 2000)) || '@c.us',
        CASE WHEN g % 2 = 0 THEN 'in' ELSE 'out' END,
        'chat',
@@ -30,7 +30,7 @@ SELECT 'perf14_' || (1 + (g % 2000)) || '@c.us',
        now() - (g || ' minutes')::interval
 FROM generate_series(1, 100000) g;
 
-INSERT INTO knewit_events (whatsapp_id, event_type, from_stage, to_stage, created_at)
+INSERT INTO tcs_events (whatsapp_id, event_type, from_stage, to_stage, created_at)
 SELECT 'perf14_' || (1 + (g % 2000)) || '@c.us',
        (ARRAY['stage_entered','objection_raised','trial_booked','transferred_to_manager'])[1 + (g % 4)],
        'НОВЫЙ_ЛИД', 'КВАЛИФИКАЦИЯ',

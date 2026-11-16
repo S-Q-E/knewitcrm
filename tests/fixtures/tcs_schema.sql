@@ -1,7 +1,7 @@
--- Test replica of the production n8n-owned knewit_* tables.
+-- Test replica of the production n8n-owned tcs_* tables.
 -- Source: schema_dump.sql (structure of the production database, pg_dump 16).
 -- Production tables belong to n8n; CRM never migrates them (see docs/db_schema.md).
--- Production has NO foreign keys between knewit_* tables: rows are matched by
+-- Production has NO foreign keys between tcs_* tables: rows are matched by
 -- whatsapp_id, so tests must delete child rows explicitly.
 
 CREATE OR REPLACE FUNCTION public.update_updated_at_column() RETURNS trigger
@@ -13,7 +13,7 @@ BEGIN
 END;
 $$;
 
-CREATE TABLE IF NOT EXISTS knewit_leads (
+CREATE TABLE IF NOT EXISTS tcs_leads (
     id SERIAL PRIMARY KEY,
     whatsapp_id VARCHAR(50) NOT NULL UNIQUE,
     client_name VARCHAR(100),
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS knewit_leads (
     last_interaction_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS knewit_messages (
+CREATE TABLE IF NOT EXISTS tcs_messages (
     id BIGSERIAL PRIMARY KEY,
     whatsapp_id VARCHAR(50) NOT NULL,
     direction VARCHAR(3) NOT NULL CHECK (direction IN ('in', 'out')),
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS knewit_messages (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS knewit_events (
+CREATE TABLE IF NOT EXISTS tcs_events (
     id BIGSERIAL PRIMARY KEY,
     whatsapp_id VARCHAR(50) NOT NULL,
     event_type VARCHAR(40) NOT NULL,
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS knewit_events (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS knewit_followups (
+CREATE TABLE IF NOT EXISTS tcs_followups (
     id BIGSERIAL PRIMARY KEY,
     whatsapp_id VARCHAR(50) NOT NULL,
     kind VARCHAR(20) NOT NULL DEFAULT 'THINKING',
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS knewit_followups (
     sent_at TIMESTAMPTZ
 );
 
-CREATE TABLE IF NOT EXISTS knewit_ai_metrics (
+CREATE TABLE IF NOT EXISTS tcs_ai_metrics (
     id BIGSERIAL PRIMARY KEY,
     whatsapp_id VARCHAR(50) NOT NULL,
     unresolved_question TEXT,
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS knewit_ai_metrics (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS knewit_chat_history (
+CREATE TABLE IF NOT EXISTS tcs_chat_history (
     id BIGSERIAL PRIMARY KEY,
     whatsapp_id VARCHAR(50) NOT NULL,
     sender VARCHAR(20) NOT NULL,
@@ -98,18 +98,18 @@ CREATE TABLE IF NOT EXISTS knewit_chat_history (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_knewit_leads_created ON knewit_leads (created_at);
-CREATE INDEX IF NOT EXISTS idx_knewit_leads_stage ON knewit_leads (current_stage);
-CREATE INDEX IF NOT EXISTS idx_knewit_leads_status ON knewit_leads (status);
-CREATE INDEX IF NOT EXISTS idx_knewit_messages_created ON knewit_messages (created_at);
-CREATE INDEX IF NOT EXISTS idx_knewit_messages_wa ON knewit_messages (whatsapp_id);
-CREATE INDEX IF NOT EXISTS idx_knewit_events_created ON knewit_events (created_at);
-CREATE INDEX IF NOT EXISTS idx_knewit_events_type ON knewit_events (event_type);
-CREATE INDEX IF NOT EXISTS idx_knewit_events_wa ON knewit_events (whatsapp_id);
-CREATE INDEX IF NOT EXISTS idx_knewit_followups_due ON knewit_followups (status, scheduled_at);
-CREATE INDEX IF NOT EXISTS idx_knewit_metrics_created_at ON knewit_ai_metrics (created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_knewit_chat_history_whatsapp_id ON knewit_chat_history (whatsapp_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tcs_leads_created ON tcs_leads (created_at);
+CREATE INDEX IF NOT EXISTS idx_tcs_leads_stage ON tcs_leads (current_stage);
+CREATE INDEX IF NOT EXISTS idx_tcs_leads_status ON tcs_leads (status);
+CREATE INDEX IF NOT EXISTS idx_tcs_messages_created ON tcs_messages (created_at);
+CREATE INDEX IF NOT EXISTS idx_tcs_messages_wa ON tcs_messages (whatsapp_id);
+CREATE INDEX IF NOT EXISTS idx_tcs_events_created ON tcs_events (created_at);
+CREATE INDEX IF NOT EXISTS idx_tcs_events_type ON tcs_events (event_type);
+CREATE INDEX IF NOT EXISTS idx_tcs_events_wa ON tcs_events (whatsapp_id);
+CREATE INDEX IF NOT EXISTS idx_tcs_followups_due ON tcs_followups (status, scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_tcs_metrics_created_at ON tcs_ai_metrics (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tcs_chat_history_whatsapp_id ON tcs_chat_history (whatsapp_id, created_at DESC);
 
-DROP TRIGGER IF EXISTS update_knewit_leads_updated_at ON knewit_leads;
-CREATE TRIGGER update_knewit_leads_updated_at BEFORE UPDATE ON knewit_leads
+DROP TRIGGER IF EXISTS update_tcs_leads_updated_at ON tcs_leads;
+CREATE TRIGGER update_tcs_leads_updated_at BEFORE UPDATE ON tcs_leads
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

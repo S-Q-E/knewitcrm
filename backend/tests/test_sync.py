@@ -29,7 +29,7 @@ async def _insert_lead(session, n: int, stage: str = "НОВЫЙ_ЛИД", status
     wa = _wa(n)
     await session.execute(
         text(
-            "INSERT INTO knewit_leads"
+            "INSERT INTO tcs_leads"
             " (whatsapp_id, name, current_stage, status, goal, trial_datetime)"
             " VALUES (:wa, :name, :stage, :status, 'test goal', :trial)"
         ),
@@ -90,13 +90,13 @@ async def _purge(factory, numbers: list[int]) -> None:
             {"ids": ids},
         )
         await session.execute(
-            text("DELETE FROM knewit_messages WHERE whatsapp_id = ANY(:ids)"), {"ids": ids}
+            text("DELETE FROM tcs_messages WHERE whatsapp_id = ANY(:ids)"), {"ids": ids}
         )
         await session.execute(
-            text("DELETE FROM knewit_events WHERE whatsapp_id = ANY(:ids)"), {"ids": ids}
+            text("DELETE FROM tcs_events WHERE whatsapp_id = ANY(:ids)"), {"ids": ids}
         )
         await session.execute(
-            text("DELETE FROM knewit_leads WHERE whatsapp_id = ANY(:ids)"), {"ids": ids}
+            text("DELETE FROM tcs_leads WHERE whatsapp_id = ANY(:ids)"), {"ids": ids}
         )
         await session.commit()
 
@@ -109,7 +109,8 @@ async def _deal_info(factory, wa: str) -> dict:
                     text(
                         "SELECT d.id, d.status, d.stage_locked, d.closed_at, d.trial_at,"
                         " d.custom, s.name AS stage, s.kind, s.bot_stage_key,"
-                        " c.name AS contact_name, c.custom AS contact_custom"
+                        " c.name AS contact_name, c.phone AS contact_phone,"
+                        " c.source AS contact_source, c.custom AS contact_custom"
                         " FROM crm_deals d JOIN crm_stages s ON s.id = d.stage_id"
                         " JOIN crm_contacts c ON c.id = d.contact_id"
                         " WHERE c.whatsapp_id = :wa"
@@ -215,7 +216,7 @@ async def test_bot_stage_move_writes_history(settings):
             async with factory() as session:
                 await session.execute(
                     text(
-                        "UPDATE knewit_leads SET current_stage = 'ЗАПИСЬ',"
+                        "UPDATE tcs_leads SET current_stage = 'ЗАПИСЬ',"
                         " previous_stage = 'НОВЫЙ_ЛИД', updated_at = now()"
                         " WHERE whatsapp_id = :wa"
                     ),
@@ -277,7 +278,7 @@ async def test_stage_locked_blocks_move_but_logs(settings):
                 )
                 await session.execute(
                     text(
-                        "UPDATE knewit_leads SET current_stage = 'ПРЕЗЕНТАЦИЯ_РЕШЕНИЯ',"
+                        "UPDATE tcs_leads SET current_stage = 'ПРЕЗЕНТАЦИЯ_РЕШЕНИЯ',"
                         " updated_at = now() WHERE whatsapp_id = :wa"
                     ),
                     {"wa": wa},
@@ -327,7 +328,7 @@ async def test_status_client_and_lost_close_deal(settings):
             async with factory() as session:
                 await session.execute(
                     text(
-                        "UPDATE knewit_leads SET status = 'КЛИЕНТ', updated_at = now()"
+                        "UPDATE tcs_leads SET status = 'КЛИЕНТ', updated_at = now()"
                         " WHERE whatsapp_id = :wa"
                     ),
                     {"wa": wa},
@@ -342,7 +343,7 @@ async def test_status_client_and_lost_close_deal(settings):
             async with factory() as session:
                 await session.execute(
                     text(
-                        "UPDATE knewit_leads SET status = 'ОТКАЗ', updated_at = now()"
+                        "UPDATE tcs_leads SET status = 'ОТКАЗ', updated_at = now()"
                         " WHERE whatsapp_id = :wa"
                     ),
                     {"wa": wa},
@@ -460,7 +461,7 @@ async def test_bot_changes_still_apply_but_manual_keys_survive(settings):
             async with factory() as session:
                 await session.execute(
                     text(
-                        "UPDATE knewit_leads SET name = 'New Bot Name', goal = 'new goal',"
+                        "UPDATE tcs_leads SET name = 'New Bot Name', goal = 'new goal',"
                         " trial_datetime = :trial, updated_at = now()"
                         " WHERE whatsapp_id = :wa"
                     ),
@@ -486,7 +487,7 @@ async def test_bot_changes_still_apply_but_manual_keys_survive(settings):
             async with factory() as session:
                 await session.execute(
                     text(
-                        "UPDATE knewit_leads SET trial_datetime = NULL, updated_at = now()"
+                        "UPDATE tcs_leads SET trial_datetime = NULL, updated_at = now()"
                         " WHERE whatsapp_id = :wa"
                     ),
                     {"wa": wa},
@@ -500,6 +501,84 @@ async def test_bot_changes_still_apply_but_manual_keys_survive(settings):
             assert got == new_trial
         finally:
             await _purge(factory, [22])
+    finally:
+        await engine.dispose()
+
+
+async def test_bot_phone_source_and_lead_data_sync(settings):
+    """Phone/source/lead_data reach the CRM and manager edits survive."""
+    engine, factory = _factory(settings)
+    wa = _wa(31)
+    try:
+        async with factory() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO tcs_leads"
+                    " (whatsapp_id, name, current_stage, status, phone, source, lead_data)"
+                    " VALUES (:wa, 'TCS Lead', 'НОВЫЙ_ЛИД', 'ACTIVE',"
+                    " '+1 215 555 0100', 'tcs_demo', CAST(:data AS jsonb))"
+                ),
+                {
+                    "wa": wa,
+                    "data": '{"budget_usd": 1800, "unit": "2B", "pets": true}',
+                },
+            )
+            await session.commit()
+        try:
+            await run_sync_cycle(factory, force_full=True)
+            info = await _deal_info(factory, wa)
+            assert info["contact_phone"] == "+1 215 555 0100"
+            assert info["contact_source"] == "tcs_demo"
+            assert info["contact_custom"]["budget_usd"] == 1800
+            assert info["contact_custom"]["unit"] == "2B"
+            assert info["contact_custom"]["pets"] is True
+            assert info["contact_custom"]["lead_data"]["budget_usd"] == 1800
+            assert info["custom"]["unit"] == "2B"
+
+            # A bot change reaches both the columns and the custom payload.
+            async with factory() as session:
+                await session.execute(
+                    text(
+                        "UPDATE tcs_leads SET phone = '+1 215 555 0199',"
+                        " source = 'tcs_demo_2',"
+                        " lead_data = CAST(:data AS jsonb), updated_at = now()"
+                        " WHERE whatsapp_id = :wa"
+                    ),
+                    {"wa": wa, "data": '{"budget_usd": 2100, "unit": "3C", "pets": false}'},
+                )
+                await session.commit()
+            await run_sync_cycle(factory, force_full=True)
+            info = await _deal_info(factory, wa)
+            assert info["contact_phone"] == "+1 215 555 0199"
+            assert info["contact_source"] == "tcs_demo_2"
+            assert info["contact_custom"]["budget_usd"] == 2100
+            assert info["contact_custom"]["unit"] == "3C"
+            assert info["contact_custom"]["pets"] is False
+
+            # Manual CRM edits win over subsequent bot values.
+            async with factory() as session:
+                await session.execute(
+                    text(
+                        "UPDATE crm_contacts SET phone = '+1 215 555 0111',"
+                        " source = 'manual' WHERE whatsapp_id = :wa"
+                    ),
+                    {"wa": wa},
+                )
+                await session.execute(
+                    text(
+                        "UPDATE tcs_leads SET phone = '+1 215 555 0222',"
+                        " source = 'tcs_demo_3', updated_at = now()"
+                        " WHERE whatsapp_id = :wa"
+                    ),
+                    {"wa": wa},
+                )
+                await session.commit()
+            await run_sync_cycle(factory, force_full=True)
+            info = await _deal_info(factory, wa)
+            assert info["contact_phone"] == "+1 215 555 0111"
+            assert info["contact_source"] == "manual"
+        finally:
+            await _purge(factory, [31])
     finally:
         await engine.dispose()
 
@@ -548,13 +627,13 @@ async def _purge_load(factory) -> None:
             text("DELETE FROM crm_conversation_state WHERE whatsapp_id LIKE :pattern"),
             {"pattern": pattern},
         )
-        for table in ("knewit_messages", "knewit_events", "knewit_followups"):
+        for table in ("tcs_messages", "tcs_events", "tcs_followups"):
             await session.execute(
                 text(f"DELETE FROM {table} WHERE whatsapp_id LIKE :pattern"),
                 {"pattern": pattern},
             )
         await session.execute(
-            text("DELETE FROM knewit_leads WHERE whatsapp_id LIKE :pattern"),
+            text("DELETE FROM tcs_leads WHERE whatsapp_id LIKE :pattern"),
             {"pattern": pattern},
         )
         await session.commit()
@@ -567,7 +646,7 @@ async def test_load_idle_cycle_under_one_second(settings):
         async with factory() as session:
             await session.execute(
                 text(
-                    "INSERT INTO knewit_leads"
+                    "INSERT INTO tcs_leads"
                     " (whatsapp_id, name, current_stage, status, goal, created_at, updated_at,"
                     " last_message_at)"
                     " SELECT :prefix || lpad(g::text, 5, '0') || '@c.us',"
@@ -581,7 +660,7 @@ async def test_load_idle_cycle_under_one_second(settings):
             )
             await session.execute(
                 text(
-                    "INSERT INTO knewit_messages"
+                    "INSERT INTO tcs_messages"
                     " (whatsapp_id, direction, message_type, content, created_at)"
                     " SELECT :prefix || lpad((g / 10)::text, 5, '0') || '@c.us',"
                     " 'in', 'chat', 'load msg',"

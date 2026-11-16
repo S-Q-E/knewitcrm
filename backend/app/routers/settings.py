@@ -134,13 +134,13 @@ async def bot_stages(
     admin: CurrentUser = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    """Real bot values for the stage editor dropdowns (read-only on knewit_*)."""
+    """Real bot values for the stage editor dropdowns (read-only on tcs_*)."""
     del admin
     stages = (
         (
             await session.execute(
                 text(
-                    "SELECT DISTINCT current_stage FROM knewit_leads"
+                    "SELECT DISTINCT current_stage FROM tcs_leads"
                     " WHERE current_stage IS NOT NULL ORDER BY 1"
                 )
             )
@@ -149,7 +149,7 @@ async def bot_stages(
         .all()
     )
     statuses = (
-        (await session.execute(text("SELECT DISTINCT status FROM knewit_leads ORDER BY 1")))
+        (await session.execute(text("SELECT DISTINCT status FROM tcs_leads ORDER BY 1")))
         .scalars()
         .all()
     )
@@ -171,11 +171,9 @@ async def integrations_status(
     )
     started = time.perf_counter()
     try:
-        leads = (await session.execute(text("SELECT COUNT(*) FROM knewit_leads"))).scalar() or 0
-        messages = (
-            await session.execute(text("SELECT COUNT(*) FROM knewit_messages"))
-        ).scalar() or 0
-        events = (await session.execute(text("SELECT COUNT(*) FROM knewit_events"))).scalar() or 0
+        leads = (await session.execute(text("SELECT COUNT(*) FROM tcs_leads"))).scalar() or 0
+        messages = (await session.execute(text("SELECT COUNT(*) FROM tcs_messages"))).scalar() or 0
+        events = (await session.execute(text("SELECT COUNT(*) FROM tcs_events"))).scalar() or 0
     except Exception as exc:
         logger.warning("bot db probe failed: %s", type(exc).__name__)
         out.bot_db_error = "unreachable"

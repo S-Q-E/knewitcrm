@@ -93,7 +93,7 @@ async def _purge_was(factory, was: list[str]) -> None:
             {"ids": was},
         )
         await session.execute(
-            text("DELETE FROM knewit_leads WHERE whatsapp_id = ANY(:ids)"), {"ids": was}
+            text("DELETE FROM tcs_leads WHERE whatsapp_id = ANY(:ids)"), {"ids": was}
         )
         await session.commit()
 
@@ -107,7 +107,7 @@ async def test_sync_new_deal_lands_on_top(settings):
         async with factory() as session:
             await session.execute(
                 text(
-                    "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+                    "INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status)"
                     " VALUES (:wa, 'Top Test', 'НОВЫЙ_ЛИД', 'ACTIVE')"
                 ),
                 {"wa": wa},
@@ -147,7 +147,7 @@ async def test_sync_batch_keeps_creation_order(settings):
             for n, wa in enumerate(was):
                 await session.execute(
                     text(
-                        "INSERT INTO knewit_leads (whatsapp_id, name, current_stage, status)"
+                        "INSERT INTO tcs_leads (whatsapp_id, name, current_stage, status)"
                         " VALUES (:wa, :name, 'НОВЫЙ_ЛИД', 'ACTIVE')"
                     ),
                     {"wa": wa, "name": f"Batch {n}"},

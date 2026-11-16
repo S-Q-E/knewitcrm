@@ -5,7 +5,7 @@ CRM_PREFIX = "crm_"
 
 
 def include_object(obj, name: str | None, type_: str, reflected: bool, compare_to) -> bool:
-    """Alembic sees only crm_* objects, never knewit_* or other n8n tables."""
+    """Alembic sees only crm_* objects, never tcs_* or other n8n tables."""
     if type_ == "table":
         return bool(name) and name.startswith(CRM_PREFIX)
     table = getattr(obj, "table", None)

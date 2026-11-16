@@ -152,7 +152,7 @@ async def get_dialog_messages(
     """
     lead_exists = (
         await session.execute(
-            text("SELECT 1 FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": whatsapp_id}
+            text("SELECT 1 FROM tcs_leads WHERE whatsapp_id = :wa"), {"wa": whatsapp_id}
         )
     ).scalar_one_or_none()
     if lead_exists is None:
@@ -162,7 +162,7 @@ async def get_dialog_messages(
     cursor = ""
     if before_id is not None:
         cursor = (
-            " AND (created_at, id) < (SELECT created_at, id FROM knewit_messages"
+            " AND (created_at, id) < (SELECT created_at, id FROM tcs_messages"
             " WHERE id = :before_id AND whatsapp_id = :whatsapp_id)"
         )
         params["before_id"] = before_id
@@ -171,7 +171,7 @@ async def get_dialog_messages(
             await session.execute(
                 text(
                     "SELECT id, direction, message_type, content, stage_at_moment,"
-                    " created_at FROM knewit_messages"
+                    " created_at FROM tcs_messages"
                     " WHERE whatsapp_id = :whatsapp_id" + cursor + " ORDER BY created_at DESC,"
                     " id DESC LIMIT :limit"
                 ),
@@ -232,7 +232,7 @@ async def _ensure_bot_lead(session: AsyncSession, whatsapp_id: str) -> None:
     """Dialog state exists only for bot leads; anything else is a 404 (as in routers/chats)."""
     lead_exists = (
         await session.execute(
-            text("SELECT 1 FROM knewit_leads WHERE whatsapp_id = :wa"), {"wa": whatsapp_id}
+            text("SELECT 1 FROM tcs_leads WHERE whatsapp_id = :wa"), {"wa": whatsapp_id}
         )
     ).scalar_one_or_none()
     if lead_exists is None:

@@ -6,7 +6,7 @@
 ## 0. Базовая линия
 
 Postgres: `docker compose up -d`, контейнер `tcs_demo-db-1`
-(`postgres:16-alpine`, порт 5432, БД `knewit` / `knewit`).
+(`postgres:16-alpine`, порт 5432, БД `tcs` / `tcs`).
 
 | Проверка | Результат |
 | --- | --- |
@@ -38,7 +38,7 @@ Postgres: `docker compose up -d`, контейнер `tcs_demo-db-1`
 
 `backend/app/workers/sync_worker.py`:
 
-- `_LEAD_SELECT` читает из `knewit_leads`:
+- `_LEAD_SELECT` читает из `tcs_leads`:
   `whatsapp_id, name, current_stage, previous_stage, status, direction, goal,
   experience_level, preferred_format, preferred_time, trial_datetime,
   last_objection`.
@@ -69,7 +69,7 @@ Postgres: `docker compose up -d`, контейнер `tcs_demo-db-1`
   этапы сопоставляет по `bot_stage_key` / `bot_status_key`.
   `_resolve_target`: `status = "КЛИЕНТ"` → `won`, `status = "ОТКАЗ"` → `lost`,
   иначе этап по `current_stage`; неизвестный этап → первый `open`.
-- `deal.trial_at` — это и есть `knewit_leads.trial_datetime`; в UI называется
+- `deal.trial_at` — это и есть `tcs_leads.trial_datetime`; в UI называется
   «Пробный урок» (Phase 1 → «Viewing»).
 
 ### 1.2 `normalize.py` и дубли
@@ -131,7 +131,7 @@ phone-ключ будет строиться только из `crm_contacts.pho
 
 ---
 
-## 2. Какие поля `knewit_leads` видны в карточке контакта и сделки
+## 2. Какие поля `tcs_leads` видны в карточке контакта и сделки
 
 `CUSTOM_FIELDS` в `sync_worker.py`:
 
@@ -143,7 +143,7 @@ phone-ключ будет строиться только из `crm_contacts.pho
 Эти шесть полей пишутся и в `crm_contacts.custom`, и в `crm_deals.custom`
 (`_merge_bot_custom`; ручные ключи менеджера сохраняются).
 
-| Поле `knewit_leads` | Куда попадает | Где видно |
+| Поле `tcs_leads` | Куда попадает | Где видно |
 | --- | --- | --- |
 | `name` | `crm_contacts.name`, `crm_deals.title` | карточка контакта, карточка/список сделок, диалоги |
 | `whatsapp_id` | `crm_contacts.whatsapp_id`, `crm_conversation_state.whatsapp_id` | контакт, диалоги, блок «Данные от бота», чат |
@@ -169,9 +169,9 @@ phone-ключ будет строиться только из `crm_contacts.pho
   `source`, `whatsapp_id` и **только те custom-поля, для которых есть
   определения в `crm_custom_fields`**. Шесть полей бота на странице контакта
   по умолчанию не видны (определений для них нет), но видны в сделке.
-- `lead_data` в Phase 2 можно заполнить в `knewit_leads`, но CRM его не
+- `lead_data` в Phase 2 можно заполнить в `tcs_leads`, но CRM его не
   отобразит без изменения `sync_worker`/UI, чего target не требует.
-- `phone` в Phase 2 можно заполнить в `knewit_leads` (555-01xx), но
+- `phone` в Phase 2 можно заполнить в `tcs_leads` (555-01xx), но
   `crm_contacts.phone` останется `NULL`; в CRM телефона не будет. Это
   ограничение текущего синка, а не seed-скрипта.
 
@@ -432,12 +432,12 @@ Do not make direct changes to the file.
 ## 10. Что это значит для следующих фаз (риски/решения)
 
 1. **Телефон бота не доходит до CRM.** `sync_worker` не читает
-   `knewit_leads.phone` и не пишет `crm_contacts.phone`. Seed Phase 2 может
+   `tcs_leads.phone` и не пишет `crm_contacts.phone`. Seed Phase 2 может
    заполнить телефон в боте, но в CRM его не будет. Если для демо нужен телефон
    в карточке — это изменение `sync_worker` (не предусмотрено target) или
    отдельное решение. Пока в CRM останется `whatsapp_id = tg:...`.
 2. **`lead_data` не доходит до CRM.** `budget_usd`, `unit`, `pets` будут только
-   в `knewit_leads.lead_data`; UI их не покажет. Для демо это ок, если не
+   в `tcs_leads.lead_data`; UI их не покажет. Для демо это ок, если не
    обещать их на экране.
 3. **`tg:` как телефон.** После Phase 1.4 нужно поправить не только
    `normalize_whatsapp`, но и `formatPhone` (карточка сделки) — иначе

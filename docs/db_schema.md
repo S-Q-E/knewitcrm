@@ -1,26 +1,26 @@
-# DB schema (knewit_*)
+# DB schema (tcs_*)
 
 > Source: production structure from `schema_dump.sql` (pg_dump, PostgreSQL 16.14, structure only).
-> The test replica is `tests/fixtures/knewit_schema.sql`; it mirrors these tables without
+> The test replica is `tests/fixtures/tcs_schema.sql`; it mirrors these tables without
 > views and without the n8n/bot helper tables.
 > CRM never migrates these tables (owned by n8n, written only via `bot_bridge.py`).
 
-Tables used by the CRM: knewit_leads, knewit_messages, knewit_events, knewit_followups.
-Other production tables (not used by the CRM): knewit_ai_metrics, knewit_chat_history,
-bot_*, chat_status, reminders, Reminderai, n8n_chat_histories and views knewit_*.
+Tables used by the CRM: tcs_leads, tcs_messages, tcs_events, tcs_followups.
+Other production tables (not used by the CRM): tcs_ai_metrics, tcs_chat_history,
+bot_*, chat_status, reminders, Reminderai, n8n_chat_histories and views tcs_*.
 
-**Production has no foreign keys between knewit_* tables.** Rows are matched by
+**Production has no foreign keys between tcs_* tables.** Rows are matched by
 `whatsapp_id` (VARCHAR(50)). Deleting a lead does not delete its messages or events, so
 tests and scripts must remove child rows explicitly.
 
-## knewit_leads
+## tcs_leads
 
 PK `id` (integer, sequence). `whatsapp_id` is UNIQUE, not the primary key.
-Trigger `update_knewit_leads_updated_at` sets `updated_at = now()` on every UPDATE.
+Trigger `update_tcs_leads_updated_at` sets `updated_at = now()` on every UPDATE.
 
 | column | type | nullable | default |
 |---|---|---|---|
-| id | integer | NO | nextval(knewit_leads_id_seq) |
+| id | integer | NO | nextval(tcs_leads_id_seq) |
 | whatsapp_id | varchar(50) | NO |  |
 | name | varchar(100) | YES |  |
 | status | varchar(30) | YES | 'new' |
@@ -47,7 +47,7 @@ Trigger `update_knewit_leads_updated_at` sets `updated_at = now()` on every UPDA
 The last group (`client_name` … `student_category`) is not written by the workflow or the CRM
 (see architecture §11.4); its origin is unknown.
 
-## knewit_messages
+## tcs_messages
 
 PK `id` bigint (sequence). `direction` is `varchar(3)` with CHECK `in`/`out`. No FK.
 Indexes: `(whatsapp_id)`, `(created_at)`. There is **no** composite `(whatsapp_id, created_at)`
@@ -65,7 +65,7 @@ index in production (see docs/DB_RECOMMENDATIONS.md, P2-6).
 | response_time_ms | integer | YES |  |
 | created_at | timestamptz | YES | CURRENT_TIMESTAMP |
 
-## knewit_events
+## tcs_events
 
 PK `id` bigint (sequence). No FK.
 
@@ -79,7 +79,7 @@ PK `id` bigint (sequence). No FK.
 | payload | jsonb | YES | '{}' |
 | created_at | timestamptz | YES | CURRENT_TIMESTAMP |
 
-## knewit_followups
+## tcs_followups
 
 PK `id` bigint (sequence). No FK. Written by the n8n workflow (`Insert Follow-up`); no consumer
 is known (architecture §11.1).
@@ -98,7 +98,7 @@ is known (architecture §11.1).
 
 ## Distinct values
 
-### knewit_leads.current_stage (from `frontend/app.js` STAGE_LABELS)
+### tcs_leads.current_stage (from `frontend/app.js` STAGE_LABELS)
 - НОВЫЙ_ЛИД
 - ВЫЯВЛЕНИЕ_ПОТРЕБНОСТИ
 - КВАЛИФИКАЦИЯ
@@ -114,7 +114,7 @@ is known (architecture §11.1).
 - ПРОДАЖА
 - ДУМАЕТ_FOLLOWUP
 
-### knewit_leads.status (from `backend/main.py` stats + `frontend/app.js` STATUS_MAP)
+### tcs_leads.status (from `backend/main.py` stats + `frontend/app.js` STATUS_MAP)
 - ACTIVE
 - ЗАПИСАН
 - ДУМАЕТ
@@ -122,7 +122,7 @@ is known (architecture §11.1).
 - ОТКАЗ
 - КЛИЕНТ
 
-### knewit_events.event_type (from `frontend/app.js` EVENT_ICONS)
+### tcs_events.event_type (from `frontend/app.js` EVENT_ICONS)
 - stage_entered
 - stage_exited
 - objection_raised

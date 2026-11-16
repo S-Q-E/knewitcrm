@@ -12,18 +12,18 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: knewit
-          POSTGRES_PASSWORD: knewit
-          POSTGRES_DB: knewit
+          POSTGRES_USER: tcs
+          POSTGRES_PASSWORD: tcs
+          POSTGRES_DB: tcs
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U knewit -d knewit"
+          --health-cmd="pg_isready -U tcs -d tcs"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=10
     env:
-      DATABASE_URL: postgresql://knewit:knewit@localhost:5432/knewit
+      DATABASE_URL: postgresql://tcs:tcs@localhost:5432/tcs
       SECRET_KEY: ci-secret-key
       ADMIN_EMAIL: admin-test@example.com
       ADMIN_PASSWORD: admin-test-password-1
@@ -38,10 +38,10 @@ jobs:
           pip install -r requirements-dev.txt
       - name: Lint
         run: ruff check backend scripts
-      - name: Apply knewit fixtures
+      - name: Apply TCS fixtures
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
-          psql "$DATABASE_URL" -f tests/fixtures/knewit_schema.sql
+          psql "$DATABASE_URL" -f tests/fixtures/tcs_schema.sql
           psql "$DATABASE_URL" -f tests/fixtures/seed.sql
       - name: Migrate
         run: alembic -c backend/alembic.ini upgrade head
@@ -79,18 +79,18 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: knewit
-          POSTGRES_PASSWORD: knewit
-          POSTGRES_DB: knewit
+          POSTGRES_USER: tcs
+          POSTGRES_PASSWORD: tcs
+          POSTGRES_DB: tcs
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U knewit -d knewit"
+          --health-cmd="pg_isready -U tcs -d tcs"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=10
     env:
-      DATABASE_URL: postgresql://knewit:knewit@localhost:5432/knewit
+      DATABASE_URL: postgresql://tcs:tcs@localhost:5432/tcs
       SECRET_KEY: ci-secret-key
       ADMIN_EMAIL: admin-test@example.com
       ADMIN_PASSWORD: admin-test-password-1
@@ -116,7 +116,7 @@ jobs:
       - name: Seed database
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
-          psql "$DATABASE_URL" -f tests/fixtures/knewit_schema.sql
+          psql "$DATABASE_URL" -f tests/fixtures/tcs_schema.sql
           psql "$DATABASE_URL" -f tests/fixtures/seed.sql
           alembic -c backend/alembic.ini upgrade head
       - name: Build frontend

@@ -37,7 +37,10 @@ export function formatPhone(
   whatsappId?: string | null,
 ): string | null {
   const fromPhone = (phone ?? "").replace(/\D/g, "");
-  const fromWhatsapp = (whatsappId ?? "").split("@")[0].replace(/\D/g, "");
+  const rawWhatsapp = (whatsappId ?? "").split("@")[0];
+  const fromWhatsapp = rawWhatsapp.startsWith("tg:")
+    ? ""
+    : rawWhatsapp.replace(/\D/g, "");
   const digits = fromPhone || fromWhatsapp;
   if (!digits) {
     return null;
