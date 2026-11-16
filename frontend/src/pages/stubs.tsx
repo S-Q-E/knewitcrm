@@ -9,7 +9,7 @@ export function StubPage({ title, hint }: { title: string; hint: string }) {
       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{hint}</p>
       {query && (
         <p className="mt-2 text-sm">
-          Поиск: <span className="font-medium">{query}</span>
+          Search: <span className="font-medium">{query}</span>
         </p>
       )}
     </div>
@@ -17,15 +17,15 @@ export function StubPage({ title, hint }: { title: string; hint: string }) {
 }
 
 export function DealsPage() {
-  return <StubPage title="Сделки (legacy)" hint="Старая заглушка, заменена канбаном." />;
+  return <StubPage title="Deals (legacy)" hint="Old stub, replaced by the kanban board." />;
 }
 
 export function ForbiddenPage() {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-      <h1 className="text-xl font-bold">Нет доступа</h1>
+      <h1 className="text-xl font-bold">Access denied</h1>
       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-        Этот раздел доступен только администраторам.
+        This section is available to administrators only.
       </p>
     </div>
   );

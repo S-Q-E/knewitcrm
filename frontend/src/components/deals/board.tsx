@@ -224,7 +224,7 @@ export function DealsBoard({
 
   if (boardQuery.isPending) {
     return (
-      <div className="flex gap-3 overflow-x-auto pb-4" aria-label="Загрузка">
+      <div className="flex gap-3 overflow-x-auto pb-4" aria-label="Loading">
         {[0, 1, 2, 3].map((index) => (
           <div
             key={index}
@@ -238,9 +238,9 @@ export function DealsBoard({
   if (boardQuery.isError) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100">
-        Не удалось загрузить доску.{" "}
+        Could not load the board.{" "}
         <button type="button" className="underline" onClick={() => boardQuery.refetch()}>
-          Попробовать снова
+          Try again
         </button>
       </div>
     );
@@ -273,7 +273,7 @@ export function DealsBoard({
           ))}
           {columns.length === 0 && (
             <p className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
-              В воронке нет стадий.
+              This pipeline has no stages.
             </p>
           )}
         </div>

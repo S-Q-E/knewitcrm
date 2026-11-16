@@ -23,11 +23,11 @@ export function LoginPage() {
       navigate(params.get("next") || "/deals", { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
-        setError("Слишком много попыток. Попробуйте позже.");
+        setError("Too many attempts. Please try again later.");
       } else if (err instanceof Error) {
-        setError(err.message === "Требуется вход" ? "Неверный email или пароль" : err.message);
+        setError(err.message === "Authentication required" ? "Invalid email or password" : err.message);
       } else {
-        setError("Неверный email или пароль");
+        setError("Invalid email or password");
       }
     }
   };
@@ -38,8 +38,8 @@ export function LoginPage() {
         onSubmit={onSubmit}
         className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
       >
-        <h1 className="text-xl font-bold">KnewIT CRM</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Вход для менеджеров</p>
+        <h1 className="text-xl font-bold">TCS Leasing CRM</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manager sign in</p>
         <label className="mt-4 block text-sm font-medium">
           Email
           <Input
@@ -52,7 +52,7 @@ export function LoginPage() {
           />
         </label>
         <label className="mt-3 block text-sm font-medium">
-          Пароль
+          Password
           <Input
             className="mt-1"
             type="password"
@@ -68,7 +68,7 @@ export function LoginPage() {
           </p>
         )}
         <Button className="mt-4 w-full" type="submit" disabled={login.isPending}>
-          {login.isPending ? "Входим…" : "Войти"}
+          {login.isPending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
     </div>

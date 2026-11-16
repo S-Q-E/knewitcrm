@@ -11,7 +11,7 @@ describe("profile prefs", () => {
   it("falls back to defaults when storage is empty or corrupt", () => {
     localStorage.clear();
     expect(loadProfilePrefs()).toEqual(DEFAULT_PREFS);
-    localStorage.setItem("knewitcrm-profile-prefs", "not-json{{{");
+    localStorage.setItem("tcs-leasing-profile-prefs", "not-json{{{");
     expect(loadProfilePrefs()).toEqual(DEFAULT_PREFS);
   });
 
@@ -24,10 +24,10 @@ describe("profile prefs", () => {
 
 describe("formatInTimezone", () => {
   it("formats the same instant differently per timezone", () => {
-    // Asia/Almaty is UTC+5 year-round (no DST since 2024).
-    const almaty = formatInTimezone("2026-01-01T00:00:00Z", "Asia/Almaty");
+    // America/New_York is UTC-5 in January (EST).
+    const newYork = formatInTimezone("2026-01-01T00:00:00Z", "America/New_York");
     const utc = formatInTimezone("2026-01-01T00:00:00Z", "UTC");
-    expect(almaty).toContain("05:00");
+    expect(newYork).toContain("7:00");
     expect(utc).toContain("00:00");
   });
 });

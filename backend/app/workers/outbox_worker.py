@@ -28,7 +28,7 @@ OUTBOX_HTTP_TIMEOUT_SECONDS = 10.0
 # died mid-flight or the connection dropped after n8n received the payload).
 # It becomes 'failed' without auto-retry: redelivery may double-send.
 OUTBOX_STALE_SENDING_SECONDS = 120
-STALE_SENDING_ERROR = "delivery state unknown, check WhatsApp"
+STALE_SENDING_ERROR = "delivery state unknown, check chat"
 
 # Maximum characters stored in crm_outbox.error: class name + short message.
 OUTBOX_ERROR_MAX_CHARS = 200

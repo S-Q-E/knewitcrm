@@ -17,7 +17,7 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   if (me.isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">
-        Загрузка…
+        Loading…
       </div>
     );
   }

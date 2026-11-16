@@ -155,7 +155,7 @@ describe("useEventStream", () => {
       });
     });
     expect(playPing).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Новое сообщение в вашем диалоге")).toBeTruthy();
+    expect(screen.getByText("New message in your dialog")).toBeTruthy();
   });
 
   it("reconnects with backoff and falls back to polling", () => {

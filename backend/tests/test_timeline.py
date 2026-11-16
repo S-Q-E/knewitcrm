@@ -91,7 +91,7 @@ async def test_timeline_merges_and_orders(client, settings):
         outgoing = next(
             i for i in body["items"] if i["kind"] == "message" and i["data"]["direction"] == "out"
         )
-        assert outgoing["data"]["author_name"] == "Бот"
+        assert outgoing["data"]["author_name"] == "Bot"
         stage = next(i for i in body["items"] if i["kind"] == "stage")
         assert stage["data"]["to_stage"]["name"]
         assert stage["data"]["source"] == "manager"

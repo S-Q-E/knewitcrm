@@ -13,7 +13,7 @@ export function DealPage() {
   return (
     <div className="mx-auto max-w-5xl">
       <Button variant="ghost" size="sm" className="mb-3" onClick={() => navigate("/deals")}>
-        ← К сделкам
+        ← Back to deals
       </Button>
       <DealDetail dealId={id} />
     </div>

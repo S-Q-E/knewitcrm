@@ -265,7 +265,7 @@ async def test_overview_matches_hand_computed_values(client, settings):
         data = await _overview(client, PERIOD)
         assert data["meta"]["date_from"] == "2026-02-10"
         assert data["meta"]["date_to"] == "2026-02-20"
-        assert data["meta"]["currency"] == "KZT"
+        assert data["meta"]["currency"] == "USD"
 
         funnel = data["funnel"]
         assert funnel["cohort_deals"] == 4

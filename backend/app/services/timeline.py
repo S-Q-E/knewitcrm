@@ -519,8 +519,8 @@ async def _enrich(
             if item.get(key):
                 item[label] = names.get(item[key], "?")
         if item["kind"] == "message" and item["author_kind"] == "client":
-            item["author_name"] = contact_name or "Клиент"
+            item["author_name"] = contact_name or "Client"
         if item["kind"] == "message" and item["author_kind"] == "bot":
-            item["author_name"] = "Бот"
+            item["author_name"] = "Bot"
         if item["kind"] == "message" and item["author_kind"] == "manager":
-            item["author_name"] = item.get("sender_name") or "Менеджер"
+            item["author_name"] = item.get("sender_name") or "Manager"

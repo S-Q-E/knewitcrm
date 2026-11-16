@@ -24,12 +24,12 @@ import { Input } from "@/components/ui/input";
 import { isoToLocalInput, localInputToIso } from "@/lib/datetime";
 
 const BOT_FIELDS: { key: string; label: string }[] = [
-  { key: "direction", label: "Направление" },
-  { key: "goal", label: "Цель" },
-  { key: "experience_level", label: "Опыт" },
-  { key: "preferred_format", label: "Формат" },
-  { key: "preferred_time", label: "Время" },
-  { key: "last_objection", label: "Возражение" },
+  { key: "direction", label: "Direction" },
+  { key: "goal", label: "Goal" },
+  { key: "experience_level", label: "Experience" },
+  { key: "preferred_format", label: "Preferred format" },
+  { key: "preferred_time", label: "Preferred time" },
+  { key: "last_objection", label: "Objection" },
   { key: "budget_usd", label: "Budget (USD)" },
   { key: "unit", label: "Unit" },
   { key: "pets", label: "Pets" },
@@ -161,7 +161,7 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
 
   if (dealQuery.isPending) {
     return (
-      <div className="flex flex-col gap-2" aria-label="Загрузка сделки">
+      <div className="flex flex-col gap-2" aria-label="Loading deal">
         {[0, 1, 2, 3].map((index) => (
           <div
             key={index}
@@ -174,9 +174,9 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
   if (dealQuery.isError || !deal) {
     return (
       <p className="text-sm text-red-600">
-        Не удалось загрузить сделку.{" "}
+        Could not load the deal.{" "}
         <button type="button" className="underline" onClick={() => dealQuery.refetch()}>
-          Повторить
+          Retry
         </button>
       </p>
     );
@@ -197,7 +197,7 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
       await updateDeal.mutateAsync({ id: deal.id, patch });
       setDraft(null);
       setCustomDraft(null);
-      push({ title: "Сохранено", variant: "default" });
+      push({ title: "Saved", variant: "default" });
     } catch (error) {
       toastError(push, error);
     }
@@ -216,7 +216,7 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
       ?.find((item) => item.id === deal.pipeline_id)
       ?.stages.find((stage) => stage.kind === "lost");
     if (!lostStage) {
-      push({ title: "Ошибка", description: "Нет lost-стадии в воронке", variant: "error" });
+      push({ title: "Error", description: "No lost stage in this pipeline", variant: "error" });
       return;
     }
     moveDeal.mutate(
@@ -237,7 +237,7 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
       });
       setTaskTitle("");
       setTaskDue("");
-      push({ title: "Задача создана", variant: "default" });
+      push({ title: "Task created", variant: "default" });
     } catch (error) {
       toastError(push, error);
     }
@@ -257,15 +257,15 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
     <div className="flex flex-col gap-4 lg:flex-row">
       <div className="flex w-full flex-col gap-3 lg:max-w-sm">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">{contact?.name ?? "Сделка"}</h2>
+          <h2 className="text-lg font-bold">{contact?.name ?? "Deal"}</h2>
           {onClose && (
             <Button variant="ghost" size="sm" onClick={onClose}>
-              Закрыть
+              Close
             </Button>
           )}
         </div>
 
-        <Field label="Название">
+        <Field label="Title">
           <Input
             defaultValue={deal.title}
             key={`title-${deal.updated_at}`}
@@ -273,7 +273,7 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
           />
         </Field>
         <div className="grid grid-cols-2 gap-2">
-          <Field label="Сумма, ₸">
+          <Field label="Amount, USD">
             <Input
               type="number"
               min="0"
@@ -284,7 +284,7 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
               }
             />
           </Field>
-          <Field label="Пробный урок">
+          <Field label="Viewing">
             <Input
               type="datetime-local"
               defaultValue={isoToLocalInput(deal.trial_at)}
@@ -293,13 +293,13 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
             />
           </Field>
         </div>
-        <Field label="Ответственный">
+        <Field label="Owner">
           <select
             value={(draft?.owner_id as string) ?? deal.owner_id ?? ""}
             onChange={(event) => edit("owner_id", event.target.value || null)}
             className="h-11 md:h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
           >
-            <option value="">Без ответственного</option>
+            <option value="">Unassigned</option>
             {users.data?.items.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.name}
@@ -307,12 +307,12 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
             ))}
           </select>
         </Field>
-        <Field label="Стадия">
+        <Field label="Stage">
           <StageSelect deal={deal} onChange={changeStage} />
         </Field>
 
         <div>
-          <p className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-300">Теги</p>
+          <p className="mb-1 text-sm font-medium text-slate-600 dark:text-slate-300">Tags</p>
           <div className="flex flex-wrap gap-1">
             {tags.data?.items.map((tag) => {
               const on = deal.tags.some((item) => item.id === tag.id);
@@ -337,7 +337,7 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
         {dealFields.data && dealFields.data.items.length > 0 && (
           <div className="flex flex-col gap-2">
             <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-              Дополнительные поля
+              Additional fields
             </p>
             {dealFields.data.items.map((field) => (
               <Field key={field.id} label={field.label + (field.required ? " *" : "")}>
@@ -357,19 +357,19 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
 
         {dirty && (
           <Button onClick={() => void saveDraft()} disabled={updateDeal.isPending}>
-            Сохранить изменения
+            Save changes
           </Button>
         )}
 
         <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={() => setShowWon(true)}>
-            Выиграно
+            Won
           </Button>
           <Button size="sm" variant="danger" onClick={() => setShowLost(true)}>
-            Проиграно
+            Lost
           </Button>
           <Button size="sm" variant="secondary" onClick={() => setShowNote(true)}>
-            Заметка
+            Note
           </Button>
           {deal.stage_locked && (
             <Button
@@ -379,13 +379,13 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
                 unlockDeal.mutate(deal.id, { onError: (error) => toastError(push, error) })
               }
             >
-              Вернуть управление боту
+              Return control to bot
             </Button>
           )}
         </div>
 
         <div className="rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-900">
-          <p className="mb-1 font-medium">Данные от бота</p>
+          <p className="mb-1 font-medium">Bot data</p>
           <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
             {BOT_FIELDS.map((field) => (
               <div key={field.key} className="flex flex-col">
@@ -399,7 +399,7 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
             ))}
           </dl>
           {contact?.whatsapp_id && (
-            <p className="mt-1 text-xs text-slate-500">WhatsApp: {contact.whatsapp_id}</p>
+            <p className="mt-1 text-xs text-slate-500">Chat: {contact.whatsapp_id}</p>
           )}
         </div>
       </div>
@@ -408,8 +408,8 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
         <div className="mb-2 flex gap-1">
           {(
             [
-              ["chat", "Переписка"],
-              ["history", "История"],
+              ["chat", "Chat"],
+              ["history", "History"],
             ] as ["chat" | "history", string][]
           ).map(([id, label]) => (
             <button
@@ -432,18 +432,18 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
               <ChatPanel whatsappId={contact.whatsapp_id} contactName={contact.name} />
             </div>
           ) : (
-            <p className="text-sm text-slate-500">У клиента нет WhatsApp-чата.</p>
+            <p className="text-sm text-slate-500">This contact has no chat yet.</p>
           )
         ) : (
           <Timeline dealId={deal.id} />
         )}
         <div className="mt-3 flex flex-col gap-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
-          <p className="text-sm font-medium">Быстрая задача</p>
+          <p className="text-sm font-medium">Quick task</p>
           <div className="flex flex-col gap-2 md:flex-row">
             <Input
               value={taskTitle}
               onChange={(event) => setTaskTitle(event.target.value)}
-              placeholder="Позвонить клиенту"
+              placeholder="Call the prospect"
               className="flex-1"
             />
             <Input
@@ -457,7 +457,7 @@ export function DealDetail({ dealId, onClose }: { dealId: string; onClose?: () =
               onClick={() => void addTask()}
               disabled={createTask.isPending || !taskTitle.trim()}
             >
-              Добавить
+              Add
             </Button>
           </div>
         </div>

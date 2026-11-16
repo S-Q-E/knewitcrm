@@ -33,9 +33,9 @@ export function ContactPage() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [customForm, setCustomForm] = useState<Record<string, string>>({});
 
-  if (contact.isPending) return <p className="text-sm text-slate-500">Загрузка контакта…</p>;
+  if (contact.isPending) return <p className="text-sm text-slate-500">Loading contact…</p>;
   if (contact.isError || !contact.data) {
-    return <p className="text-sm text-red-600">Контакт не найден.</p>;
+    return <p className="text-sm text-red-600">Contact not found.</p>;
   }
   const c = contact.data;
 
@@ -53,7 +53,7 @@ export function ContactPage() {
       await update.mutateAsync({ id: c.id, patch });
       setForm({});
       setCustomForm({});
-      push({ title: "Контакт обновлён", variant: "default" });
+      push({ title: "Contact updated", variant: "default" });
     } catch (error) {
       toastError(push, error);
     }
@@ -62,7 +62,7 @@ export function ContactPage() {
   const setTags = async (tagIds: string[]) => {
     try {
       await api.put(`/api/contacts/${c.id}/tags`, { tag_ids: tagIds });
-      push({ title: "Теги обновлены", variant: "default" });
+      push({ title: "Tags updated", variant: "default" });
     } catch (error) {
       toastError(push, error);
     } finally {
@@ -74,12 +74,12 @@ export function ContactPage() {
   return (
     <div className="flex flex-col gap-4">
       <Link className="text-sm text-blue-600 hover:underline" to="/contacts">
-        ← К контактам
+        ← Back to contacts
       </Link>
       <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <h1 className="text-xl font-bold">{c.name ?? "Без имени"}</h1>
+        <h1 className="text-xl font-bold">{c.name ?? "No name"}</h1>
         <p className="mt-1 text-sm text-slate-500">
-          {c.phone ?? "—"} · {c.email ?? "—"} · {c.whatsapp_id ?? "—"} · источник: {c.source ?? "—"}
+          {c.phone ?? "—"} · {c.email ?? "—"} · {c.whatsapp_id ?? "—"} · source: {c.source ?? "—"}
         </p>
         <div className="mt-3 grid max-w-2xl grid-cols-2 gap-2 text-sm">
           {(["name", "phone", "email", "source"] as const).map((field) => (
@@ -93,11 +93,11 @@ export function ContactPage() {
             </label>
           ))}
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-slate-500">Ответственный</span>
+            <span className="text-xs text-slate-500">Owner</span>
             <p className="px-1 py-1.5 text-sm">
-              {users.data?.items.find((u) => u.id === c.owner_id)?.name ?? "Не назначен"}
+              {users.data?.items.find((u) => u.id === c.owner_id)?.name ?? "Unassigned"}
             </p>
-            <span className="text-[11px] text-slate-400">Меняется в карточке сделки</span>
+            <span className="text-[11px] text-slate-400">Changed in the deal card</span>
           </div>
         </div>
         {customDefs.data && customDefs.data.items.length > 0 && (
@@ -118,13 +118,13 @@ export function ContactPage() {
         )}
         <div className="mt-3 flex flex-wrap gap-2">
           <Button size="sm" onClick={() => void save()} disabled={update.isPending}>
-            Сохранить
+            Save
           </Button>
           <Button
             size="sm"
             variant="secondary"
             onClick={() => {
-              if (window.confirm("Удалить контакт в корзину?")) {
+              if (window.confirm("Move this contact to trash?")) {
                 void remove
                   .mutateAsync(c.id)
                   .then(() => navigate("/contacts"))
@@ -132,7 +132,7 @@ export function ContactPage() {
               }
             }}
           >
-            В корзину
+            To trash
           </Button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1 text-xs">
@@ -162,7 +162,7 @@ export function ContactPage() {
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="font-medium">Сделки контакта ({deals.data?.total ?? 0})</h2>
+        <h2 className="font-medium">Contact deals ({deals.data?.total ?? 0})</h2>
         <ul className="mt-2 flex flex-col gap-1 text-sm">
           {(deals.data?.items ?? []).map((d) => (
             <li key={d.id}>
@@ -178,13 +178,13 @@ export function ContactPage() {
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="font-medium">Заметка</h2>
+        <h2 className="font-medium">Note</h2>
         <div className="mt-2 flex gap-2">
           <input
-            aria-label="Текст заметки"
+            aria-label="Note text"
             value={noteBody}
             onChange={(e) => setNoteBody(e.target.value)}
-            placeholder="Новая заметка…"
+            placeholder="New note…"
             className="h-11 md:h-9 flex-1 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
           />
           <Button
@@ -195,19 +195,19 @@ export function ContactPage() {
                 .mutateAsync({ contact_id: c.id, body: noteBody.trim() })
                 .then(() => {
                   setNoteBody("");
-                  push({ title: "Заметка добавлена", variant: "default" });
+                  push({ title: "Note added", variant: "default" });
                 })
                 .catch((e: unknown) => toastError(push, e));
             }}
           >
-            Добавить
+            Add
           </Button>
         </div>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="font-medium">Общая лента</h2>
-        {timeline.isPending && <p className="mt-2 text-sm text-slate-500">Загрузка ленты…</p>}
+        <h2 className="font-medium">Activity</h2>
+        {timeline.isPending && <p className="mt-2 text-sm text-slate-500">Loading timeline…</p>}
         {timeline.data && (
           <ul className="mt-2 flex flex-col gap-1 text-sm">
             {timeline.data.items.map((item) => (
@@ -218,7 +218,7 @@ export function ContactPage() {
                 <ItemBody item={item} />
               </li>
             ))}
-            {timeline.data.items.length === 0 && <li className="text-slate-500">Пока пусто.</li>}
+            {timeline.data.items.length === 0 && <li className="text-slate-500">Nothing here yet.</li>}
           </ul>
         )}
       </div>

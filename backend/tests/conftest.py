@@ -31,6 +31,7 @@ def settings() -> Settings:
     # All background loops stay off so tests observe only what they trigger.
     return Settings(
         cookie_secure=False,
+        default_timezone="UTC",
         sync_enabled=False,
         outbox_enabled=False,
         notifications_enabled=False,

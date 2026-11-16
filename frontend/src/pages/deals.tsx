@@ -115,7 +115,7 @@ export function DealsPage() {
 
   if (pipelines.isPending) {
     return (
-      <div className="flex gap-3 overflow-x-auto pb-4" aria-label="Загрузка">
+      <div className="flex gap-3 overflow-x-auto pb-4" aria-label="Loading">
         {[0, 1, 2].map((index) => (
           <div
             key={index}
@@ -129,9 +129,9 @@ export function DealsPage() {
   if (pipelines.isError || !activePipeline || !activePipelineId) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100">
-        Не удалось загрузить воронки.{" "}
+        Could not load pipelines.{" "}
         <button type="button" className="underline" onClick={() => pipelines.refetch()}>
-          Попробовать снова
+          Try again
         </button>
       </div>
     );
@@ -141,7 +141,7 @@ export function DealsPage() {
     <div className="flex h-full flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <select
-          aria-label="Воронка"
+          aria-label="Pipeline"
           value={activePipelineId}
           onChange={(event) => setPipelineId(event.target.value)}
           className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm font-medium dark:border-slate-700 dark:bg-slate-900"
@@ -165,7 +165,7 @@ export function DealsPage() {
                   : "text-slate-600 dark:text-slate-300",
               )}
             >
-              {mode === "kanban" ? "Канбан" : "Список"}
+              {mode === "kanban" ? "Kanban" : "List"}
             </button>
           ))}
         </div>
@@ -213,7 +213,7 @@ export function DealsPage() {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Карточка сделки"
+          aria-label="Deal card"
           className="fixed inset-0 z-30 flex justify-end bg-black/40"
           onClick={() => setOpenDealId(null)}
         >

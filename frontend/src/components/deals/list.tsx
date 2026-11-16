@@ -8,12 +8,12 @@ import { formatMoney, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const ALL_COLUMNS = [
-  { id: "title", label: "Название" },
-  { id: "contact", label: "Контакт" },
-  { id: "amount", label: "Сумма" },
-  { id: "owner", label: "Ответственный" },
-  { id: "tags", label: "Теги" },
-  { id: "updated", label: "Активность" },
+  { id: "title", label: "Title" },
+  { id: "contact", label: "Contact" },
+  { id: "amount", label: "Amount" },
+  { id: "owner", label: "Owner" },
+  { id: "tags", label: "Tags" },
+  { id: "updated", label: "Activity" },
 ] as const;
 
 type ColumnId = (typeof ALL_COLUMNS)[number]["id"];
@@ -25,7 +25,7 @@ export function dealSortField(column: string): string | null {
   return null;
 }
 
-const STORAGE_KEY = "knewitcrm-deal-columns";
+const STORAGE_KEY = "tcs-leasing-deal-columns";
 
 function loadColumns(): ColumnId[] {
   try {
@@ -100,7 +100,7 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
         close_lost_reason_id: bulkReason || undefined,
       });
       setSelected(new Set());
-      push({ title: `Обновлено сделок: ${selected.size}`, variant: "default" });
+      push({ title: `Deals updated: ${selected.size}`, variant: "default" });
     } catch (error) {
       toastError(push, error);
     }
@@ -135,7 +135,7 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3 text-xs">
-        <span className="font-medium">Колонки:</span>
+        <span className="font-medium">Columns:</span>
         {ALL_COLUMNS.map((col) => (
           <label key={col.id} className="flex items-center gap-1">
             <input
@@ -150,14 +150,14 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
 
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900">
-          <span className="font-medium">Выбрано: {selected.size}</span>
+          <span className="font-medium">Selected: {selected.size}</span>
           <select
-            aria-label="Массово: стадия"
+            aria-label="Bulk: stage"
             value={bulkStage}
             onChange={(event) => setBulkStage(event.target.value)}
             className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
           >
-            <option value="">Стадия…</option>
+            <option value="">Stage…</option>
             {[...stagesById.values()].map((stage) => (
               <option key={stage.id} value={stage.id}>
                 {stage.name}
@@ -165,12 +165,12 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
             ))}
           </select>
           <select
-            aria-label="Массово: ответственный"
+            aria-label="Bulk: owner"
             value={bulkOwner}
             onChange={(event) => setBulkOwner(event.target.value)}
             className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
           >
-            <option value="">Ответственный…</option>
+            <option value="">Owner…</option>
             {users.data?.items.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.name}
@@ -178,12 +178,12 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
             ))}
           </select>
           <select
-            aria-label="Массово: тег"
+            aria-label="Bulk: tag"
             value={bulkTag}
             onChange={(event) => setBulkTag(event.target.value)}
             className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
           >
-            <option value="">Тег…</option>
+            <option value="">Tag…</option>
             {tags.data?.items.map((tag) => (
               <option key={tag.id} value={tag.id}>
                 {tag.name}
@@ -191,12 +191,12 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
             ))}
           </select>
           <select
-            aria-label="Массово: закрыть как отказ"
+            aria-label="Bulk: close as lost"
             value={bulkReason}
             onChange={(event) => setBulkReason(event.target.value)}
             className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
           >
-            <option value="">Закрыть как отказ…</option>
+            <option value="">Close as lost…</option>
             {reasons.data?.items.map((reason) => (
               <option key={reason.id} value={reason.id}>
                 {reason.name}
@@ -204,7 +204,7 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
             ))}
           </select>
           <Button size="sm" onClick={() => void runBulk()} disabled={bulk.isPending}>
-            Применить
+            Apply
           </Button>
         </div>
       )}
@@ -216,7 +216,7 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
               <th className="w-8 p-2">
                 <input
                   type="checkbox"
-                  aria-label="Выбрать всё"
+                  aria-label="Select all"
                   checked={items.length > 0 && items.every((item) => selected.has(item.id))}
                   onChange={() =>
                     setSelected((prev) =>
@@ -248,7 +248,7 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
                   </th>
                 );
               })}
-              <th className="p-2 font-medium">Стадия</th>
+              <th className="p-2 font-medium">Stage</th>
             </tr>
           </thead>
           <tbody>
@@ -262,7 +262,7 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
                 <td className="p-2" onClick={(event) => event.stopPropagation()}>
                   <input
                     type="checkbox"
-                    aria-label={`Выбрать ${deal.title}`}
+                    aria-label={`Select ${deal.title}`}
                     checked={selected.has(deal.id)}
                     onChange={() => toggleSelect(deal.id)}
                   />
@@ -277,10 +277,10 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
             ))}
           </tbody>
         </table>
-        {list.isPending && <p className="p-4 text-sm text-slate-500">Загрузка…</p>}
-        {list.isError && <p className="p-4 text-sm text-red-600">Не удалось загрузить сделки.</p>}
+        {list.isPending && <p className="p-4 text-sm text-slate-500">Loading…</p>}
+        {list.isError && <p className="p-4 text-sm text-red-600">Could not load deals.</p>}
         {!list.isPending && items.length === 0 && (
-          <p className="p-4 text-sm text-slate-500">Сделок нет. Измените фильтры.</p>
+          <p className="p-4 text-sm text-slate-500">No deals. Adjust the filters.</p>
         )}
       </div>
 
@@ -291,10 +291,10 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
           disabled={offset === 0}
           onClick={() => setOffset((value) => Math.max(0, value - limit))}
         >
-          Назад
+          Back
         </Button>
         <span>
-          {offset + 1}–{Math.min(offset + limit, total)} из {total}
+          {offset + 1}–{Math.min(offset + limit, total)} of {total}
         </span>
         <Button
           variant="secondary"
@@ -302,7 +302,7 @@ export function DealsListView({ filters, stagesById, contactsById, onOpen }: Lis
           disabled={offset + limit >= total}
           onClick={() => setOffset((value) => value + limit)}
         >
-          Далее
+          Next
         </Button>
       </div>
     </div>

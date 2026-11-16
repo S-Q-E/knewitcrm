@@ -107,9 +107,9 @@ export function ChatPanel({ whatsappId, contactName = null }: ChatPanelProps) {
     return (
       <div className="flex h-full min-h-0 flex-col items-center justify-center">
         {dialog.isPending ? (
-          <p className="text-sm text-slate-500">Загрузка…</p>
+          <p className="text-sm text-slate-500">Loading…</p>
         ) : (
-          <p className="text-sm text-slate-500">Диалог недоступен.</p>
+          <p className="text-sm text-slate-500">Dialog unavailable.</p>
         )}
       </div>
     );
@@ -119,7 +119,7 @@ export function ChatPanel({ whatsappId, contactName = null }: ChatPanelProps) {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-800">
         <span className="min-w-0 flex-1 truncate text-xs text-slate-500 dark:text-slate-400">
-          {dialog.data.bot_paused ? "Бот на паузе" : "Бот отвечает"}
+          {dialog.data.bot_paused ? "Bot paused" : "Bot replying"}
         </span>
         <Button
           size="sm"
@@ -127,26 +127,26 @@ export function ChatPanel({ whatsappId, contactName = null }: ChatPanelProps) {
           disabled={pauseBot.isPending || resumeBot.isPending}
           onClick={() => togglePause(dialog.data)}
         >
-          {dialog.data.bot_paused ? "Включить бота" : "Пауза бота"}
+          {dialog.data.bot_paused ? "Resume bot" : "Pause bot"}
         </Button>
       </div>
 
       {dialog.data.bot_paused && (
         <div className="flex items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
-          <span>Бот на паузе. Клиент не получит автоматических ответов.</span>
+          <span>Bot paused. The prospect will not receive automatic replies.</span>
           <Button
             size="sm"
             variant="secondary"
             disabled={resumeBot.isPending}
             onClick={() => togglePause(dialog.data)}
           >
-            Вернуть боту
+            Return to bot
           </Button>
         </div>
       )}
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
-        {messages.isPending && <p className="text-sm text-slate-500">Загрузка…</p>}
+        {messages.isPending && <p className="text-sm text-slate-500">Loading…</p>}
         {hasMoreOlder && (
           <Button
             size="sm"
@@ -155,7 +155,7 @@ export function ChatPanel({ whatsappId, contactName = null }: ChatPanelProps) {
             disabled={loadingOlder}
             onClick={() => void loadOlder()}
           >
-            Показать более ранние
+            Show earlier
           </Button>
         )}
         {shownMessages.map((message) => (
@@ -170,7 +170,7 @@ export function ChatPanel({ whatsappId, contactName = null }: ChatPanelProps) {
           >
             <p className="whitespace-pre-wrap">{message.content ?? ""}</p>
             <p className="mt-1 text-[11px] opacity-70">
-              {message.message_type === "manager" ? "Менеджер · " : ""}
+              {message.message_type === "manager" ? "Manager · " : ""}
               {message.stage_at_moment ? `${message.stage_at_moment} · ` : ""}
               {formatDate(message.created_at)}
             </p>
@@ -190,17 +190,17 @@ export function ChatPanel({ whatsappId, contactName = null }: ChatPanelProps) {
             >
               <p className="whitespace-pre-wrap">{item.body}</p>
               <p className="mt-1 flex items-center gap-2 text-[11px] opacity-80">
-                {item.status === "failed" ? "Ошибка отправки" : "В очереди…"}
+                {item.status === "failed" ? "Send failed" : "Queued…"}
                 {formatDate(item.created_at)}
                 {item.status === "failed" && (
                   <button
                     type="button"
                     onClick={() => retry(item)}
                     disabled={retryOutbox.isPending}
-                    title="Сообщение уже могло дойти до клиента — возможна дубль-доставка"
+                    title="The message may already have reached the prospect — a duplicate is possible"
                     className="font-medium underline underline-offset-2"
                   >
-                    Повторить (возможна дубль-доставка)
+                    Retry (duplicate possible)
                   </button>
                 )}
               </p>

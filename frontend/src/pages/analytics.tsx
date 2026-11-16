@@ -25,11 +25,11 @@ import { cn } from "@/lib/utils";
 type Preset = "today" | "7" | "30" | "90" | "custom";
 
 const PRESETS: { id: Preset; label: string }[] = [
-  { id: "today", label: "Сегодня" },
-  { id: "7", label: "7 дней" },
-  { id: "30", label: "30 дней" },
-  { id: "90", label: "90 дней" },
-  { id: "custom", label: "Свой период" },
+  { id: "today", label: "Today" },
+  { id: "7", label: "7 days" },
+  { id: "30", label: "30 days" },
+  { id: "90", label: "90 days" },
+  { id: "custom", label: "Custom range" },
 ];
 
 function toISODate(d: Date): string {
@@ -61,10 +61,12 @@ function resolveRange(
   return { date_from: toISODate(from), date_to: today };
 }
 
-const number = new Intl.NumberFormat("ru-RU");
+const number = new Intl.NumberFormat("en-US");
 
 function formatMoney(value: number, currency: string): string {
-  return `${number.format(value)} ${currency === "KZT" ? "₸" : currency}`;
+  return currency === "USD"
+    ? `$${number.format(value)}`
+    : `${number.format(value)} ${currency}`;
 }
 
 function formatPercent(value: number | null): string {
@@ -74,9 +76,9 @@ function formatPercent(value: number | null): string {
 
 function formatHours(value: number | null): string {
   if (value === null || value === undefined) return "—";
-  if (value < 1) return `${Math.round(value * 60)} мин`;
-  if (value < 48) return `${value.toFixed(1)} ч`;
-  return `${(value / 24).toFixed(1)} дн`;
+  if (value < 1) return `${Math.round(value * 60)} min`;
+  if (value < 48) return `${value.toFixed(1)} h`;
+  return `${(value / 24).toFixed(1)} d`;
 }
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
@@ -118,7 +120,7 @@ function CsvButton({ section, filters }: { section: AnalyticsSection; filters: A
             .finally(() => setBusy(false));
         }}
       >
-        {busy ? "Готовим…" : "CSV"}
+        {busy ? "Preparing…" : "CSV"}
       </Button>
     </span>
   );
@@ -147,7 +149,7 @@ function useSort<T extends string>(initial: T) {
       const cmp =
         typeof va === "number" && typeof vb === "number"
           ? va - vb
-          : String(va).localeCompare(String(vb), "ru");
+          : String(va).localeCompare(String(vb), "en");
       return dir === "asc" ? cmp : -cmp;
     });
   };
@@ -208,16 +210,16 @@ function DrillModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-bold">Сделки на стадии «{stage.name}»</h3>
+          <h3 className="text-base font-bold">Deals at stage “{stage.name}”</h3>
           <Button variant="ghost" size="sm" onClick={onClose}>
-            Закрыть
+            Close
           </Button>
         </div>
         <p className="mb-3 text-xs text-slate-500">
-          Когорта: сделки, созданные в выбранном периоде. Всего: {number.format(total)}
+          Cohort: deals created in the selected period. Total: {number.format(total)}
         </p>
-        {drill.isPending && <p className="text-sm text-slate-500">Загрузка…</p>}
-        {drill.isError && <p className="text-sm text-red-600">Не удалось загрузить сделки.</p>}
+        {drill.isPending && <p className="text-sm text-slate-500">Loading…</p>}
+        {drill.isError && <p className="text-sm text-red-600">Could not load deals.</p>}
         {drill.data && (
           <>
             <table className="w-full text-sm">
@@ -240,7 +242,7 @@ function DrillModal({
                 ))}
                 {drill.data.items.length === 0 && (
                   <tr>
-                    <td className="py-4 text-center text-slate-500">Нет сделок с таким фильтром</td>
+                    <td className="py-4 text-center text-slate-500">No deals with this filter</td>
                   </tr>
                 )}
               </tbody>
@@ -252,10 +254,10 @@ function DrillModal({
                 disabled={offset === 0}
                 onClick={() => setOffset((o) => Math.max(0, o - 20))}
               >
-                Назад
+                Back
               </Button>
               <span className="text-xs text-slate-500">
-                {offset + 1}–{offset + drill.data.items.length} из {number.format(total)}
+                {offset + 1}–{offset + drill.data.items.length} of {number.format(total)}
               </span>
               <Button
                 variant="secondary"
@@ -263,7 +265,7 @@ function DrillModal({
                 disabled={offset + 20 >= total}
                 onClick={() => setOffset((o) => o + 20)}
               >
-                Дальше
+                Next
               </Button>
             </div>
           </>
@@ -355,9 +357,9 @@ export function AnalyticsPage() {
           value={pipelineId}
           onChange={(e) => setPipelineId(e.target.value)}
           className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
-          title="Воронка"
+          title="Pipeline"
         >
-          <option value="">Все воронки</option>
+          <option value="">All pipelines</option>
           {pipelines.data?.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -368,9 +370,9 @@ export function AnalyticsPage() {
           value={ownerId}
           onChange={(e) => setOwnerId(e.target.value)}
           className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
-          title="Ответственный"
+          title="Owner"
         >
-          <option value="">Все менеджеры</option>
+          <option value="">All managers</option>
           {users.data?.items.map((u) => (
             <option key={u.id} value={u.id}>
               {u.name}
@@ -385,18 +387,18 @@ export function AnalyticsPage() {
               size="sm"
               onClick={() => setGranularity(g)}
             >
-              {g === "day" ? "По дням" : "По неделям"}
+              {g === "day" ? "By day" : "By week"}
             </Button>
           ))}
         </div>
       </div>
 
-      {overview.isPending && <p className="text-sm text-slate-500">Загрузка аналитики…</p>}
+      {overview.isPending && <p className="text-sm text-slate-500">Loading analytics…</p>}
       {overview.isError && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          Не удалось загрузить аналитику.{" "}
+          Could not load analytics.{" "}
           <button type="button" className="underline" onClick={() => overview.refetch()}>
-            Повторить
+            Retry
           </button>
         </div>
       )}
@@ -404,23 +406,23 @@ export function AnalyticsPage() {
       {data && (
         <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <Kpi label="Новые лиды" value={number.format(data.summary.new_leads)} />
-            <Kpi label="Записи на пробное" value={number.format(data.summary.trials_booked)} />
+            <Kpi label="New leads" value={number.format(data.summary.new_leads)} />
+            <Kpi label="Viewings booked" value={number.format(data.summary.trials_booked)} />
             <Kpi
-              label="Продажи"
+              label="Sales"
               value={`${number.format(data.summary.won_count)} · ${formatMoney(data.summary.won_sum, data.meta.currency)}`}
-              hint={`Средний чек ${formatMoney(data.summary.avg_check, data.meta.currency)}`}
+              hint={`Average deal ${formatMoney(data.summary.avg_check, data.meta.currency)}`}
             />
-            <Kpi label="Потери" value={number.format(data.summary.lost_count)} />
-            <Kpi label="Конверсия общая" value={formatPercent(data.funnel.overall_conversion)} />
+            <Kpi label="Losses" value={number.format(data.summary.lost_count)} />
+            <Kpi label="Overall conversion" value={formatPercent(data.funnel.overall_conversion)} />
             <Kpi
-              label="Без менеджера"
+              label="Without a manager"
               value={formatPercent(data.bot.closed_without_manager_share)}
-              hint={`${number.format(data.bot.closed_without_manager)} диалогов`}
+              hint={`${number.format(data.bot.closed_without_manager)} dialogs`}
             />
           </div>
 
-          <Card title={`Воронка · когорта ${number.format(data.funnel.cohort_deals)} сделок`}>
+          <Card title={`Funnel · cohort of ${number.format(data.funnel.cohort_deals)} deals`}>
             <div className="mb-2 flex justify-end">
               <CsvButton section="funnel" filters={filters} />
             </div>
@@ -446,12 +448,12 @@ export function AnalyticsPage() {
                   <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                   <Tooltip
                     formatter={(value, name) => {
-                      if (name === "reached") return [value, "Дошло"];
+                      if (name === "reached") return [value, "Reached"];
                       return [value, name];
                     }}
-                    labelFormatter={(label) => `Стадия: ${label} (клик — сделки)`}
+                    labelFormatter={(label) => `Stage: ${label} (click for deals)`}
                   />
-                  <Bar dataKey="reached" name="Дошло" fill="#0ea5e9" className="cursor-pointer">
+                  <Bar dataKey="reached" name="Reached" fill="#0ea5e9" className="cursor-pointer">
                     {data.funnel.stages.map((s) => (
                       <Cell key={s.stage_id} fill={s.is_bottleneck ? "#f59e0b" : "#0ea5e9"} />
                     ))}
@@ -463,27 +465,27 @@ export function AnalyticsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs text-slate-500 dark:border-slate-700">
-                    <th className="px-2 py-1.5 text-left font-medium">Стадия</th>
+                    <th className="px-2 py-1.5 text-left font-medium">Stage</th>
                     <Th
-                      label="Дошло"
+                      label="Reached"
                       active={funnelSort.key === "reached"}
                       dir={funnelSort.dir}
                       onClick={() => funnelSort.toggle("reached")}
                     />
                     <Th
-                      label="Конверсия"
+                      label="Conversion"
                       active={funnelSort.key === "conversion_from_prev"}
                       dir={funnelSort.dir}
                       onClick={() => funnelSort.toggle("conversion_from_prev")}
                     />
                     <Th
-                      label="Время"
+                      label="Time"
                       active={funnelSort.key === "avg_hours_on_stage"}
                       dir={funnelSort.dir}
                       onClick={() => funnelSort.toggle("avg_hours_on_stage")}
                     />
                     <Th
-                      label="Сейчас"
+                      label="Now"
                       active={funnelSort.key === "current"}
                       dir={funnelSort.dir}
                       onClick={() => funnelSort.toggle("current")}
@@ -506,7 +508,7 @@ export function AnalyticsPage() {
                         </button>
                         {s.is_bottleneck && (
                           <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                            узкое место
+                            bottleneck
                           </span>
                         )}
                       </td>
@@ -521,7 +523,7 @@ export function AnalyticsPage() {
             </div>
           </Card>
 
-          <Card title="Динамика">
+          <Card title="Dynamics">
             <div className="mb-2 flex justify-end">
               <CsvButton section="dynamics" filters={filters} />
             </div>
@@ -539,31 +541,31 @@ export function AnalyticsPage() {
                   <Line
                     type="monotone"
                     dataKey="new_leads"
-                    name="Новые лиды"
+                    name="New leads"
                     stroke="#0ea5e9"
                     dot={false}
                   />
                   <Line
                     type="monotone"
                     dataKey="trials"
-                    name="Записи"
+                    name="Viewings"
                     stroke="#8b5cf6"
                     dot={false}
                   />
-                  <Line type="monotone" dataKey="won" name="Продажи" stroke="#16a34a" dot={false} />
-                  <Line type="monotone" dataKey="lost" name="Потери" stroke="#dc2626" dot={false} />
+                  <Line type="monotone" dataKey="won" name="Sales" stroke="#16a34a" dot={false} />
+                  <Line type="monotone" dataKey="lost" name="Losses" stroke="#dc2626" dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card title="Потери по причинам">
+            <Card title="Losses by reason">
               <div className="mb-2 flex justify-end">
                 <CsvButton section="lost_reasons" filters={filters} />
               </div>
               {data.summary.lost_by_reason.length === 0 ? (
-                <p className="text-sm text-slate-500">Потерь за период нет</p>
+                <p className="text-sm text-slate-500">No losses in this period</p>
               ) : (
                 <table className="w-full text-sm">
                   <tbody>
@@ -580,20 +582,20 @@ export function AnalyticsPage() {
                 </table>
               )}
             </Card>
-            <Card title="Источники">
+            <Card title="Sources">
               <div className="mb-2 flex justify-end">
                 <CsvButton section="sources" filters={filters} />
               </div>
               {data.sources.length === 0 ? (
-                <p className="text-sm text-slate-500">Нет данных</p>
+                <p className="text-sm text-slate-500">No data</p>
               ) : (
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 text-xs text-slate-500 dark:border-slate-700">
-                      <th className="px-2 py-1.5 text-left font-medium">Источник</th>
-                      <th className="px-2 py-1.5 text-right font-medium">Контакты</th>
-                      <th className="px-2 py-1.5 text-right font-medium">Продажи</th>
-                      <th className="px-2 py-1.5 text-right font-medium">Сумма</th>
+                      <th className="px-2 py-1.5 text-left font-medium">Source</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Contacts</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Sales</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -616,7 +618,7 @@ export function AnalyticsPage() {
             </Card>
           </div>
 
-          <Card title="Менеджеры">
+          <Card title="Managers">
             <div className="mb-2 flex justify-end">
               <CsvButton section="managers" filters={filters} />
             </div>
@@ -624,34 +626,34 @@ export function AnalyticsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs text-slate-500 dark:border-slate-700">
-                    <th className="px-2 py-1.5 text-left font-medium">Менеджер</th>
+                    <th className="px-2 py-1.5 text-left font-medium">Manager</th>
                     <Th
-                      label="В работе"
+                      label="In progress"
                       active={managerSort.key === "deals_in_work"}
                       dir={managerSort.dir}
                       onClick={() => managerSort.toggle("deals_in_work")}
                     />
                     <Th
-                      label="Выиграно"
+                      label="Won"
                       active={managerSort.key === "won"}
                       dir={managerSort.dir}
                       onClick={() => managerSort.toggle("won")}
                     />
                     <Th
-                      label="Конверсия"
+                      label="Conversion"
                       active={managerSort.key === "conversion"}
                       dir={managerSort.dir}
                       onClick={() => managerSort.toggle("conversion")}
                     />
                     <Th
-                      label="Сумма"
+                      label="Amount"
                       active={managerSort.key === "won_sum"}
                       dir={managerSort.dir}
                       onClick={() => managerSort.toggle("won_sum")}
                     />
-                    <th className="px-2 py-1.5 text-left font-medium">Первый ответ</th>
+                    <th className="px-2 py-1.5 text-left font-medium">First response</th>
                     <th className="px-2 py-1.5 text-left font-medium">
-                      Задачи (готово/просрочено)
+                      Tasks (done/overdue)
                     </th>
                   </tr>
                 </thead>
@@ -681,7 +683,7 @@ export function AnalyticsPage() {
                   {managerRows.length === 0 && (
                     <tr>
                       <td className="px-2 py-4 text-center text-slate-500" colSpan={7}>
-                        Нет данных
+                        No data
                       </td>
                     </tr>
                   )}
@@ -690,23 +692,23 @@ export function AnalyticsPage() {
             </div>
           </Card>
 
-          <Card title="Бот">
+          <Card title="Bot">
             <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-4">
               <Kpi
-                label="Сообщения in/out"
+                label="Messages in/out"
                 value={`${number.format(data.bot.messages_in)} / ${number.format(data.bot.messages_out)}`}
               />
               <Kpi
-                label="Среднее время ответа"
+                label="Average response time"
                 value={
                   data.bot.avg_response_time_ms === null
                     ? "—"
-                    : `${number.format(Math.round(data.bot.avg_response_time_ms))} мс`
+                    : `${number.format(Math.round(data.bot.avg_response_time_ms))} ms`
                 }
               />
-              <Kpi label="Токены всего" value={number.format(data.bot.tokens_total)} />
+              <Kpi label="Tokens total" value={number.format(data.bot.tokens_total)} />
               <Kpi
-                label="Передачи менеджеру"
+                label="Manager handovers"
                 value={`${number.format(data.bot.handover_count)} · ${formatPercent(data.bot.handover_share)}`}
               />
             </div>
@@ -719,19 +721,19 @@ export function AnalyticsPage() {
                   <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                   <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                  <Tooltip formatter={(value) => [value, "Токены"]} />
-                  <Bar dataKey="tokens" name="Токены" fill="#8b5cf6" />
+                  <Tooltip formatter={(value) => [value, "Tokens"]} />
+                  <Bar dataKey="tokens" name="Tokens" fill="#8b5cf6" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
             <div className="mt-3 grid gap-4 lg:grid-cols-2">
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">Топ возражений</h3>
+                  <h3 className="text-sm font-semibold">Top objections</h3>
                   <CsvButton section="objections" filters={filters} />
                 </div>
                 {data.bot.top_objections.length === 0 ? (
-                  <p className="text-sm text-slate-500">Нет данных</p>
+                  <p className="text-sm text-slate-500">No data</p>
                 ) : (
                   <table className="w-full text-sm">
                     <tbody>
@@ -750,11 +752,11 @@ export function AnalyticsPage() {
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">Где застревают лиды</h3>
+                  <h3 className="text-sm font-semibold">Where leads get stuck</h3>
                   <CsvButton section="abandoned" filters={filters} />
                 </div>
                 {data.bot.abandoned_by_stage.length === 0 ? (
-                  <p className="text-sm text-slate-500">Нет данных</p>
+                  <p className="text-sm text-slate-500">No data</p>
                 ) : (
                   <table className="w-full text-sm">
                     <tbody>
@@ -776,20 +778,20 @@ export function AnalyticsPage() {
             </div>
           </Card>
 
-          <Card title="Теги">
+          <Card title="Tags">
             <div className="mb-2 flex justify-end">
               <CsvButton section="tags" filters={filters} />
             </div>
             {data.tags.length === 0 ? (
-              <p className="text-sm text-slate-500">Нет данных</p>
+              <p className="text-sm text-slate-500">No data</p>
             ) : (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs text-slate-500 dark:border-slate-700">
-                    <th className="px-2 py-1.5 text-left font-medium">Тег</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Сделки</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Продажи</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Сумма</th>
+                    <th className="px-2 py-1.5 text-left font-medium">Tag</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Deals</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Sales</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Amount</th>
                   </tr>
                 </thead>
                 <tbody>

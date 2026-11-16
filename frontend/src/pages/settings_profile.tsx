@@ -17,7 +17,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { inputClass } from "@/pages/settings";
 
-const TIMEZONES = ["Asia/Almaty", "Asia/Aqtobe", "Asia/Aqtau", "Europe/Moscow", "UTC"];
+const TIMEZONES = [
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "UTC",
+];
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -47,7 +53,7 @@ export function ProfileTab() {
     try {
       await updateProfile.mutateAsync({ name: nameValue.trim() });
       setName(null);
-      push({ title: "Имя обновлено", variant: "default" });
+      push({ title: "Name updated", variant: "default" });
     } catch (error) {
       toastError(push, error);
     }
@@ -61,7 +67,7 @@ export function ProfileTab() {
       });
       setCurrentPassword("");
       setNewPassword("");
-      push({ title: "Пароль изменён. Другие устройства вышли.", variant: "default" });
+      push({ title: "Password changed. Other devices were signed out.", variant: "default" });
     } catch (error) {
       toastError(push, error);
     }
@@ -74,37 +80,37 @@ export function ProfileTab() {
 
   return (
     <div className="grid max-w-3xl gap-4">
-      <Card title="Личные данные">
+      <Card title="Personal details">
         <div className="flex flex-col gap-2">
           <p className="text-sm text-slate-500">
-            {me.data?.email} · роль {me.data?.role === "admin" ? "администратор" : "менеджер"}
+            {me.data?.email} · role {me.data?.role === "admin" ? "administrator" : "manager"}
           </p>
           <div className="flex gap-2">
-            <Input value={nameValue} onChange={(e) => setName(e.target.value)} aria-label="Имя" />
+            <Input value={nameValue} onChange={(e) => setName(e.target.value)} aria-label="Name" />
             <Button
               size="sm"
               disabled={updateProfile.isPending || !nameValue.trim() || nameValue === me.data?.name}
               onClick={() => void saveName()}
             >
-              Сохранить
+              Save
             </Button>
           </div>
         </div>
       </Card>
 
-      <Card title="Смена пароля">
+      <Card title="Change password">
         <div className="flex flex-col gap-2">
           <Input
             type="password"
-            placeholder="Текущий пароль"
-            aria-label="Текущий пароль"
+            placeholder="Current password"
+            aria-label="Current password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
           />
           <Input
             type="password"
-            placeholder="Новый пароль (минимум 10 символов)"
-            aria-label="Новый пароль"
+            placeholder="New password (at least 10 characters)"
+            aria-label="New password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
           />
@@ -114,16 +120,16 @@ export function ProfileTab() {
               disabled={changePassword.isPending || newPassword.length < 10 || !currentPassword}
               onClick={() => void savePassword()}
             >
-              Сменить пароль
+              Change password
             </Button>
           </div>
         </div>
       </Card>
 
-      <Card title="Отображение">
+      <Card title="Display">
         <div className="flex flex-col gap-3">
           <label className="flex items-center gap-2 text-sm">
-            Часовой пояс
+            Timezone
             <select
               value={prefs.timezone}
               onChange={(e) => savePrefs({ ...prefs, timezone: e.target.value })}
@@ -142,20 +148,20 @@ export function ProfileTab() {
               checked={prefs.sound}
               onChange={(e) => savePrefs({ ...prefs, sound: e.target.checked })}
             />
-            Звук уведомлений
+            Notification sound
           </label>
           <button
             type="button"
             className="self-start text-xs text-slate-500 underline"
             onClick={() => savePrefs(DEFAULT_PREFS)}
           >
-            Сбросить к значениям по умолчанию
+            Reset to defaults
           </button>
         </div>
       </Card>
 
-      <Card title="Активные сессии">
-        {sessions.isPending && <p className="text-sm text-slate-500">Загрузка…</p>}
+      <Card title="Active sessions">
+        {sessions.isPending && <p className="text-sm text-slate-500">Loading…</p>}
         {sessions.data && (
           <div className="flex flex-col gap-2">
             {sessions.data.items.map((item) => (
@@ -165,15 +171,15 @@ export function ProfileTab() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate">
-                    {item.user_agent || "Неизвестное устройство"}
+                    {item.user_agent || "Unknown device"}
                     {item.is_current && (
                       <span className="ml-2 rounded bg-emerald-100 px-1.5 text-xs text-emerald-800">
-                        это устройство
+                        this device
                       </span>
                     )}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {item.ip || "—"} · вход {formatInTimezone(item.created_at, prefs.timezone)}
+                    {item.ip || "—"} · signed in {formatInTimezone(item.created_at, prefs.timezone)}
                   </p>
                 </div>
                 {!item.is_current && (
@@ -185,7 +191,7 @@ export function ProfileTab() {
                       revokeOne.mutate(item.id, { onError: (e) => toastError(push, e) })
                     }
                   >
-                    Выйти
+                    Sign out
                   </Button>
                 )}
               </div>
@@ -199,12 +205,12 @@ export function ProfileTab() {
                   onClick={() =>
                     revokeOthers.mutate(undefined, {
                       onSuccess: (data) =>
-                        push({ title: `Закрыто сессий: ${data.revoked}`, variant: "default" }),
+                        push({ title: `Sessions closed: ${data.revoked}`, variant: "default" }),
                       onError: (e) => toastError(push, e),
                     })
                   }
                 >
-                  Выйти на других устройствах
+                  Sign out other devices
                 </Button>
               </div>
             )}

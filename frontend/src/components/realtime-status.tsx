@@ -12,21 +12,21 @@ export interface StatusView {
 export function statusView(status: StreamStatus): StatusView {
   if (status.connected) {
     return {
-      label: "Онлайн",
-      hint: "Обновления приходят в реальном времени",
+      label: "Online",
+      hint: "Updates arrive in real time",
       dot: "bg-emerald-500",
     };
   }
   if (status.fallback) {
     return {
-      label: "Резервный опрос",
-      hint: "Соединение недоступно: списки обновляются каждые 15 секунд",
+      label: "Backup polling",
+      hint: "Connection unavailable: lists refresh every 15 seconds",
       dot: "bg-amber-500",
     };
   }
   return {
-    label: "Нет соединения",
-    hint: "Переподключаемся. Списки могут отставать",
+    label: "No connection",
+    hint: "Reconnecting. Lists may lag",
     dot: "bg-red-500",
   };
 }

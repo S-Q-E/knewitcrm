@@ -157,7 +157,7 @@ export async function downloadAnalyticsCsv(
     credentials: "include",
   });
   if (!response.ok) {
-    throw new Error(`Не удалось выгрузить отчёт (${response.status})`);
+    throw new Error(`Could not export the report (${response.status})`);
   }
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);

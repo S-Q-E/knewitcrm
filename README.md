@@ -50,7 +50,7 @@ alembic -c backend/alembic.ini revision -m "what changed"  # then edit upgrade()
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | — | Bootstrap the first admin once (min 10 chars), then ignored |
 | `APP_ENV` / `LOG_LEVEL` | local / INFO | |
 | `COOKIE_SECURE` | true | Set `false` for plain-HTTP local dev |
-| `DEFAULT_TIMEZONE` / `DEFAULT_CURRENCY` | Asia/Almaty / KZT | |
+| `DEFAULT_TIMEZONE` / `DEFAULT_CURRENCY` | America/New_York / USD | |
 | `TRUSTED_PROXY_HOPS` | 1 | Trailing X-Forwarded-For entries added by our proxies (Railway = 1) |
 | `SYNC_ENABLED` / `SYNC_INTERVAL_SECONDS` | true / 5 | Bot sync worker (leads → contacts/deals, locks, handover) |
 | `OUTBOX_ENABLED` / `OUTBOX_INTERVAL_SECONDS` | true / 5 | Manager-message delivery worker |

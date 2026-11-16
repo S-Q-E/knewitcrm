@@ -17,13 +17,13 @@ describe("ItemBody message direction label", () => {
         item={messageItem({
           direction: "out",
           author_kind: "manager",
-          author_name: "Иван",
-          body: "Здравствуйте!",
+          author_name: "Alex",
+          body: "Hello!",
         })}
       />,
     );
-    expect(screen.getByText(/менеджер/)).toBeDefined();
-    expect(screen.queryByText(/· бот/)).toBeNull();
+    expect(screen.getByText(/manager/)).toBeDefined();
+    expect(screen.queryByText(/· bot/)).toBeNull();
   });
 
   it("keeps labeling a bot outgoing message as bot", () => {
@@ -32,12 +32,12 @@ describe("ItemBody message direction label", () => {
         item={messageItem({
           direction: "out",
           author_kind: "bot",
-          author_name: "Бот",
-          body: "Здравствуйте!",
+          author_name: "Bot",
+          body: "Hello!",
         })}
       />,
     );
-    expect(screen.getByText(/· бот/)).toBeDefined();
+    expect(screen.getByText(/· bot/)).toBeDefined();
   });
 
   it("labels an incoming message as incoming", () => {
@@ -46,11 +46,11 @@ describe("ItemBody message direction label", () => {
         item={messageItem({
           direction: "in",
           author_kind: "client",
-          author_name: "Клиент",
-          body: "Привет!",
+          author_name: "Client",
+          body: "Hi!",
         })}
       />,
     );
-    expect(screen.getByText(/входящее/)).toBeDefined();
+    expect(screen.getByText(/incoming/)).toBeDefined();
   });
 });

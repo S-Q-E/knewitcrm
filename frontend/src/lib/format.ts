@@ -1,11 +1,11 @@
 import { formatDistanceToNow } from "date-fns";
-import { ru } from "date-fns/locale";
+import { enUS } from "date-fns/locale";
 
-export function formatMoney(amount: number | null | undefined, currency = "KZT"): string {
+export function formatMoney(amount: number | null | undefined, currency = "USD"): string {
   if (amount === null || amount === undefined) {
     return "—";
   }
-  return new Intl.NumberFormat("ru-KZ", {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
     maximumFractionDigits: 0,
@@ -16,14 +16,14 @@ export function formatRelative(iso: string | null | undefined): string {
   if (!iso) {
     return "—";
   }
-  return formatDistanceToNow(new Date(iso), { addSuffix: true, locale: ru });
+  return formatDistanceToNow(new Date(iso), { addSuffix: true, locale: enUS });
 }
 
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) {
     return "—";
   }
-  return new Intl.DateTimeFormat("ru-KZ", {
+  return new Intl.DateTimeFormat("en-US", {
     day: "numeric",
     month: "short",
     hour: "2-digit",

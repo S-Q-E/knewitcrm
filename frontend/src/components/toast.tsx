@@ -55,6 +55,6 @@ export function Toaster() {
 }
 
 export function toastError(push: (t: Omit<Toast, "id">) => void, error: unknown): void {
-  const message = error instanceof Error ? error.message : "Неизвестная ошибка";
-  push({ title: "Ошибка", description: message, variant: "error" });
+  const message = error instanceof Error ? error.message : "Unknown error";
+  push({ title: "Error", description: message, variant: "error" });
 }

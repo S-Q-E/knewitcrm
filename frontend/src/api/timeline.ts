@@ -9,12 +9,12 @@ export type TimelineItem = components["schemas"]["TimelineItemOut"];
 export type TimelineKind = "message" | "event" | "stage" | "note" | "task" | "activity";
 
 export const TIMELINE_FILTERS: { id: TimelineKind; label: string }[] = [
-  { id: "message", label: "Сообщения" },
-  { id: "event", label: "События" },
-  { id: "stage", label: "Стадии" },
-  { id: "note", label: "Заметки" },
-  { id: "task", label: "Задачи" },
-  { id: "activity", label: "Системные" },
+  { id: "message", label: "Messages" },
+  { id: "event", label: "Events" },
+  { id: "stage", label: "Stages" },
+  { id: "note", label: "Notes" },
+  { id: "task", label: "Tasks" },
+  { id: "activity", label: "System" },
 ];
 
 export function useTimeline(dealId: string | null, kinds: TimelineKind[], cursor: string | null) {

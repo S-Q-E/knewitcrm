@@ -42,21 +42,21 @@ describe("ChatComposer", () => {
     mockPointer(false);
     const onSend = vi.fn();
     render(<Harness onSend={onSend} />);
-    const box = screen.getByLabelText("Сообщение клиенту");
-    fireEvent.change(box, { target: { value: "Здравствуйте!" } });
+    const box = screen.getByLabelText("Message to prospect");
+    fireEvent.change(box, { target: { value: "Hello!" } });
     fireEvent.keyDown(box, { key: "Enter", shiftKey: false });
     expect(onSend).toHaveBeenCalledTimes(1);
-    expect(onSend).toHaveBeenCalledWith("Здравствуйте!");
+    expect(onSend).toHaveBeenCalledWith("Hello!");
     // The harness clears the draft on send, like the dialogs page does.
-    expect((screen.getByLabelText("Сообщение клиенту") as HTMLTextAreaElement).value).toBe("");
+    expect((screen.getByLabelText("Message to prospect") as HTMLTextAreaElement).value).toBe("");
   });
 
   it("inserts a newline on Shift+Enter instead of sending", () => {
     mockPointer(false);
     const onSend = vi.fn();
     render(<Harness onSend={onSend} />);
-    const box = screen.getByLabelText("Сообщение клиенту") as HTMLTextAreaElement;
-    fireEvent.change(box, { target: { value: "строка" } });
+    const box = screen.getByLabelText("Message to prospect") as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: "a line" } });
     fireEvent.keyDown(box, { key: "Enter", shiftKey: true });
     expect(onSend).not.toHaveBeenCalled();
   });
@@ -65,21 +65,21 @@ describe("ChatComposer", () => {
     mockPointer(true);
     const onSend = vi.fn();
     render(<Harness onSend={onSend} />);
-    const box = screen.getByLabelText("Сообщение клиенту");
-    fireEvent.change(box, { target: { value: "привет с телефона" } });
+    const box = screen.getByLabelText("Message to prospect");
+    fireEvent.change(box, { target: { value: "hello from phone" } });
     fireEvent.keyDown(box, { key: "Enter", shiftKey: false });
     expect(onSend).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(onSend).toHaveBeenCalledTimes(1);
-    expect(onSend).toHaveBeenCalledWith("привет с телефона");
+    expect(onSend).toHaveBeenCalledWith("hello from phone");
   });
 
   it("warns before sending while the bot is active", () => {
     render(<Harness botPaused={false} />);
-    const box = screen.getByLabelText("Сообщение клиенту");
-    fireEvent.change(box, { target: { value: "привет" } });
+    const box = screen.getByLabelText("Message to prospect");
+    fireEvent.change(box, { target: { value: "hello" } });
     const alert = screen.getByRole("alert");
-    expect(alert.textContent).toContain("Бот отвечает клиенту прямо сейчас");
+    expect(alert.textContent).toContain("The bot is replying right now");
   });
 
   it("stays quiet while the bot is paused", () => {

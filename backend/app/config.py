@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     app_env: str = Field(default="local", alias="APP_ENV")
     cookie_secure: bool = Field(default=True, alias="COOKIE_SECURE")
     allowed_origins: list[str] = Field(default_factory=list, alias="ALLOWED_ORIGINS")
-    default_timezone: str = Field(default="Asia/Almaty", alias="DEFAULT_TIMEZONE")
-    default_currency: str = Field(default="KZT", alias="DEFAULT_CURRENCY")
+    default_timezone: str = Field(default="America/New_York", alias="DEFAULT_TIMEZONE")
+    default_currency: str = Field(default="USD", alias="DEFAULT_CURRENCY")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
     # Step 14 hardening: HTTP protections.

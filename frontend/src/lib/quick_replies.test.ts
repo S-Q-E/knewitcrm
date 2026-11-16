@@ -4,17 +4,17 @@ import { substituteQuickReply } from "@/lib/quick_replies";
 
 describe("substituteQuickReply", () => {
   it("replaces every {name} occurrence", () => {
-    expect(substituteQuickReply("{name}, здравствуйте! Это {name}.", "Асель")).toBe(
-      "Асель, здравствуйте! Это Асель.",
+    expect(substituteQuickReply("Hello, {name}! This is {name}.", "Aigerim")).toBe(
+      "Hello, Aigerim! This is Aigerim.",
     );
   });
 
   it("falls back to an empty string without a name", () => {
-    expect(substituteQuickReply("Здравствуйте, {name}!", null)).toBe("Здравствуйте, !");
-    expect(substituteQuickReply("Здравствуйте, {name}!", "  ")).toBe("Здравствуйте, !");
+    expect(substituteQuickReply("Hello, {name}!", null)).toBe("Hello, !");
+    expect(substituteQuickReply("Hello, {name}!", "  ")).toBe("Hello, !");
   });
 
   it("leaves bodies without the placeholder untouched", () => {
-    expect(substituteQuickReply("Добрый день!", "Асель")).toBe("Добрый день!");
+    expect(substituteQuickReply("Good afternoon!", "Aigerim")).toBe("Good afternoon!");
   });
 });

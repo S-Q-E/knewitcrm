@@ -61,8 +61,8 @@ def test_locale_defaults():
         ADMIN_EMAIL="a@example.com",
         ADMIN_PASSWORD="admin-password-1",
     )
-    assert s.default_timezone == "Asia/Almaty"
-    assert s.default_currency == "KZT"
+    assert s.default_timezone == "America/New_York"
+    assert s.default_currency == "USD"
 
 
 def test_trusted_proxy_hops_default_and_env():

@@ -31,7 +31,7 @@ export function parseApiError(status: number, body: unknown): ApiError {
       return new ApiError(status, err.code, err.message, err.details);
     }
   }
-  return new ApiError(status, "UNKNOWN_ERROR", `Запрос завершился с ошибкой (${status})`);
+  return new ApiError(status, "UNKNOWN_ERROR", `Request failed (${status})`);
 }
 
 export interface RequestOptions extends RequestInit {
@@ -55,7 +55,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const response = await fetch(path, { ...init, headers, credentials: "include" });
   if (response.status === 401 && !noAuthRedirect) {
     window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
-    throw new ApiError(401, "UNAUTHORIZED", "Требуется вход");
+    throw new ApiError(401, "UNAUTHORIZED", "Authentication required");
   }
   if (response.status === 204) {
     return undefined as T;

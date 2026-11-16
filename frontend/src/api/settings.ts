@@ -582,14 +582,14 @@ export function useActivityMeta() {
 
 // Local profile preferences (per browser, like the theme)
 
-const PREFS_KEY = "knewitcrm-profile-prefs";
+const PREFS_KEY = "tcs-leasing-profile-prefs";
 
 export interface ProfilePrefs {
   timezone: string;
   sound: boolean;
 }
 
-export const DEFAULT_PREFS: ProfilePrefs = { timezone: "Asia/Almaty", sound: true };
+export const DEFAULT_PREFS: ProfilePrefs = { timezone: "America/New_York", sound: true };
 
 export function loadProfilePrefs(): ProfilePrefs {
   try {
@@ -614,8 +614,8 @@ export function saveProfilePrefs(prefs: ProfilePrefs): void {
 
 export function formatInTimezone(iso: string, timezone: string): string {
   try {
-    return new Date(iso).toLocaleString("ru-RU", { timeZone: timezone });
+    return new Date(iso).toLocaleString("en-US", { timeZone: timezone });
   } catch {
-    return new Date(iso).toLocaleString("ru-RU");
+    return new Date(iso).toLocaleString("en-US");
   }
 }

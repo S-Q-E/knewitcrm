@@ -15,8 +15,8 @@ export function DialogsPage() {
   const [params, setParams] = useSearchParams();
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
-  // Выбранный диалог живёт в URL (?wa=), поэтому системная кнопка «назад»
-  // возвращает к списку, а ссылка /dialogs?wa= со сделки открывает чат.
+  // The selected dialog lives in the URL (?wa=), so the browser back button
+  // returns to the list, while a /dialogs?wa= link from a deal opens the chat.
   const selected = params.get("wa");
 
   const dialogs = useDialogs({
@@ -29,14 +29,14 @@ export function DialogsPage() {
 
   const totalUnread = dialogs.data?.items.reduce((sum, item) => sum + item.unread_count, 0) ?? 0;
   useEffect(() => {
-    document.title = totalUnread > 0 ? `(${totalUnread}) KnewIT CRM` : "KnewIT CRM";
+    document.title = totalUnread > 0 ? `(${totalUnread}) TCS Leasing CRM` : "TCS Leasing CRM";
     return () => {
-      document.title = "KnewIT CRM";
+      document.title = "TCS Leasing CRM";
     };
   }, [totalUnread]);
 
   const open = (whatsappId: string) => {
-    // Push, а не replace: системная кнопка «назад» вернёт к списку.
+    // Push, not replace: browser back returns to the list.
     setParams({ wa: whatsappId });
   };
 
@@ -52,11 +52,11 @@ export function DialogsPage() {
         <div className="flex flex-nowrap gap-1 overflow-x-auto pb-1">
           {(
             [
-              ["all", "Все"],
-              ["mine", "Мои"],
-              ["unassigned", "Без ответственного"],
-              ["unread", "Непрочитанные"],
-              ["needs_reply", "Требуют ответа"],
+              ["all", "All"],
+              ["mine", "Mine"],
+              ["unassigned", "Unassigned"],
+              ["unread", "Unread"],
+              ["needs_reply", "Needs reply"],
             ] as [Filter, string][]
           ).map(([id, label]) => (
             <button
@@ -77,10 +77,10 @@ export function DialogsPage() {
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Поиск диалога"
+          placeholder="Search dialogs"
         />
         <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
-          {dialogs.isPending && <p className="text-sm text-slate-500">Загрузка…</p>}
+          {dialogs.isPending && <p className="text-sm text-slate-500">Loading…</p>}
           {dialogs.data?.items.map((item) => (
             <button
               key={item.whatsapp_id}
@@ -100,7 +100,7 @@ export function DialogsPage() {
                 <span className="flex items-center gap-1">
                   {item.needs_reply && (
                     <span className="rounded-full bg-amber-100 px-1.5 text-[11px] text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                      ждёт ответа
+                      awaiting reply
                     </span>
                   )}
                   {item.unread_count > 0 && (
@@ -111,17 +111,17 @@ export function DialogsPage() {
                 </span>
               </span>
               <span className="block truncate text-xs text-slate-500">
-                {item.last_message?.content ?? "Нет сообщений"}
+                {item.last_message?.content ?? "No messages"}
               </span>
               <span className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400">
                 {item.last_message ? formatRelative(item.last_message.created_at) : ""}
-                {item.bot_paused ? " · бот на паузе" : " · бот отвечает"}
+                {item.bot_paused ? " · bot paused" : " · bot replying"}
                 {item.assignee_name ? ` · ${item.assignee_name}` : ""}
               </span>
             </button>
           ))}
           {!dialogs.isPending && (dialogs.data?.total ?? 0) === 0 && (
-            <p className="text-sm text-slate-500">Диалогов нет.</p>
+            <p className="text-sm text-slate-500">No dialogs.</p>
           )}
         </div>
       </aside>
@@ -133,7 +133,7 @@ export function DialogsPage() {
         )}
       >
         {!selected || !dialog.data ? (
-          <p className="m-auto hidden text-sm text-slate-500 md:block">Выберите диалог слева.</p>
+          <p className="m-auto hidden text-sm text-slate-500 md:block">Select a dialog on the left.</p>
         ) : (
           <>
             <header className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3 dark:border-slate-800">
@@ -141,7 +141,7 @@ export function DialogsPage() {
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="Назад к списку"
+                aria-label="Back to list"
                 onClick={back}
                 className="md:hidden"
               >
@@ -152,8 +152,8 @@ export function DialogsPage() {
                   {dialog.data.contact_name ?? dialog.data.whatsapp_id}
                 </p>
                 <p className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
-                  <span>{dialog.data.assignee_name ?? "Без ответственного"}</span>
-                  <span className="text-[11px] text-slate-400">· Меняется в карточке сделки</span>
+                  <span>{dialog.data.assignee_name ?? "Unassigned"}</span>
+                  <span className="text-[11px] text-slate-400">· Changed in the deal card</span>
                 </p>
               </div>
             </header>

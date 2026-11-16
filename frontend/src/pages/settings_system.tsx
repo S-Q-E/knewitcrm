@@ -75,7 +75,7 @@ function UserModal({ user, onClose }: { user: AdminUser | null; onClose: () => v
   };
 
   return (
-    <ModalShell title={user ? "Пользователь" : "Новый пользователь"} onClose={onClose}>
+    <ModalShell title={user ? "User" : "New user"} onClose={onClose}>
       <div className="flex flex-col gap-3">
         {!user && (
           <FieldLabel>
@@ -84,19 +84,19 @@ function UserModal({ user, onClose }: { user: AdminUser | null; onClose: () => v
           </FieldLabel>
         )}
         <FieldLabel>
-          Имя
+          Name
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </FieldLabel>
         <div className="flex gap-3">
           <FieldLabel>
-            Роль
+            Role
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as "admin" | "manager")}
               className={inputClass}
             >
-              <option value="manager">Менеджер</option>
-              <option value="admin">Администратор</option>
+              <option value="manager">Manager</option>
+              <option value="admin">Administrator</option>
             </select>
           </FieldLabel>
           <label className="flex items-end gap-2 pb-2 text-sm">
@@ -105,21 +105,21 @@ function UserModal({ user, onClose }: { user: AdminUser | null; onClose: () => v
               checked={isActive}
               onChange={(e) => setIsActive(e.target.checked)}
             />
-            Активен
+            Active
           </label>
         </div>
         <FieldLabel>
-          {user ? "Новый пароль (сброс, минимум 10 символов)" : "Пароль (минимум 10 символов)"}
+          {user ? "New password (reset, at least 10 characters)" : "Password (at least 10 characters)"}
           <Input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder={user ? "Оставьте пустым, чтобы не менять" : ""}
+            placeholder={user ? "Leave blank to keep unchanged" : ""}
           />
         </FieldLabel>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            Отмена
+            Cancel
           </Button>
           <Button
             disabled={
@@ -129,7 +129,7 @@ function UserModal({ user, onClose }: { user: AdminUser | null; onClose: () => v
             }
             onClick={() => void save()}
           >
-            Сохранить
+            Save
           </Button>
         </div>
       </div>
@@ -147,10 +147,10 @@ export function UsersTab() {
 
   return (
     <Card
-      title="Пользователи"
+      title="Users"
       actions={
         <Button size="sm" onClick={() => setModal("create")}>
-          Новый пользователь
+          New user
         </Button>
       }
     >
@@ -158,11 +158,11 @@ export function UsersTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-left text-xs text-slate-500 dark:border-slate-700">
-              <th className="px-2 py-1.5 font-medium">Имя</th>
+              <th className="px-2 py-1.5 font-medium">Name</th>
               <th className="px-2 py-1.5 font-medium">Email</th>
-              <th className="px-2 py-1.5 font-medium">Роль</th>
-              <th className="px-2 py-1.5 font-medium">Статус</th>
-              <th className="px-2 py-1.5 font-medium">Последний вход</th>
+              <th className="px-2 py-1.5 font-medium">Role</th>
+              <th className="px-2 py-1.5 font-medium">Status</th>
+              <th className="px-2 py-1.5 font-medium">Last sign-in</th>
               <th className="px-2 py-1.5" />
             </tr>
           </thead>
@@ -172,9 +172,9 @@ export function UsersTab() {
                 <td className="px-2 py-1.5 font-medium">{user.name}</td>
                 <td className="px-2 py-1.5">{user.email}</td>
                 <td className="px-2 py-1.5">
-                  {user.role === "admin" ? "Администратор" : "Менеджер"}
+                  {user.role === "admin" ? "Administrator" : "Manager"}
                 </td>
-                <td className="px-2 py-1.5">{user.is_active ? "Активен" : "Отключён"}</td>
+                <td className="px-2 py-1.5">{user.is_active ? "Active" : "Disabled"}</td>
                 <td className="px-2 py-1.5 text-slate-500">
                   {user.last_login_at
                     ? formatInTimezone(user.last_login_at, loadProfilePrefs().timezone)
@@ -182,7 +182,7 @@ export function UsersTab() {
                 </td>
                 <td className="px-2 py-1.5 text-right">
                   <Button size="sm" variant="secondary" onClick={() => setModal(user)}>
-                    Изменить
+                    Edit
                   </Button>
                 </td>
               </tr>
@@ -197,10 +197,10 @@ export function UsersTab() {
           disabled={offset === 0}
           onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
         >
-          Назад
+          Back
         </Button>
         <span className="text-xs text-slate-500">
-          {offset + 1}–{offset + (users.data?.items.length ?? 0)} из {total}
+          {offset + 1}–{offset + (users.data?.items.length ?? 0)} of {total}
         </span>
         <Button
           size="sm"
@@ -208,7 +208,7 @@ export function UsersTab() {
           disabled={offset + PAGE_SIZE >= total}
           onClick={() => setOffset((o) => o + PAGE_SIZE)}
         >
-          Дальше
+          Next
         </Button>
       </div>
       {modal && (
@@ -276,11 +276,11 @@ function AutomationModal({
     try {
       actions = JSON.parse(actionsText) as unknown;
     } catch {
-      push({ title: "Действия: некорректный JSON", variant: "error" });
+      push({ title: "Actions: invalid JSON", variant: "error" });
       return;
     }
     if (!Array.isArray(actions)) {
-      push({ title: "Действия должны быть JSON-массивом", variant: "error" });
+      push({ title: "Actions must be a JSON array", variant: "error" });
       return;
     }
     const trigger_config: Record<string, unknown> =
@@ -318,28 +318,28 @@ function AutomationModal({
   };
 
   return (
-    <ModalShell title={automation ? "Правило" : "Новое правило"} onClose={onClose} wide>
+    <ModalShell title={automation ? "Rule" : "New rule"} onClose={onClose} wide>
       <div className="flex flex-col gap-3">
         <FieldLabel>
-          Название
+          Title
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </FieldLabel>
         <div className="flex gap-3">
           <FieldLabel>
-            Триггер
+            Trigger
             <select
               value={trigger}
               onChange={(e) => setTrigger(e.target.value as Automation["trigger_type"])}
               className={inputClass}
             >
-              <option value="deal_entered_stage">Сделка вошла в стадию</option>
-              <option value="no_activity_hours">Нет активности N часов</option>
+              <option value="deal_entered_stage">Deal entered a stage</option>
+              <option value="no_activity_hours">No activity for N hours</option>
             </select>
           </FieldLabel>
           {trigger === "deal_entered_stage" ? (
             <>
               <FieldLabel>
-                ID воронки (необязательно)
+                Pipeline ID (optional)
                 <Input
                   value={pipelineId}
                   onChange={(e) => setPipelineId(e.target.value)}
@@ -347,7 +347,7 @@ function AutomationModal({
                 />
               </FieldLabel>
               <FieldLabel>
-                ID стадии (необязательно)
+                Stage ID (optional)
                 <Input
                   value={stageId}
                   onChange={(e) => setStageId(e.target.value)}
@@ -357,13 +357,13 @@ function AutomationModal({
             </>
           ) : (
             <FieldLabel>
-              Часов без активности
+              Hours without activity
               <Input value={hours} inputMode="numeric" onChange={(e) => setHours(e.target.value)} />
             </FieldLabel>
           )}
         </div>
         <FieldLabel>
-          Действия (JSON-массив: create_task, assign_owner, add_tag, notify)
+          Actions (JSON array: create_task, assign_owner, add_tag, notify)
           <textarea
             value={actionsText}
             onChange={(e) => setActionsText(e.target.value)}
@@ -378,14 +378,14 @@ function AutomationModal({
             checked={isActive}
             onChange={(e) => setIsActive(e.target.checked)}
           />
-          Правило включено
+          Rule enabled
         </label>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            Отмена
+            Cancel
           </Button>
           <Button disabled={!name.trim()} onClick={() => void save()}>
-            Сохранить
+            Save
           </Button>
         </div>
       </div>
@@ -407,7 +407,7 @@ export function AutomationTab() {
   };
 
   const remove = async (automation: Automation) => {
-    if (!window.confirm(`Удалить правило «${automation.name}»?`)) return;
+    if (!window.confirm(`Delete rule “${automation.name}”?`)) return;
     try {
       await deleteAutomation.mutateAsync(automation.id);
     } catch (error) {
@@ -417,13 +417,13 @@ export function AutomationTab() {
 
   return (
     <div className="grid gap-4">
-      <Card title="Распределение и бот">
+      <Card title="Assignment and bot">
         {!data ? (
-          <p className="text-sm text-slate-500">Загрузка…</p>
+          <p className="text-sm text-slate-500">Loading…</p>
         ) : (
           <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">Новые сделки</p>
+              <p className="text-sm font-medium">New deals</p>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="radio"
@@ -431,7 +431,7 @@ export function AutomationTab() {
                   checked={data.deal_assignment_mode === "unassigned"}
                   onChange={() => set({ deal_assignment_mode: "unassigned" })}
                 />
-                Без ответственного
+                Unassigned
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -440,30 +440,30 @@ export function AutomationTab() {
                   checked={data.deal_assignment_mode === "round_robin"}
                   onChange={() => set({ deal_assignment_mode: "round_robin" })}
                 />
-                По очереди между менеджерами (round-robin)
+                Round-robin between managers
               </label>
             </div>
             <Toggle
-              label="Автопауза бота при передаче менеджеру"
-              hint="Статус МЕНЕДЖЕР ставит диалог на паузу и создаёт срочную задачу"
+              label="Auto-pause bot on manager handover"
+              hint="The MANAGER status pauses the dialog and creates an urgent task"
               checked={data.auto_pause_on_manager}
               onChange={(value) => set({ auto_pause_on_manager: value })}
             />
             <Toggle
-              label="Автопауза при ручном ответе"
-              hint="Сообщение менеджера ставит бота на паузу, чтобы не мешать диалогу"
+              label="Auto-pause on manual reply"
+              hint="A manager message pauses the bot so it does not interfere with the dialog"
               checked={data.auto_pause_on_manual_reply}
               onChange={(value) => set({ auto_pause_on_manual_reply: value })}
             />
             <Toggle
-              label="Менеджеры видят только свои записи"
-              hint="Ограничить доступ к чужим сделкам, контактам и диалогам"
+              label="Managers see only their own records"
+              hint="Restrict access to other users' deals, contacts and dialogs"
               checked={data.restrict_managers_to_own}
               onChange={(value) => set({ restrict_managers_to_own: value })}
             />
             <Toggle
-              label="Аналитика видна менеджерам"
-              hint="Выключите, чтобы раздел «Аналитика» был доступен только администраторам"
+              label="Analytics visible to managers"
+              hint="Turn off to make Analytics available to administrators only"
               checked={data.analytics_managers_visible}
               onChange={(value) => set({ analytics_managers_visible: value })}
             />
@@ -472,10 +472,10 @@ export function AutomationTab() {
       </Card>
 
       <Card
-        title="Правила автоматизации"
+        title="Automation rules"
         actions={
           <Button size="sm" onClick={() => setModal("create")}>
-            Новое правило
+            New rule
           </Button>
         }
       >
@@ -493,27 +493,27 @@ export function AutomationTab() {
                     : "bg-slate-100 text-slate-500",
                 )}
               >
-                {automation.is_active ? "вкл" : "выкл"}
+                {automation.is_active ? "on" : "off"}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="font-medium">{automation.name}</p>
                 <p className="truncate text-xs text-slate-500">
                   {automation.trigger_type === "deal_entered_stage"
-                    ? "Вход в стадию"
-                    : "Нет активности"}{" "}
-                  · действий: {automation.actions.length}
+                    ? "Stage entered"
+                    : "No activity"}{" "}
+                  · actions: {automation.actions.length}
                 </p>
               </div>
               <Button size="sm" variant="secondary" onClick={() => setModal(automation)}>
-                Изменить
+                Edit
               </Button>
               <Button size="sm" variant="ghost" onClick={() => void remove(automation)}>
-                Удалить
+                Delete
               </Button>
             </div>
           ))}
           {automations.data?.length === 0 && (
-            <p className="text-sm text-slate-500">Правил пока нет</p>
+            <p className="text-sm text-slate-500">No rules yet</p>
           )}
         </div>
       </Card>
@@ -543,52 +543,52 @@ export function IntegrationsTab() {
   return (
     <div className="grid gap-4">
       <Card
-        title="Подключения"
+        title="Connections"
         actions={
           <Button size="sm" variant="secondary" onClick={() => void integrations.refetch()}>
-            Проверить
+            Check
           </Button>
         }
       >
-        {integrations.isPending && <p className="text-sm text-slate-500">Проверка…</p>}
+        {integrations.isPending && <p className="text-sm text-slate-500">Checking…</p>}
         {data && (
           <div className="grid gap-2 md:grid-cols-2">
             <div className="rounded-md border border-slate-100 p-3 text-sm dark:border-slate-800">
               <p className="font-medium">
-                База бота{" "}
+                Bot database{" "}
                 <span className={cn(data.bot_db_ok ? "text-emerald-600" : "text-red-600")}>
-                  {data.bot_db_ok ? "● подключена" : "● недоступна"}
+                  {data.bot_db_ok ? "● connected" : "● unavailable"}
                 </span>
               </p>
               {data.bot_db_ok ? (
                 <p className="mt-1 text-xs text-slate-500">
-                  Задержка {data.bot_db_latency_ms} мс · лидов {data.leads_count} · сообщений{" "}
-                  {data.messages_count} · событий {data.events_count}
+                  Latency {data.bot_db_latency_ms} ms · leads {data.leads_count} · messages{" "}
+                  {data.messages_count} · events {data.events_count}
                 </p>
               ) : (
-                <p className="mt-1 text-xs text-red-600">Ошибка: {data.bot_db_error}</p>
+                <p className="mt-1 text-xs text-red-600">Error: {data.bot_db_error}</p>
               )}
             </div>
             <div className="rounded-md border border-slate-100 p-3 text-sm dark:border-slate-800">
               <p className="font-medium">
-                n8n (отправка WhatsApp){" "}
+                n8n (chat delivery){" "}
                 <span className={cn(data.n8n_configured ? "text-emerald-600" : "text-amber-600")}>
-                  {data.n8n_configured ? "● настроен" : "● не настроен"}
+                  {data.n8n_configured ? "● configured" : "● not configured"}
                 </span>
               </p>
               <p className="mt-1 break-all font-mono text-xs text-slate-500">
-                {data.n8n_webhook_url ?? "URL вебхука не задан (N8N_SEND_WEBHOOK_URL)"}
+                {data.n8n_webhook_url ?? "Webhook URL is not set (N8N_SEND_WEBHOOK_URL)"}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Очередь: {data.outbox_queued} · отправляется {data.outbox_sending} · отправлено{" "}
-                {data.outbox_sent} · ошибок {data.outbox_failed}
+                Queue: {data.outbox_queued} · sending {data.outbox_sending} · sent{" "}
+                {data.outbox_sent} · errors {data.outbox_failed}
               </p>
             </div>
           </div>
         )}
       </Card>
 
-      <Card title="Журнал отправок">
+      <Card title="Delivery journal">
         <div className="mb-2 flex gap-1">
           {["failed", "queued", "sending", "sent"].map((status) => (
             <Button
@@ -601,12 +601,12 @@ export function IntegrationsTab() {
               }}
             >
               {status === "failed"
-                ? "Ошибки"
+                ? "Errors"
                 : status === "queued"
-                  ? "В очереди"
+                  ? "Queued"
                   : status === "sending"
-                    ? "Отправляются"
-                    : "Отправлены"}
+                    ? "Sending"
+                    : "Sent"}
             </Button>
           ))}
         </div>
@@ -646,13 +646,13 @@ export function IntegrationsTab() {
                     )
                   }
                 >
-                  Повторить
+                  Retry
                 </Button>
               )}
             </div>
           ))}
           {journal.data?.items.length === 0 && (
-            <p className="text-sm text-slate-500">Записей нет</p>
+            <p className="text-sm text-slate-500">No records</p>
           )}
         </div>
         <div className="mt-3 flex items-center justify-between">
@@ -662,16 +662,16 @@ export function IntegrationsTab() {
             disabled={outboxOffset === 0}
             onClick={() => setOutboxOffset((o) => Math.max(0, o - 20))}
           >
-            Назад
+            Back
           </Button>
-          <span className="text-xs text-slate-500">Всего: {journal.data?.total ?? 0}</span>
+          <span className="text-xs text-slate-500">Total: {journal.data?.total ?? 0}</span>
           <Button
             size="sm"
             variant="secondary"
             disabled={outboxOffset + 20 >= (journal.data?.total ?? 0)}
             onClick={() => setOutboxOffset((o) => o + 20)}
           >
-            Дальше
+            Next
           </Button>
         </div>
       </Card>
@@ -714,15 +714,15 @@ export function ActivityTab() {
   };
 
   return (
-    <Card title="Журнал действий">
+    <Card title="Activity log">
       <div className="mb-3 grid gap-2 md:grid-cols-5">
         <select
-          aria-label="Пользователь"
+          aria-label="User"
           value={filters.actor_id}
           onChange={(e) => apply({ actor_id: e.target.value })}
           className={inputClass}
         >
-          <option value="">Все пользователи</option>
+          <option value="">All users</option>
           {(users.data?.items ?? []).map((user) => (
             <option key={user.id} value={user.id}>
               {user.name}
@@ -730,12 +730,12 @@ export function ActivityTab() {
           ))}
         </select>
         <select
-          aria-label="Сущность"
+          aria-label="Entity"
           value={filters.entity}
           onChange={(e) => apply({ entity: e.target.value })}
           className={inputClass}
         >
-          <option value="">Все сущности</option>
+          <option value="">All entities</option>
           {(meta.data?.entities ?? []).map((entity) => (
             <option key={entity} value={entity}>
               {entity}
@@ -743,20 +743,20 @@ export function ActivityTab() {
           ))}
         </select>
         <Input
-          placeholder="Действие содержит…"
-          aria-label="Действие"
+          placeholder="Action contains…"
+          aria-label="Action"
           value={filters.action}
           onChange={(e) => apply({ action: e.target.value })}
         />
         <Input
           type="date"
-          aria-label="Дата с"
+          aria-label="Date from"
           value={filters.date_from}
           onChange={(e) => apply({ date_from: e.target.value })}
         />
         <Input
           type="date"
-          aria-label="Дата по"
+          aria-label="Date to"
           value={filters.date_to}
           onChange={(e) => apply({ date_to: e.target.value })}
         />
@@ -765,10 +765,10 @@ export function ActivityTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-left text-xs text-slate-500 dark:border-slate-700">
-              <th className="px-2 py-1.5 font-medium">Время</th>
-              <th className="px-2 py-1.5 font-medium">Кто</th>
-              <th className="px-2 py-1.5 font-medium">Сущность</th>
-              <th className="px-2 py-1.5 font-medium">Действие</th>
+              <th className="px-2 py-1.5 font-medium">Time</th>
+              <th className="px-2 py-1.5 font-medium">Who</th>
+              <th className="px-2 py-1.5 font-medium">Entity</th>
+              <th className="px-2 py-1.5 font-medium">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -777,7 +777,7 @@ export function ActivityTab() {
                 <td className="whitespace-nowrap px-2 py-1.5 text-xs text-slate-500">
                   {formatInTimezone(item.created_at, timezone)}
                 </td>
-                <td className="px-2 py-1.5">{item.actor_name ?? "Система"}</td>
+                <td className="px-2 py-1.5">{item.actor_name ?? "System"}</td>
                 <td className="px-2 py-1.5 font-mono text-xs">{item.entity}</td>
                 <td className="px-2 py-1.5 font-mono text-xs">{item.action}</td>
               </tr>
@@ -785,7 +785,7 @@ export function ActivityTab() {
           </tbody>
         </table>
         {(activity.data?.items.length ?? 0) === 0 && (
-          <p className="py-4 text-center text-sm text-slate-500">Записей нет</p>
+          <p className="py-4 text-center text-sm text-slate-500">No records</p>
         )}
       </div>
       <div className="mt-3 flex items-center justify-between">
@@ -795,16 +795,16 @@ export function ActivityTab() {
           disabled={offset === 0}
           onClick={() => setOffset((o) => Math.max(0, o - 50))}
         >
-          Назад
+          Back
         </Button>
-        <span className="text-xs text-slate-500">Всего: {activity.data?.total ?? 0}</span>
+        <span className="text-xs text-slate-500">Total: {activity.data?.total ?? 0}</span>
         <Button
           size="sm"
           variant="secondary"
           disabled={offset + 50 >= (activity.data?.total ?? 0)}
           onClick={() => setOffset((o) => o + 50)}
         >
-          Дальше
+          Next
         </Button>
       </div>
     </Card>

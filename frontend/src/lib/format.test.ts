@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { formatMoney, formatPhone, initials, positionBetween } from "@/lib/format";
 
 describe("formatMoney", () => {
-  it("formats KZT without decimals", () => {
-    const text = formatMoney(120000, "KZT");
+  it("formats USD without decimals", () => {
+    const text = formatMoney(120000, "USD");
     expect(text).toContain("120");
-    expect(text).toContain("₸");
+    expect(text).toContain("$");
   });
 
   it("renders a dash for missing amounts", () => {
@@ -39,7 +39,7 @@ describe("formatPhone", () => {
 
 describe("initials", () => {
   it("takes first letters", () => {
-    expect(initials("Айгерим Тестова")).toBe("АТ");
+    expect(initials("Aigerim Testova")).toBe("AT");
     expect(initials(null)).toBe("?");
   });
 });

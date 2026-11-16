@@ -94,7 +94,7 @@ async def merge_contacts(
     if winner.whatsapp_id and loser.whatsapp_id and winner.whatsapp_id != loser.whatsapp_id:
         raise ApiError(
             "MERGE_WHATSAPP_CONFLICT",
-            "Both contacts have different WhatsApp chats; merge is refused",
+            "Both contacts have different chats; merge is refused",
             409,
         )
 

@@ -68,16 +68,16 @@ export function DealFiltersBar({ filters, onChange }: FiltersProps) {
       <Input
         value={filters.search ?? ""}
         onChange={(event) => set({ search: event.target.value })}
-        placeholder="Поиск по названию"
+        placeholder="Search by title"
         className="w-48"
       />
       <select
-        aria-label="Ответственный"
+        aria-label="Owner"
         value={filters.owner_id ?? ""}
         onChange={(event) => set({ owner_id: event.target.value || undefined })}
         className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
       >
-        <option value="">Все ответственные</option>
+        <option value="">All owners</option>
         {users.data?.items.map((user) => (
           <option key={user.id} value={user.id}>
             {user.name}
@@ -85,12 +85,12 @@ export function DealFiltersBar({ filters, onChange }: FiltersProps) {
         ))}
       </select>
       <select
-        aria-label="Тег"
+        aria-label="Tag"
         value={filters.tag?.[0] ?? ""}
         onChange={(event) => set({ tag: event.target.value ? [event.target.value] : [] })}
         className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
       >
-        <option value="">Все теги</option>
+        <option value="">All tags</option>
         {tags.data?.items.map((tag) => (
           <option key={tag.id} value={tag.id}>
             {tag.name}
@@ -98,31 +98,31 @@ export function DealFiltersBar({ filters, onChange }: FiltersProps) {
         ))}
       </select>
       <select
-        aria-label="Источник"
+        aria-label="Source"
         value={filters.contact_source ?? ""}
         onChange={(event) => set({ contact_source: event.target.value || undefined })}
         className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
       >
-        <option value="">Все источники</option>
-        <option value="bot">Бот</option>
-        <option value="manual">Вручную</option>
+        <option value="">All sources</option>
+        <option value="bot">Bot</option>
+        <option value="manual">Manual</option>
       </select>
       <Input
-        aria-label="Создана от"
+        aria-label="Created from"
         type="date"
         value={filters.created_from?.slice(0, 10) ?? ""}
         onChange={(event) => set({ created_from: event.target.value || undefined })}
         className="w-40"
       />
       <Input
-        aria-label="Создана до"
+        aria-label="Created to"
         type="date"
         value={filters.created_to?.slice(0, 10) ?? ""}
         onChange={(event) => set({ created_to: event.target.value || undefined })}
         className="w-40"
       />
       <Button variant="ghost" size="sm" onClick={clearAll}>
-        Сбросить
+        Reset
       </Button>
 
       <span className="mx-1 hidden h-5 w-px bg-slate-200 dark:bg-slate-700 md:block" />
@@ -138,7 +138,7 @@ export function DealFiltersBar({ filters, onChange }: FiltersProps) {
             </button>
             <button
               type="button"
-              aria-label={`Удалить вид ${view.name}`}
+              aria-label={`Delete view ${view.name}`}
               onClick={() => void removeView(view.id)}
               className="rounded-full px-1 text-slate-500 hover:text-red-600"
             >
@@ -151,7 +151,7 @@ export function DealFiltersBar({ filters, onChange }: FiltersProps) {
             <Input
               value={viewName}
               onChange={(event) => setViewName(event.target.value)}
-              placeholder="Название вида"
+              placeholder="View name"
               className="h-7 w-36"
             />
             <Button size="sm" onClick={() => void saveView()} disabled={createView.isPending}>
@@ -160,7 +160,7 @@ export function DealFiltersBar({ filters, onChange }: FiltersProps) {
           </span>
         ) : (
           <Button variant="ghost" size="sm" onClick={() => setSaving(true)}>
-            Сохранить вид
+            Save view
           </Button>
         )}
       </div>

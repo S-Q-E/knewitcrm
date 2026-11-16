@@ -43,8 +43,8 @@ psql "$STAGING_DATABASE_URL" -f tests/fixtures/seed.sql
 | `ADMIN_PASSWORD` | Временный пароль (мин. 10 симв.) | Временный пароль (мин. 10 симв.) | Только первый запуск — **удалить сразу после** (п. 5) |
 | `N8N_SEND_WEBHOOK_URL` | Staging-вебхук n8n (или пусто) | Production-вебхук `.../webhook/crm-send-message` | Пусто = отправка падает в `failed` с подсказкой |
 | `N8N_WEBHOOK_SECRET` | Секрет staging | Секрет production | Тот же, что `$env.N8N_WEBHOOK_SECRET` в n8n (см. `docs/n8n/README.md`) |
-| `DEFAULT_TIMEZONE` | `Asia/Almaty` | `Asia/Almaty` | Границы суток в аналитике |
-| `DEFAULT_CURRENCY` | `KZT` | `KZT` | Валюта сумм по умолчанию |
+| `DEFAULT_TIMEZONE` | `America/New_York` | `America/New_York` | Границы суток в аналитике |
+| `DEFAULT_CURRENCY` | `USD` | `USD` | Валюта сумм по умолчанию |
 | `LOG_LEVEL` | `INFO` | `WARNING` | JSON-логи; `DEBUG` только для разбора инцидента |
 | `SENTRY_DSN` | (опц., свой проект) | (опц., свой проект) | Пусто = Sentry выключен и на бэке, и на фронте |
 | `METRICS_TOKEN` | Случайный токен | Случайный токен | Bearer для `/api/metrics`; пусто = 404 (состав метрик — в D27) |

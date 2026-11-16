@@ -90,7 +90,7 @@ export function BoardColumnView({
         </SortableContext>
         {column.items.length === 0 && (
           <p className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-xs text-slate-400 dark:border-slate-700">
-            Перетащите сделку сюда
+            Drop a deal here
           </p>
         )}
         {column.next_cursor && (
@@ -100,7 +100,7 @@ export function BoardColumnView({
             disabled={loadingMore}
             onClick={() => onShowMore(column.stage_id)}
           >
-            {loadingMore ? "Загрузка…" : `Показать ещё (всего ${column.total})`}
+            {loadingMore ? "Loading…" : `Show more (${column.total} total)`}
           </Button>
         )}
       </div>
@@ -112,10 +112,10 @@ export function BoardColumnView({
           className="w-full"
           onClick={() => onQuickCreate(column.stage_id)}
         >
-          <Plus className="h-4 w-4" /> Быстрая сделка
+          <Plus className="h-4 w-4" /> Quick deal
         </Button>
       </div>
-      {activeStageId === column.stage_id && <span className="sr-only">Целевая колонка</span>}
+      {activeStageId === column.stage_id && <span className="sr-only">Target column</span>}
     </section>
   );
 }

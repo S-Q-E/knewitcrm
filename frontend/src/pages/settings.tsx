@@ -56,14 +56,14 @@ type AdminTabId =
   "funnels" | "fields" | "tags" | "users" | "replies" | "automation" | "integrations" | "activity";
 
 const ADMIN_TABS: { id: AdminTabId; label: string }[] = [
-  { id: "funnels", label: "Воронки" },
-  { id: "fields", label: "Поля" },
-  { id: "tags", label: "Теги" },
-  { id: "users", label: "Пользователи" },
-  { id: "replies", label: "Шаблоны" },
-  { id: "automation", label: "Автоматизация" },
-  { id: "integrations", label: "Интеграции" },
-  { id: "activity", label: "Журнал" },
+  { id: "funnels", label: "Pipelines" },
+  { id: "fields", label: "Fields" },
+  { id: "tags", label: "Tags" },
+  { id: "users", label: "Users" },
+  { id: "replies", label: "Templates" },
+  { id: "automation", label: "Automation" },
+  { id: "integrations", label: "Integrations" },
+  { id: "activity", label: "Activity log" },
 ];
 
 export function SettingsPage() {
@@ -73,7 +73,7 @@ export function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-bold">Настройки</h1>
+      <h1 className="text-xl font-bold">Settings</h1>
       <div className="flex flex-wrap gap-1">
         <button
           type="button"
@@ -85,7 +85,7 @@ export function SettingsPage() {
               : "bg-white text-slate-600 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300",
           )}
         >
-          Профиль
+          Profile
         </button>
         {isAdmin &&
           ADMIN_TABS.map((item) => (

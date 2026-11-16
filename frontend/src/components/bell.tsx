@@ -8,15 +8,15 @@ import { formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const TYPE_LABEL: Record<string, string> = {
-  deal_assigned: "Сделка назначена",
-  task_overdue: "Просроченная задача",
-  task_due_soon: "Задача скоро",
-  manager_handover: "Клиент ждёт менеджера",
-  dialog_message: "Новое сообщение",
-  locked_stage: "Бот упёрся в блокировку",
-  unanswered: "Клиент ждёт ответа",
-  bot_paused_long: "Бот на паузе слишком долго",
-  automation: "Автоматизация",
+  deal_assigned: "Deal assigned",
+  task_overdue: "Overdue task",
+  task_due_soon: "Task due soon",
+  manager_handover: "Prospect waiting for manager",
+  dialog_message: "New message",
+  locked_stage: "Bot hit a locked stage",
+  unanswered: "Prospect waiting for reply",
+  bot_paused_long: "Bot paused too long",
+  automation: "Automation",
 };
 
 function target(notification: Notification): string | null {
@@ -67,7 +67,7 @@ export function BellDropdown({ onClose }: { onClose: () => void }) {
   return (
     <div className="absolute right-0 z-20 mt-2 max-h-96 w-80 overflow-y-auto rounded-md border border-slate-200 bg-white p-2 text-sm shadow-lg dark:border-slate-700 dark:bg-slate-900">
       <div className="flex items-center justify-between px-2 py-1">
-        <p className="font-medium">Уведомления</p>
+        <p className="font-medium">Notifications</p>
         {(list.data?.unread_total ?? 0) > 0 && (
           <button
             type="button"
@@ -76,7 +76,7 @@ export function BellDropdown({ onClose }: { onClose: () => void }) {
               readAll.mutate(undefined, { onError: (error) => toastError(push, error) })
             }
           >
-            Прочитать все
+            Mark all read
           </button>
         )}
       </div>
@@ -104,10 +104,10 @@ export function BellDropdown({ onClose }: { onClose: () => void }) {
         </button>
       ))}
       {(list.data?.items.length ?? 0) === 0 && !list.isPending && (
-        <p className="px-2 py-3 text-slate-500">Пока нет уведомлений.</p>
+        <p className="px-2 py-3 text-slate-500">No notifications yet.</p>
       )}
       <Button variant="ghost" size="sm" className="mt-1 w-full" onClick={onClose}>
-        Закрыть
+        Close
       </Button>
     </div>
   );

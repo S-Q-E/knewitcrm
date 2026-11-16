@@ -2002,7 +2002,7 @@ export interface components {
             amount?: number | null;
             /**
              * Currency
-             * @default KZT
+             * @default USD
              */
             currency: string;
             /** Owner Id */

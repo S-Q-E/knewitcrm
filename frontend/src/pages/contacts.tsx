@@ -27,16 +27,16 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const ALL_COLUMNS = [
-  { id: "name", label: "Имя" },
-  { id: "phone", label: "Телефон" },
+  { id: "name", label: "Name" },
+  { id: "phone", label: "Phone" },
   { id: "email", label: "Email" },
-  { id: "whatsapp", label: "WhatsApp" },
-  { id: "owner", label: "Ответственный" },
-  { id: "tags", label: "Теги" },
+  { id: "whatsapp", label: "Chat" },
+  { id: "owner", label: "Owner" },
+  { id: "tags", label: "Tags" },
 ] as const;
 
 type ColumnId = (typeof ALL_COLUMNS)[number]["id"];
-const STORAGE_KEY = "knewitcrm-contact-columns";
+const STORAGE_KEY = "tcs-leasing-contact-columns";
 
 function loadColumns(): ColumnId[] {
   try {
@@ -58,11 +58,11 @@ export function autoMapping(header: string[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const col of header) {
     const low = col.trim().toLowerCase();
-    if (["name", "имя", "фио", "full_name"].includes(low)) out[col] = "name";
-    else if (["phone", "телефон", "phone_number", "tel"].includes(low)) out[col] = "phone";
-    else if (["email", "почта", "e-mail"].includes(low)) out[col] = "email";
+    if (["name", "full_name"].includes(low)) out[col] = "name";
+    else if (["phone", "phone_number", "tel"].includes(low)) out[col] = "phone";
+    else if (["email", "e-mail"].includes(low)) out[col] = "email";
     else if (["whatsapp", "whatsapp_id", "wa"].includes(low)) out[col] = "whatsapp_id";
-    else if (["source", "источник"].includes(low)) out[col] = "source";
+    else if (["source"].includes(low)) out[col] = "source";
     else out[col] = "ignore";
   }
   return out;
@@ -79,13 +79,13 @@ export function ContactsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-xl font-bold">Контакты</h1>
+        <h1 className="text-xl font-bold">Contacts</h1>
         <nav className="flex flex-wrap gap-1 text-sm md:ml-4">
           {[
-            ["list", "Список"],
-            ["duplicates", "Дубликаты"],
-            ["import", "Импорт"],
-            ["trash", "Корзина"],
+            ["list", "List"],
+            ["duplicates", "Duplicates"],
+            ["import", "Import"],
+            ["trash", "Trash"],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -168,7 +168,7 @@ function ContactsList() {
       });
       setSelected(new Set());
       push({
-        title: del ? `В корзину: ${selected.size}` : `Обновлено: ${selected.size}`,
+        title: del ? `To trash: ${selected.size}` : `Updated: ${selected.size}`,
         variant: "default",
       });
     } catch (error) {
@@ -181,7 +181,7 @@ function ContactsList() {
     try {
       await createView.mutateAsync({ name: viewName.trim(), filters });
       setViewName("");
-      push({ title: "Вид сохранён", variant: "default" });
+      push({ title: "View saved", variant: "default" });
     } catch (error) {
       toastError(push, error);
     }
@@ -191,8 +191,8 @@ function ContactsList() {
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <input
-          aria-label="Быстрый поиск"
-          placeholder="Быстрый поиск: имя, телефон, email…"
+          aria-label="Quick search"
+          placeholder="Quick search: name, phone, email…"
           value={search}
           onChange={(e) => {
             const next = new URLSearchParams(params);
@@ -204,12 +204,12 @@ function ContactsList() {
           className="h-11 w-full rounded-md border border-slate-200 bg-white px-2 text-base dark:border-slate-700 dark:bg-slate-900 sm:w-72 md:h-9 md:text-sm"
         />
         <select
-          aria-label="Ответственный"
+          aria-label="Owner"
           value={ownerId}
           onChange={(e) => setOwnerId(e.target.value)}
           className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-1 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
         >
-          <option value="">Все ответственные</option>
+          <option value="">All owners</option>
           {users.data?.items.map((u) => (
             <option key={u.id} value={u.id}>
               {u.name}
@@ -217,15 +217,15 @@ function ContactsList() {
           ))}
         </select>
         <select
-          aria-label="Источник"
+          aria-label="Source"
           value={source}
           onChange={(e) => setSource(e.target.value)}
           className="h-11 md:h-9 rounded-md border border-slate-200 bg-white px-1 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
         >
-          <option value="">Все источники</option>
-          <option value="bot">Бот</option>
-          <option value="manual">Вручную</option>
-          <option value="import">Импорт</option>
+          <option value="">All sources</option>
+          <option value="bot">Bot</option>
+          <option value="manual">Manual</option>
+          <option value="import">Import</option>
         </select>
         <a
           className="text-sm text-blue-600 hover:underline"
@@ -242,7 +242,7 @@ function ContactsList() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-medium">Виды:</span>
+        <span className="font-medium">Views:</span>
         {savedViews.data?.items.map((v) => (
           <span
             key={v.id}
@@ -265,7 +265,7 @@ function ContactsList() {
             </button>
             <button
               type="button"
-              aria-label={`Удалить вид ${v.name}`}
+              aria-label={`Delete view ${v.name}`}
               onClick={() => void deleteView.mutateAsync(v.id)}
               className="text-slate-400 hover:text-red-600"
             >
@@ -274,19 +274,19 @@ function ContactsList() {
           </span>
         ))}
         <input
-          aria-label="Название вида"
-          placeholder="Название вида…"
+          aria-label="View name"
+          placeholder="View name…"
           value={viewName}
           onChange={(e) => setViewName(e.target.value)}
           className="h-11 md:h-8 w-40 rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
         />
         <Button size="sm" variant="secondary" onClick={() => void saveView()}>
-          Сохранить вид
+          Save view
         </Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-xs">
-        <span className="font-medium">Колонки:</span>
+        <span className="font-medium">Columns:</span>
         {ALL_COLUMNS.map((col) => (
           <label key={col.id} className="flex items-center gap-1">
             <input
@@ -301,14 +301,14 @@ function ContactsList() {
 
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900">
-          <span className="font-medium">Выбрано: {selected.size}</span>
+          <span className="font-medium">Selected: {selected.size}</span>
           <select
-            aria-label="Массово: ответственный"
+            aria-label="Bulk: owner"
             value={bulkOwner}
             onChange={(e) => setBulkOwner(e.target.value)}
             className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
           >
-            <option value="">Ответственный…</option>
+            <option value="">Owner…</option>
             {users.data?.items.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
@@ -316,12 +316,12 @@ function ContactsList() {
             ))}
           </select>
           <select
-            aria-label="Массово: тег"
+            aria-label="Bulk: tag"
             value={bulkTag}
             onChange={(e) => setBulkTag(e.target.value)}
             className="h-11 md:h-8 rounded-md border border-slate-200 bg-white px-1 dark:border-slate-700 dark:bg-slate-900"
           >
-            <option value="">Тег…</option>
+            <option value="">Tag…</option>
             {tags.data?.items.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
@@ -329,7 +329,7 @@ function ContactsList() {
             ))}
           </select>
           <Button size="sm" onClick={() => void runBulk(false)} disabled={bulk.isPending}>
-            Применить
+            Apply
           </Button>
           <Button
             size="sm"
@@ -337,7 +337,7 @@ function ContactsList() {
             onClick={() => void runBulk(true)}
             disabled={bulk.isPending}
           >
-            В корзину
+            To trash
           </Button>
         </div>
       )}
@@ -349,7 +349,7 @@ function ContactsList() {
               <th className="w-8 p-2">
                 <input
                   type="checkbox"
-                  aria-label="Выбрать всё"
+                  aria-label="Select all"
                   checked={items.length > 0 && items.every((i) => selected.has(i.id))}
                   onChange={() =>
                     setSelected((prev) =>
@@ -384,7 +384,7 @@ function ContactsList() {
                   </button>
                 </th>
               ))}
-              <th className="p-2 font-medium">Действия</th>
+              <th className="p-2 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -396,7 +396,7 @@ function ContactsList() {
                 <td className="p-2">
                   <input
                     type="checkbox"
-                    aria-label={`Выбрать ${c.name ?? c.phone ?? c.id}`}
+                    aria-label={`Select ${c.name ?? c.phone ?? c.id}`}
                     checked={selected.has(c.id)}
                     onChange={() =>
                       setSelected((prev) => {
@@ -435,22 +435,22 @@ function ContactsList() {
                     type="button"
                     className="text-red-600 hover:underline"
                     onClick={() => {
-                      if (window.confirm("Удалить контакт в корзину?")) {
+                      if (window.confirm("Move this contact to trash?")) {
                         void remove.mutateAsync(c.id).catch((e: unknown) => toastError(push, e));
                       }
                     }}
                   >
-                    В корзину
+                    To trash
                   </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {list.isPending && <p className="p-4 text-sm text-slate-500">Загрузка…</p>}
-        {list.isError && <p className="p-4 text-sm text-red-600">Не удалось загрузить контакты.</p>}
+        {list.isPending && <p className="p-4 text-sm text-slate-500">Loading…</p>}
+        {list.isError && <p className="p-4 text-sm text-red-600">Could not load contacts.</p>}
         {!list.isPending && items.length === 0 && (
-          <p className="p-4 text-sm text-slate-500">Контактов нет. Измените фильтры.</p>
+          <p className="p-4 text-sm text-slate-500">No contacts. Adjust the filters.</p>
         )}
       </div>
 
@@ -461,10 +461,10 @@ function ContactsList() {
           disabled={offset === 0}
           onClick={() => setOffset((v) => Math.max(0, v - limit))}
         >
-          Назад
+          Back
         </Button>
         <span>
-          {offset + 1}–{Math.min(offset + limit, total)} из {total}
+          {offset + 1}–{Math.min(offset + limit, total)} of {total}
         </span>
         <Button
           variant="secondary"
@@ -472,7 +472,7 @@ function ContactsList() {
           disabled={offset + limit >= total}
           onClick={() => setOffset((v) => v + limit)}
         >
-          Далее
+          Next
         </Button>
       </div>
     </div>
@@ -485,14 +485,14 @@ function DuplicatesView() {
   const merge = useMergeContacts();
   const [winners, setWinners] = useState<Record<string, string>>({});
   const groups = dup.data?.groups ?? [];
-  if (dup.isPending) return <p className="text-sm text-slate-500">Ищем дубликаты…</p>;
-  if (dup.isError) return <p className="text-sm text-red-600">Не удалось загрузить дубликаты.</p>;
-  if (groups.length === 0) return <p className="text-sm text-slate-500">Дубликатов не найдено.</p>;
+  if (dup.isPending) return <p className="text-sm text-slate-500">Looking for duplicates…</p>;
+  if (dup.isError) return <p className="text-sm text-red-600">Could not load duplicates.</p>;
+  if (groups.length === 0) return <p className="text-sm text-slate-500">No duplicates found.</p>;
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-slate-500">
-        Групп: {groups.length}. Объединение переносит сделки, заметки, задачи и теги; источник
-        остаётся в корзине.
+        Groups: {groups.length}. Merging moves deals, notes, tasks and tags; the source
+        stays in the trash.
       </p>
       {groups.map((g) => (
         <div
@@ -500,7 +500,7 @@ function DuplicatesView() {
           className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"
         >
           <p className="text-sm font-medium">
-            {g.kind === "phone" ? "Телефон" : "Email"}: {g.value}
+            {g.kind === "phone" ? "Phone" : "Email"}: {g.value}
           </p>
           <div className="mt-2 flex flex-col gap-1">
             {g.contact_ids.map((id) => (
@@ -514,7 +514,7 @@ function DuplicatesView() {
                 <Link className="text-blue-600 hover:underline" to={`/contacts/${id}`}>
                   {id.slice(0, 8)}
                 </Link>
-                <span className="text-slate-500">оставить как основной</span>
+                <span className="text-slate-500">keep as primary</span>
               </label>
             ))}
           </div>
@@ -529,14 +529,14 @@ function DuplicatesView() {
                   onClick={() => {
                     const winner = winners[g.key];
                     if (!winner) return;
-                    if (!window.confirm("Объединить контакты? Действие необратимо.")) return;
+                    if (!window.confirm("Merge contacts? This cannot be undone.")) return;
                     void merge
                       .mutateAsync({ winner_id: winner, loser_id: loser })
-                      .then(() => push({ title: "Контакты объединены", variant: "default" }))
+                      .then(() => push({ title: "Contacts merged", variant: "default" }))
                       .catch((e: unknown) => toastError(push, e));
                   }}
                 >
-                  Влить {loser.slice(0, 8)} в основной
+                  Merge {loser.slice(0, 8)} into primary
                 </Button>
               ))}
           </div>
@@ -581,7 +581,7 @@ function ImportView() {
     });
     if (!resp.ok) {
       const body = (await resp.json().catch(() => null)) as { error?: { message?: string } } | null;
-      push({ title: body?.error?.message ?? "Ошибка предпросмотра", variant: "error" });
+      push({ title: body?.error?.message ?? "Preview error", variant: "error" });
       return;
     }
     const data = (await resp.json()) as ImportPreview;
@@ -601,7 +601,7 @@ function ImportView() {
       headers: token ? { "X-CSRF-Token": decodeURIComponent(token) } : {},
     });
     if (!resp.ok) {
-      push({ title: "Ошибка импорта", variant: "error" });
+      push({ title: "Import error", variant: "error" });
       return;
     }
     const data = (await resp.json()) as { id: string };
@@ -619,9 +619,9 @@ function ImportView() {
 
   return (
     <div className="flex max-w-2xl flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <h2 className="font-medium">Импорт CSV</h2>
+      <h2 className="font-medium">Import CSV</h2>
       <input
-        aria-label="CSV файл"
+        aria-label="CSV file"
         type="file"
         accept=".csv,text/csv"
         onChange={(e) => {
@@ -633,7 +633,7 @@ function ImportView() {
       />
       {header.length > 0 && (
         <div className="flex flex-col gap-1 text-sm">
-          <p className="font-medium">Маппинг колонок:</p>
+          <p className="font-medium">Column mapping:</p>
           {header.map((col) => (
             <label key={col} className="flex items-center gap-2">
               <span className="w-40 truncate font-mono text-xs">{col}</span>
@@ -659,22 +659,22 @@ function ImportView() {
           disabled={!file}
           onClick={() => void doPreviewFetch()}
         >
-          Предпросмотр
+          Preview
         </Button>
         <Button size="sm" disabled={!file} onClick={() => void doImport()}>
-          Импортировать в фоне
+          Import in background
         </Button>
       </div>
       {preview && (
         <div className="text-sm">
           <p>
-            Всего строк: {preview.total}, валидных: {preview.valid}, с ошибками: {preview.invalid}
+            Total rows: {preview.total}, valid: {preview.valid}, with errors: {preview.invalid}
           </p>
           {preview.errors.length > 0 && (
             <ul className="mt-1 max-h-32 overflow-auto text-red-600">
               {preview.errors.map((e, i) => (
                 <li key={i}>
-                  Строка {e.row}: {e.error}
+                  Row {e.row}: {e.error}
                 </li>
               ))}
             </ul>
@@ -684,14 +684,14 @@ function ImportView() {
       {job.data && (
         <div className="text-sm">
           <p>
-            Задача {job.data.id}: {job.data.status}, ок: {job.data.ok_count}, ошибок:{" "}
+            Job {job.data.id}: {job.data.status}, ok: {job.data.ok_count}, errors:{" "}
             {job.data.error_count}
           </p>
           {job.data.errors.length > 0 && (
             <ul className="mt-1 max-h-32 overflow-auto text-red-600">
               {job.data.errors.map((e, i) => (
                 <li key={i}>
-                  Строка {e.row}: {e.error}
+                  Row {e.row}: {e.error}
                 </li>
               ))}
             </ul>
@@ -708,13 +708,13 @@ function TrashView() {
   const trash = useTrash("all");
   const restoreContact = useRestoreContact();
   if (me.data && me.data.role !== "admin") {
-    return <p className="text-sm text-slate-500">Корзина доступна только администраторам.</p>;
+    return <p className="text-sm text-slate-500">Trash is available to admins only.</p>;
   }
-  if (trash.isPending) return <p className="text-sm text-slate-500">Загрузка корзины…</p>;
+  if (trash.isPending) return <p className="text-sm text-slate-500">Loading trash…</p>;
   if (trash.isError)
-    return <p className="text-sm text-red-600">Нет доступа или ошибка загрузки.</p>;
+    return <p className="text-sm text-red-600">No access or loading error.</p>;
   const items = trash.data?.items ?? [];
-  if (items.length === 0) return <p className="text-sm text-slate-500">Корзина пуста.</p>;
+  if (items.length === 0) return <p className="text-sm text-slate-500">Trash is empty.</p>;
   return (
     <div className="flex flex-col gap-2">
       {items.map((item) => (
@@ -733,11 +733,11 @@ function TrashView() {
                   ? restoreContact.mutateAsync(item.id)
                   : api.post(`/api/deals/${item.id}/restore`).then(() => undefined);
               void doRestore
-                .then(() => push({ title: "Восстановлено", variant: "default" }))
+                .then(() => push({ title: "Restored", variant: "default" }))
                 .catch((e: unknown) => toastError(push, e));
             }}
           >
-            Восстановить
+            Restore
           </button>
         </div>
       ))}

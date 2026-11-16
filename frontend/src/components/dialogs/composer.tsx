@@ -20,8 +20,8 @@ export function ChatComposer({
   onSend,
 }: ChatComposerProps) {
   const [touched, setTouched] = useState(false);
-  // На тачскринах Enter переносит строку, отправка только кнопкой,
-  // иначе виртуальная клавиатура мешает набирать многострочные тексты.
+  // On touch screens Enter inserts a new line and only the button sends,
+  // otherwise the virtual keyboard makes multi-line text hard to type.
   const [coarsePointer, setCoarsePointer] = useState(false);
   useEffect(() => {
     if (typeof window.matchMedia !== "function") {
@@ -50,18 +50,18 @@ export function ChatComposer({
           role="alert"
           className="mb-2 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200"
         >
-          Бот отвечает клиенту прямо сейчас — отправка поставит его на паузу.
+          The bot is replying right now — sending will pause it.
         </p>
       )}
       <div className="flex gap-2">
         <textarea
-          aria-label="Сообщение клиенту"
+          aria-label="Message to prospect"
           value={draft}
           rows={2}
           placeholder={
             coarsePointer
-              ? "Сообщение клиенту…"
-              : "Сообщение клиенту… (Enter — отправить, Shift+Enter — перенос)"
+              ? "Message to prospect…"
+              : "Message to prospect… (Enter to send, Shift+Enter for a new line)"
           }
           disabled={sending}
           onChange={(event) => {
@@ -88,7 +88,7 @@ export function ChatComposer({
           disabled={sending || trimmed.length === 0}
           className="shrink-0 self-end"
         >
-          {sending ? "Отправка…" : "Отправить"}
+          {sending ? "Sending…" : "Send"}
         </Button>
       </div>
     </div>

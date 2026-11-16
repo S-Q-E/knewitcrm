@@ -41,7 +41,7 @@ class DealCreate(BaseModel):
     stage_id: uuid.UUID
     title: str = Field(min_length=1, max_length=255)
     amount: float | None = Field(default=None, ge=0)
-    currency: str = Field(default="KZT", min_length=3, max_length=3)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
     owner_id: uuid.UUID | None = None
     trial_at: datetime | None = None
     custom: dict[str, Any] = Field(default_factory=dict)

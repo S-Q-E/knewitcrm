@@ -5,7 +5,7 @@ import { autoMapping } from "@/pages/contacts";
 
 describe("contacts helpers", () => {
   it("builds query string for filters", () => {
-    expect(contactQueryString({ search: "иван", sort: "-created_at" })).toContain("search=");
+    expect(contactQueryString({ search: "ivan", sort: "-created_at" })).toContain("search=");
     expect(contactQueryString({})).toBe("");
   });
 

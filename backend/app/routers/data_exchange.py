@@ -298,7 +298,7 @@ async def _run_import_job(job_id: str, factory) -> None:
         await _execute_import_job(job_id, factory)
     except Exception:
         logger.exception("contact import failed job_id=%s", job_id)
-        await _mark_import_failed(factory, job_id, "внутренняя ошибка импорта")
+        await _mark_import_failed(factory, job_id, "internal import error")
 
 
 async def _execute_import_job(job_id: str, factory) -> None:
@@ -379,7 +379,7 @@ async def fail_stale_imports(factory, now: datetime | None = None) -> int:
             .values(
                 status="failed",
                 finished_at=datetime.now(UTC),
-                errors=[{"error": "импорт прерван перезапуском сервера"}],
+                errors=[{"error": "import interrupted by a server restart"}],
             )
             .returning(CrmImport.id)
         )

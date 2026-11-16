@@ -44,9 +44,9 @@ import { FieldLabel, ModalShell, inputClass } from "@/pages/settings";
 import { cn } from "@/lib/utils";
 
 const KIND_LABELS: Record<Stage["kind"], string> = {
-  open: "Открытая",
-  won: "Выиграно",
-  lost: "Проиграно",
+  open: "Open",
+  won: "Won",
+  lost: "Lost",
 };
 
 function Card({
@@ -94,7 +94,7 @@ function SortableStageRow({
     >
       <button
         type="button"
-        aria-label={`Перетащить стадию ${stage.name}`}
+        aria-label={`Drag stage ${stage.name}`}
         className="cursor-grab touch-none px-1 text-slate-400"
         {...attributes}
         {...listeners}
@@ -119,10 +119,10 @@ function SortableStageRow({
         </span>
       )}
       <Button size="sm" variant="secondary" onClick={onEdit}>
-        Изменить
+        Edit
       </Button>
       <Button size="sm" variant="ghost" onClick={onDelete}>
-        Удалить
+        Delete
       </Button>
     </div>
   );
@@ -169,40 +169,40 @@ function StageModal({
   };
 
   return (
-    <ModalShell title={stage ? "Стадия" : "Новая стадия"} onClose={onClose}>
+    <ModalShell title={stage ? "Stage" : "New stage"} onClose={onClose}>
       <div className="flex flex-col gap-3">
         <FieldLabel>
-          Название
+          Title
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </FieldLabel>
         <div className="flex gap-3">
           <FieldLabel>
-            Цвет
+            Color
             <input
               type="color"
-              aria-label="Цвет стадии"
+              aria-label="Stage color"
               value={color}
               onChange={(e) => setColor(e.target.value)}
               className="h-9 w-16 cursor-pointer rounded-md border border-slate-200 dark:border-slate-700"
             />
           </FieldLabel>
           <FieldLabel>
-            Тип
+            Type
             <select
               value={kind}
               onChange={(e) => setKind(e.target.value as Stage["kind"])}
               className={inputClass}
             >
-              <option value="open">Открытая</option>
-              <option value="won">Выиграно</option>
-              <option value="lost">Проиграно</option>
+              <option value="open">Open</option>
+              <option value="won">Won</option>
+              <option value="lost">Lost</option>
             </select>
           </FieldLabel>
         </div>
         <FieldLabel>
-          Этап бота (current_stage)
+          Bot stage (current_stage)
           <select value={botKey} onChange={(e) => setBotKey(e.target.value)} className={inputClass}>
-            <option value="">— не привязано —</option>
+            <option value="">— not linked —</option>
             {(botStages.data?.stages ?? []).map((value) => (
               <option key={value} value={value}>
                 {value}
@@ -211,13 +211,13 @@ function StageModal({
           </select>
         </FieldLabel>
         <FieldLabel>
-          Статус бота (для финальных стадий)
+          Bot status (for final stages)
           <select
             value={statusKey}
             onChange={(e) => setStatusKey(e.target.value)}
             className={inputClass}
           >
-            <option value="">— не привязано —</option>
+            <option value="">— not linked —</option>
             {(botStages.data?.statuses ?? []).map((value) => (
               <option key={value} value={value}>
                 {value}
@@ -227,13 +227,13 @@ function StageModal({
         </FieldLabel>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            Отмена
+            Cancel
           </Button>
           <Button
             disabled={!name.trim() || createStage.isPending || updateStage.isPending}
             onClick={() => void save()}
           >
-            Сохранить
+            Save
           </Button>
         </div>
       </div>
@@ -267,20 +267,20 @@ function DeleteStageModal({
   };
 
   return (
-    <ModalShell title={`Удалить стадию «${stage.name}»?`} onClose={onClose}>
+    <ModalShell title={`Delete stage “${stage.name}”?`} onClose={onClose}>
       <div className="flex flex-col gap-3 text-sm">
         <p className="text-slate-600 dark:text-slate-300">
-          Если на стадии есть сделки, выберите, куда их перенести. Без выбора удаление будет
-          отклонено.
+          If the stage has deals, choose where to move them. Without a choice, deletion will
+          be rejected.
         </p>
         <FieldLabel>
-          Перенести сделки в
+          Move deals to
           <select
             value={recipient}
             onChange={(e) => setRecipient(e.target.value)}
             className={inputClass}
           >
-            <option value="">— не переносить —</option>
+            <option value="">— do not move —</option>
             {others.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
@@ -290,10 +290,10 @@ function DeleteStageModal({
         </FieldLabel>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            Отмена
+            Cancel
           </Button>
           <Button variant="danger" disabled={deleteStage.isPending} onClick={() => void confirm()}>
-            Удалить
+            Delete
           </Button>
         </div>
       </div>
@@ -325,10 +325,10 @@ function PipelineModal({ pipeline, onClose }: { pipeline: Pipeline | null; onClo
   };
 
   return (
-    <ModalShell title={pipeline ? "Воронка" : "Новая воронка"} onClose={onClose}>
+    <ModalShell title={pipeline ? "Pipeline" : "New pipeline"} onClose={onClose}>
       <div className="flex flex-col gap-3">
         <FieldLabel>
-          Название
+          Title
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </FieldLabel>
         <label className="flex items-center gap-2 text-sm">
@@ -337,14 +337,14 @@ function PipelineModal({ pipeline, onClose }: { pipeline: Pipeline | null; onClo
             checked={isDefault}
             onChange={(e) => setIsDefault(e.target.checked)}
           />
-          Воронка по умолчанию
+          Default pipeline
         </label>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            Отмена
+            Cancel
           </Button>
           <Button disabled={!name.trim()} onClick={() => void save()}>
-            Сохранить
+            Save
           </Button>
         </div>
       </div>
@@ -402,7 +402,7 @@ export function FunnelsTab() {
 
   const removePipeline = async () => {
     if (!pipeline) return;
-    if (!window.confirm(`Удалить воронку «${pipeline.name}»?`)) return;
+    if (!window.confirm(`Delete pipeline “${pipeline.name}”?`)) return;
     try {
       await deletePipeline.mutateAsync(pipeline.id);
       setPipelineId(null);
@@ -414,16 +414,16 @@ export function FunnelsTab() {
   return (
     <div className="grid gap-4">
       <Card
-        title="Воронки"
+        title="Pipelines"
         actions={
           <Button size="sm" onClick={() => setPipelineModal("create")}>
-            Новая воронка
+            New pipeline
           </Button>
         }
       >
         <div className="flex flex-wrap items-center gap-2">
           <select
-            aria-label="Воронка"
+            aria-label="Pipeline"
             value={pipeline?.id ?? ""}
             onChange={(e) => setPipelineId(e.target.value)}
             className={cn(inputClass, "w-auto min-w-52")}
@@ -431,17 +431,17 @@ export function FunnelsTab() {
             {pipelines.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
-                {item.is_default ? " (по умолчанию)" : ""}
+                {item.is_default ? " (default)" : ""}
               </option>
             ))}
           </select>
           {pipeline && (
             <>
               <Button size="sm" variant="secondary" onClick={() => setPipelineModal("edit")}>
-                Переименовать
+                Rename
               </Button>
               <Button size="sm" variant="ghost" onClick={() => void removePipeline()}>
-                Удалить
+                Delete
               </Button>
             </>
           )}
@@ -450,16 +450,16 @@ export function FunnelsTab() {
 
       {pipeline && (
         <Card
-          title={`Стадии · ${pipeline.name}`}
+          title={`Stages · ${pipeline.name}`}
           actions={
             <Button size="sm" onClick={() => setStageModal("create")}>
-              Новая стадия
+              New stage
             </Button>
           }
         >
           <p className="mb-2 text-xs text-slate-500">
-            Порядок меняется перетаскиванием за ⋮⋮. Привязки к боту влияют на двустороннюю
-            синхронизацию (см. docs/DECISIONS.md, D3).
+            Order changes by dragging the ⋮⋮ handle. Bot links affect two-way
+            synchronization (see docs/DECISIONS.md, D3).
           </p>
           <DndContext sensors={sensors} onDragEnd={onDragEnd}>
             <SortableContext
@@ -536,7 +536,7 @@ function LostReasonsCard() {
   };
 
   const remove = async (id: string, reasonName: string) => {
-    if (!window.confirm(`Удалить причину «${reasonName}»?`)) return;
+    if (!window.confirm(`Delete reason “${reasonName}”?`)) return;
     try {
       await deleteReason.mutateAsync(id);
     } catch (error) {
@@ -545,30 +545,30 @@ function LostReasonsCard() {
   };
 
   return (
-    <Card title="Причины отказа">
+    <Card title="Lost reasons">
       <div className="mb-2 flex gap-2">
         <Input
-          placeholder="Новая причина…"
-          aria-label="Новая причина отказа"
+          placeholder="New reason…"
+          aria-label="New lost reason"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
         <Button size="sm" disabled={!name.trim()} onClick={() => void create()}>
-          Добавить
+          Add
         </Button>
       </div>
       {editing && (
         <div className="mb-2 flex gap-2">
           <Input
-            aria-label="Название причины"
+            aria-label="Reason name"
             value={editing.name}
             onChange={(e) => setEditing({ ...editing, name: e.target.value })}
           />
           <Button size="sm" disabled={!editing.name.trim()} onClick={() => void saveEdit()}>
-            Сохранить
+            Save
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
-            Отмена
+            Cancel
           </Button>
         </div>
       )}
@@ -584,10 +584,10 @@ function LostReasonsCard() {
               variant="secondary"
               onClick={() => setEditing({ id: reason.id, name: reason.name })}
             >
-              Изменить
+              Edit
             </Button>
             <Button size="sm" variant="ghost" onClick={() => void remove(reason.id, reason.name)}>
-              Удалить
+              Delete
             </Button>
           </div>
         ))}
@@ -599,12 +599,12 @@ function LostReasonsCard() {
 // Custom fields
 
 const FIELD_TYPES = [
-  { value: "text", label: "Текст" },
-  { value: "number", label: "Число" },
-  { value: "date", label: "Дата" },
-  { value: "select", label: "Выбор" },
-  { value: "multiselect", label: "Множественный выбор" },
-  { value: "bool", label: "Да/нет" },
+  { value: "text", label: "Text" },
+  { value: "number", label: "Number" },
+  { value: "date", label: "Date" },
+  { value: "select", label: "Select" },
+  { value: "multiselect", label: "Multi-select" },
+  { value: "bool", label: "Yes/No" },
 ];
 
 function FieldModal({
@@ -665,21 +665,21 @@ function FieldModal({
   };
 
   return (
-    <ModalShell title={field ? "Поле" : "Новое поле"} onClose={onClose}>
+    <ModalShell title={field ? "Field" : "New field"} onClose={onClose}>
       <div className="flex flex-col gap-3">
         {!field && (
           <FieldLabel>
-            Ключ (латиница, без пробелов)
+            Key (Latin letters, no spaces)
             <Input value={key} onChange={(e) => setKey(e.target.value)} />
           </FieldLabel>
         )}
         <FieldLabel>
-          Подпись
+          Label
           <Input value={label} onChange={(e) => setLabel(e.target.value)} />
         </FieldLabel>
         {!field && (
           <FieldLabel>
-            Тип
+            Type
             <select
               value={type}
               onChange={(e) => setType(e.target.value as CustomField["type"])}
@@ -695,7 +695,7 @@ function FieldModal({
         )}
         {needsOptions && (
           <FieldLabel>
-            Опции (по одной на строку)
+            Options (one per line)
             <textarea
               value={optionsText}
               onChange={(e) => setOptionsText(e.target.value)}
@@ -711,19 +711,19 @@ function FieldModal({
               checked={required}
               onChange={(e) => setRequired(e.target.checked)}
             />
-            Обязательное
+            Required
           </label>
           <FieldLabel>
-            Порядок
+            Order
             <Input value={sort} inputMode="numeric" onChange={(e) => setSort(e.target.value)} />
           </FieldLabel>
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            Отмена
+            Cancel
           </Button>
           <Button disabled={!label.trim() || (!field && !key.trim())} onClick={() => void save()}>
-            Сохранить
+            Save
           </Button>
         </div>
       </div>
@@ -741,7 +741,7 @@ export function FieldsTab() {
   const remove = async (field: CustomField) => {
     if (
       !window.confirm(
-        `Удалить поле «${field.label}»? Значения в сделках/контактах останутся, но поле пропадёт из форм.`,
+        `Delete field “${field.label}”? Values in deals/contacts will remain, but the field will disappear from forms.`,
       )
     )
       return;
@@ -754,7 +754,7 @@ export function FieldsTab() {
 
   return (
     <Card
-      title="Произвольные поля"
+      title="Custom fields"
       actions={
         <div className="flex gap-1">
           {(["deal", "contact"] as const).map((value) => (
@@ -764,11 +764,11 @@ export function FieldsTab() {
               variant={entity === value ? "default" : "secondary"}
               onClick={() => setEntity(value)}
             >
-              {value === "deal" ? "Сделки" : "Контакты"}
+              {value === "deal" ? "Deals" : "Contacts"}
             </Button>
           ))}
           <Button size="sm" onClick={() => setModal("create")}>
-            Новое поле
+            New field
           </Button>
         </div>
       }
@@ -783,19 +783,19 @@ export function FieldsTab() {
               <span className="font-medium">{field.label}</span>{" "}
               <span className="text-xs text-slate-500">
                 {field.key} · {FIELD_TYPES.find((t) => t.value === field.type)?.label}
-                {field.required ? " · обязательное" : ""}
+                {field.required ? " · required" : ""}
               </span>
             </span>
             <Button size="sm" variant="secondary" onClick={() => setModal(field)}>
-              Изменить
+              Edit
             </Button>
             <Button size="sm" variant="ghost" onClick={() => void remove(field)}>
-              Удалить
+              Delete
             </Button>
           </div>
         ))}
         {fields.data?.items.length === 0 && (
-          <p className="text-sm text-slate-500">Полей пока нет</p>
+          <p className="text-sm text-slate-500">No fields yet</p>
         )}
       </div>
       {modal && (
@@ -838,17 +838,17 @@ function TagModal({
   };
 
   return (
-    <ModalShell title={tag ? "Тег" : "Новый тег"} onClose={onClose}>
+    <ModalShell title={tag ? "Tag" : "New tag"} onClose={onClose}>
       <div className="flex flex-col gap-3">
         <FieldLabel>
-          Название
+          Title
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </FieldLabel>
         <FieldLabel>
-          Цвет
+          Color
           <input
             type="color"
-            aria-label="Цвет тега"
+            aria-label="Tag color"
             value={color}
             onChange={(e) => setColor(e.target.value)}
             className="h-9 w-16 cursor-pointer rounded-md border border-slate-200 dark:border-slate-700"
@@ -856,10 +856,10 @@ function TagModal({
         </FieldLabel>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            Отмена
+            Cancel
           </Button>
           <Button disabled={!name.trim()} onClick={() => void save()}>
-            Сохранить
+            Save
           </Button>
         </div>
       </div>
@@ -876,10 +876,10 @@ export function TagsTab() {
   >(null);
 
   const remove = async (id: string, name: string) => {
-    if (!window.confirm(`Удалить тег «${name}»? Он будет снят со всех сущностей.`)) return;
+    if (!window.confirm(`Delete tag “${name}”? It will be removed from all entities.`)) return;
     try {
       const result = await deleteTag.mutateAsync(id);
-      push({ title: `Тег удалён (снято: ${result.detached_from ?? "—"})`, variant: "default" });
+      push({ title: `Tag deleted (removed from: ${result.detached_from ?? "—"})`, variant: "default" });
     } catch (error) {
       toastError(push, error);
     }
@@ -887,10 +887,10 @@ export function TagsTab() {
 
   return (
     <Card
-      title="Теги"
+      title="Tags"
       actions={
         <Button size="sm" onClick={() => setModal("create")}>
-          Новый тег
+          New tag
         </Button>
       }
     >
@@ -906,10 +906,10 @@ export function TagsTab() {
             />
             <span className="flex-1 font-medium">{tag.name}</span>
             <Button size="sm" variant="secondary" onClick={() => setModal(tag)}>
-              Изменить
+              Edit
             </Button>
             <Button size="sm" variant="ghost" onClick={() => void remove(tag.id, tag.name)}>
-              Удалить
+              Delete
             </Button>
           </div>
         ))}
@@ -950,14 +950,14 @@ function ReplyModal({ reply, onClose }: { reply: QuickReply | null; onClose: () 
   };
 
   return (
-    <ModalShell title={reply ? "Шаблон" : "Новый шаблон"} onClose={onClose}>
+    <ModalShell title={reply ? "Template" : "New template"} onClose={onClose}>
       <div className="flex flex-col gap-3">
         <FieldLabel>
-          Название
+          Title
           <Input value={title} onChange={(e) => setTitle(e.target.value)} />
         </FieldLabel>
         <FieldLabel>
-          Текст (поддерживается {"{name}"})
+          Text (supports {"{name}"})
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
@@ -966,15 +966,15 @@ function ReplyModal({ reply, onClose }: { reply: QuickReply | null; onClose: () 
           />
         </FieldLabel>
         <FieldLabel>
-          Порядок
+          Order
           <Input value={sort} inputMode="numeric" onChange={(e) => setSort(e.target.value)} />
         </FieldLabel>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            Отмена
+            Cancel
           </Button>
           <Button disabled={!title.trim() || !body.trim()} onClick={() => void save()}>
-            Сохранить
+            Save
           </Button>
         </div>
       </div>
@@ -989,7 +989,7 @@ export function RepliesTab() {
   const [modal, setModal] = useState<QuickReply | "create" | null>(null);
 
   const remove = async (reply: QuickReply) => {
-    if (!window.confirm(`Удалить шаблон «${reply.title}»?`)) return;
+    if (!window.confirm(`Delete template “${reply.title}”?`)) return;
     try {
       await deleteReply.mutateAsync(reply.id);
     } catch (error) {
@@ -999,10 +999,10 @@ export function RepliesTab() {
 
   return (
     <Card
-      title="Шаблоны быстрых ответов"
+      title="Quick reply templates"
       actions={
         <Button size="sm" onClick={() => setModal("create")}>
-          Новый шаблон
+          New template
         </Button>
       }
     >
@@ -1017,15 +1017,15 @@ export function RepliesTab() {
               <p className="truncate text-xs text-slate-500">{reply.body}</p>
             </div>
             <Button size="sm" variant="secondary" onClick={() => setModal(reply)}>
-              Изменить
+              Edit
             </Button>
             <Button size="sm" variant="ghost" onClick={() => void remove(reply)}>
-              Удалить
+              Delete
             </Button>
           </div>
         ))}
         {replies.data?.items.length === 0 && (
-          <p className="text-sm text-slate-500">Шаблонов пока нет</p>
+          <p className="text-sm text-slate-500">No templates yet</p>
         )}
       </div>
       {modal && (

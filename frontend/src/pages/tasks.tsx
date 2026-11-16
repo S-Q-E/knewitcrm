@@ -21,7 +21,7 @@ import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const taskSchema = z.object({
-  title: z.string().min(1, "Введите название").max(255),
+  title: z.string().min(1, "Enter a title").max(255),
   type: z.enum(["call", "meeting", "message", "other"]),
   assignee_id: z.string().optional(),
   due_at: z.string().optional(),
@@ -30,10 +30,10 @@ const taskSchema = z.object({
 type TaskForm = z.infer<typeof taskSchema>;
 
 const TYPE_LABEL: Record<string, string> = {
-  call: "Звонок",
-  meeting: "Встреча",
-  message: "Написать",
-  other: "Другое",
+  call: "Call",
+  meeting: "Meeting",
+  message: "Message",
+  other: "Other",
 };
 
 function dayKey(iso: string | null | undefined): string | null {
@@ -96,7 +96,7 @@ function TaskModal({ task, onClose }: { task?: Task; onClose: () => void }) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={task ? "Редактировать задачу" : "Новая задача"}
+      aria-label={task ? "Edit task" : "New task"}
       className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
     >
@@ -105,9 +105,9 @@ function TaskModal({ task, onClose }: { task?: Task; onClose: () => void }) {
         onClick={(event) => event.stopPropagation()}
         className="w-full max-w-md rounded-lg bg-white p-5 dark:bg-slate-900"
       >
-        <h2 className="text-lg font-bold">{task ? "Редактировать задачу" : "Новая задача"}</h2>
+        <h2 className="text-lg font-bold">{task ? "Edit task" : "New task"}</h2>
         <label className="mt-3 block text-sm font-medium">
-          Название
+          Title
           <Input className="mt-1" {...form.register("title")} />
           {form.formState.errors.title && (
             <span className="text-xs text-red-600">{form.formState.errors.title.message}</span>
@@ -115,7 +115,7 @@ function TaskModal({ task, onClose }: { task?: Task; onClose: () => void }) {
         </label>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <label className="block text-sm font-medium">
-            Тип
+            Type
             <select
               {...form.register("type")}
               className="mt-1 h-11 md:h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
@@ -128,17 +128,17 @@ function TaskModal({ task, onClose }: { task?: Task; onClose: () => void }) {
             </select>
           </label>
           <label className="block text-sm font-medium">
-            Срок
+            Due
             <Input className="mt-1" type="datetime-local" {...form.register("due_at")} />
           </label>
         </div>
         <label className="mt-3 block text-sm font-medium">
-          Исполнитель
+          Assignee
           <select
             {...form.register("assignee_id")}
             className="mt-1 h-11 md:h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
           >
-            <option value="">Без исполнителя</option>
+            <option value="">Unassigned</option>
             {users.data?.items.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.name}
@@ -148,10 +148,10 @@ function TaskModal({ task, onClose }: { task?: Task; onClose: () => void }) {
         </label>
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="ghost" type="button" onClick={onClose}>
-            Отмена
+            Cancel
           </Button>
           <Button type="submit" disabled={createTask.isPending || updateTask.isPending}>
-            Сохранить
+            Save
           </Button>
         </div>
       </form>
@@ -179,7 +179,7 @@ function TaskRow({ task, onEdit }: { task: Task; onEdit: (task: Task) => void })
     >
       <input
         type="checkbox"
-        aria-label={done ? `Вернуть ${task.title}` : `Выполнить ${task.title}`}
+        aria-label={done ? `Reopen ${task.title}` : `Complete ${task.title}`}
         checked={done}
         onChange={() =>
           complete.mutate(
@@ -192,8 +192,8 @@ function TaskRow({ task, onEdit }: { task: Task; onEdit: (task: Task) => void })
         <p className={cn("truncate font-medium", done && "line-through")}>{task.title}</p>
         <p className="text-xs text-slate-500">
           {TYPE_LABEL[task.type] ?? task.type}
-          {task.due_at ? ` · до ${formatDate(task.due_at)}` : ""}
-          {overdue ? " · просрочена" : ""}
+          {task.due_at ? ` · due ${formatDate(task.due_at)}` : ""}
+          {overdue ? " · overdue" : ""}
         </p>
       </div>
       {task.deal_id && (
@@ -202,7 +202,7 @@ function TaskRow({ task, onEdit }: { task: Task; onEdit: (task: Task) => void })
           className="shrink-0 text-xs text-slate-500 underline"
           onClick={() => navigate(`/deals/${task.deal_id}`)}
         >
-          Сделка
+          Deal
         </button>
       )}
       <button
@@ -210,11 +210,11 @@ function TaskRow({ task, onEdit }: { task: Task; onEdit: (task: Task) => void })
         className="shrink-0 text-xs text-slate-500 underline"
         onClick={() => onEdit(task)}
       >
-        Изменить
+        Edit
       </button>
       <button
         type="button"
-        aria-label={`Удалить ${task.title}`}
+        aria-label={`Delete ${task.title}`}
         disabled={remove.isPending}
         className="shrink-0 text-xs text-slate-400 hover:text-red-600 disabled:opacity-50"
         onClick={() => remove.mutate(task.id, { onError: (error) => toastError(push, error) })}
@@ -248,7 +248,7 @@ export function TasksPage() {
     const key = addDaysKey(index - 1);
     return {
       key,
-      label: new Date(`${key}T00:00:00`).toLocaleDateString("ru-RU", {
+      label: new Date(`${key}T00:00:00`).toLocaleDateString("en-US", {
         weekday: "short",
         day: "numeric",
         month: "short",
@@ -266,7 +266,7 @@ export function TasksPage() {
         {tasks.map((task) => (
           <TaskRow key={task.id} task={task} onEdit={setEditing} />
         ))}
-        {tasks.length === 0 && <p className="text-xs text-slate-400">Пусто.</p>}
+        {tasks.length === 0 && <p className="text-xs text-slate-400">Empty.</p>}
       </div>
     </section>
   );
@@ -287,22 +287,22 @@ export function TasksPage() {
                   : "text-slate-600 dark:text-slate-300",
               )}
             >
-              {mode === "groups" ? "Списки" : "Неделя"}
+              {mode === "groups" ? "Lists" : "Week"}
             </button>
           ))}
         </div>
         <Button size="sm" onClick={() => setCreating(true)}>
-          Новая задача
+          New task
         </Button>
       </div>
 
       {view === "groups" ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {group("Просрочено", overdue)}
-          {group("Сегодня", dueToday)}
-          {group("Завтра", dueTomorrow)}
-          {group("Позже", later)}
-          {group("Выполнено", done)}
+          {group("Overdue", overdue)}
+          {group("Today", dueToday)}
+          {group("Tomorrow", dueTomorrow)}
+          {group("Later", later)}
+          {group("Done", done)}
         </div>
       ) : (
         <div className="grid gap-2 md:grid-cols-7">

@@ -22,7 +22,7 @@ function deal(index: number) {
     stage_id: STAGE,
     title: `Deal ${index}`,
     amount: null,
-    currency: "KZT",
+    currency: "USD",
     owner_id: null,
     status: "open",
     position: index,
@@ -88,15 +88,15 @@ describe("DealsBoard pagination", () => {
     );
 
     await screen.findByText("Deal 1", {}, SLOW);
-    fireEvent.click(await screen.findByRole("button", { name: /Показать ещё/ }, SLOW));
+    fireEvent.click(await screen.findByRole("button", { name: /Show more/ }, SLOW));
     await screen.findByText("Deal 51", {}, SLOW);
-    fireEvent.click(await screen.findByRole("button", { name: /Показать ещё/ }, SLOW));
+    fireEvent.click(await screen.findByRole("button", { name: /Show more/ }, SLOW));
     await screen.findByText("Deal 120", {}, SLOW);
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: /Показать ещё/ })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Show more/ })).toBeNull());
     expect(screen.getByText("Deal 1")).toBeTruthy();
     expect(screen.getByText("Deal 51")).toBeTruthy();
     expect(screen.getByText("Deal 120")).toBeTruthy();

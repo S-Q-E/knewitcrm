@@ -1,3 +1,8 @@
+# The backend runs from the host and reads .env.
+# Demo defaults:
+# DEFAULT_TIMEZONE=America/New_York
+# DEFAULT_CURRENCY=USD
+
 services:
   db:
     image: postgres:16-alpine

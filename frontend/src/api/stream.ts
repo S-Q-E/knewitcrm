@@ -159,7 +159,7 @@ export function useEventStream() {
         const dialog = queryClient.getQueryData<DialogCache>(["dialog", event.data.whatsapp_id]);
         if (dialog?.assigned_to && me.data && dialog.assigned_to === me.data.id) {
           playPing();
-          push({ title: "Новое сообщение в вашем диалоге", variant: "default" });
+          push({ title: "New message in your dialog", variant: "default" });
         }
       }
       invalidate(invalidationFor(event));

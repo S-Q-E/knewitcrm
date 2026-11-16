@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
 
-const STORAGE_KEY = "knewitcrm-theme";
+const STORAGE_KEY = "tcs-leasing-theme";
 
 function initialTheme(): Theme {
   const stored = window.localStorage.getItem(STORAGE_KEY);

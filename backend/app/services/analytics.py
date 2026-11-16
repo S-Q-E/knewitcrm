@@ -9,7 +9,7 @@ on tcs_* tables; hotspot crm_* columns are indexed by migration
 Conventions (see D20):
 - Period params are calendar dates (YYYY-MM-DD) interpreted as day
   boundaries in the CRM timezone (settings.default_timezone, default
-  Asia/Almaty) and converted to UTC for comparisons. DB stores UTC.
+  America/New_York) and converted to UTC for comparisons. DB stores UTC.
 - Funnel is cohort-based: deals created in the period; "reached" counts
   history rows (any time) plus mapped bot events, with the current stage
   as fallback for deals without history.
@@ -43,6 +43,7 @@ class AnalyticsFilters:
     start_utc: datetime
     end_utc: datetime
     tz_name: str
+    currency: str
     pipeline_id: uuid.UUID
     owner_id: uuid.UUID | None
     granularity: str
@@ -69,6 +70,7 @@ async def resolve_filters(
     owner_id: str | None,
     granularity: str,
     tz_name: str,
+    currency: str = "USD",
 ) -> AnalyticsFilters:
     from ..models import CrmPipeline, CrmUser
 
@@ -146,6 +148,7 @@ async def resolve_filters(
         start_utc=start_utc,
         end_utc=end_utc,
         tz_name=tz_name,
+        currency=currency,
         pipeline_id=pid,
         owner_id=owner,
         granularity=granularity,
@@ -432,7 +435,7 @@ async def summary_section(session: AsyncSession, filters: AnalyticsFilters) -> d
         "lost_by_reason": [
             {
                 "reason_id": str(r["id"]) if r["id"] is not None else None,
-                "reason": r["name"] or "Без причины",
+                "reason": r["name"] or "No reason",
                 "count": int(r["count"]),
             }
             for r in reasons
@@ -1002,7 +1005,7 @@ async def overview(factory, filters: AnalyticsFilters) -> dict:
             "granularity": filters.granularity,
             "pipeline_id": str(filters.pipeline_id),
             "owner_id": str(filters.owner_id) if filters.owner_id else None,
-            "currency": "KZT",
+            "currency": filters.currency,
             "timezone": filters.tz_name,
         },
         "funnel": funnel,

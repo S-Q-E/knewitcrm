@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth_deps import CurrentUser, require_user
+from ..config import Settings
 from ..deps import get_session, get_settings
 from ..errors import ApiError
 from ..schemas.analytics import AnalyticsOverviewOut
@@ -89,9 +90,9 @@ async def analytics_overview(
     granularity: str = Query(default="day", pattern="^(day|week)$"),
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
 ):
     await _ensure_analytics_visible(session, user)
-    settings = get_settings()
     filters = await resolve_filters(
         session,
         user,
@@ -101,6 +102,7 @@ async def analytics_overview(
         owner_id=owner_id,
         granularity=granularity,
         tz_name=settings.default_timezone,
+        currency=settings.default_currency,
     )
     return await overview(request.app.state.session_factory, filters)
 
@@ -118,9 +120,9 @@ async def analytics_export(
     granularity: str = Query(default="day", pattern="^(day|week)$"),
     user: CurrentUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
 ):
     await _ensure_analytics_visible(session, user)
-    settings = get_settings()
     filters = await resolve_filters(
         session,
         user,
@@ -130,6 +132,7 @@ async def analytics_export(
         owner_id=owner_id,
         granularity=granularity,
         tz_name=settings.default_timezone,
+        currency=settings.default_currency,
     )
     data = await overview(request.app.state.session_factory, filters)
     if section == "funnel":

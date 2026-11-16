@@ -25,12 +25,12 @@ import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { to: "/deals", label: "Сделки", icon: Coins, adminOnly: false },
-  { to: "/dialogs", label: "Диалоги", icon: MessagesSquare, adminOnly: false },
-  { to: "/contacts", label: "Контакты", icon: Users, adminOnly: false },
-  { to: "/tasks", label: "Задачи", icon: Bell, adminOnly: false },
-  { to: "/analytics", label: "Аналитика", icon: BarChart3, adminOnly: false },
-  { to: "/settings", label: "Настройки", icon: Settings, adminOnly: false },
+  { to: "/deals", label: "Deals", icon: Coins, adminOnly: false },
+  { to: "/dialogs", label: "Dialogs", icon: MessagesSquare, adminOnly: false },
+  { to: "/contacts", label: "Contacts", icon: Users, adminOnly: false },
+  { to: "/tasks", label: "Tasks", icon: Bell, adminOnly: false },
+  { to: "/analytics", label: "Analytics", icon: BarChart3, adminOnly: false },
+  { to: "/settings", label: "Settings", icon: Settings, adminOnly: false },
 ];
 
 export function Layout() {
@@ -60,7 +60,7 @@ export function Layout() {
   };
 
   const visibleNav = NAV.filter((item) => !item.adminOnly || me?.role === "admin");
-  // На телефоне в нижний бар влезает 5 слотов: 4 раздела + «Ещё».
+  // Mobile bottom bar fits five slots: four sections plus "More".
   const tabNav = visibleNav.slice(0, 4);
   const moreNav = visibleNav.slice(4);
 
@@ -99,20 +99,20 @@ export function Layout() {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Глобальный поиск: контакты и сделки"
+              placeholder="Search contacts and deals"
               className="pl-9"
             />
           </form>
           <div className="ml-auto flex items-center gap-1 md:gap-2">
             <RealtimeStatus />
-            <Button variant="ghost" size="icon" onClick={toggle} title="Переключить тему">
+            <Button variant="ghost" size="icon" onClick={toggle} title="Toggle theme">
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
             <div className="relative">
               <Button
                 variant="ghost"
                 size="icon"
-                title="Уведомления"
+                title="Notifications"
                 onClick={() => {
                   setBellOpen((open) => !open);
                   setMenuOpen(false);
@@ -135,7 +135,7 @@ export function Layout() {
                   setBellOpen(false);
                 }}
               >
-                {me?.name ?? "Меню"}
+                {me?.name ?? "Menu"}
               </Button>
               {menuOpen && (
                 <div className="absolute right-0 z-20 mt-2 w-56 rounded-md border border-slate-200 bg-white p-2 text-sm shadow-lg dark:border-slate-700 dark:bg-slate-900">
@@ -150,7 +150,7 @@ export function Layout() {
                     }}
                   >
                     <LogOut className="h-4 w-4" />
-                    Выйти
+                    Log out
                   </button>
                 </div>
               )}
@@ -158,12 +158,15 @@ export function Layout() {
           </div>
         </header>
         <main className="min-w-0 flex-1 p-3 pb-24 md:p-6 md:pb-6">
+          <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+            DEMO — fictional data
+          </div>
           <Outlet />
         </main>
       </div>
 
       <nav
-        aria-label="Основная навигация"
+        aria-label="Main navigation"
         className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 md:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
@@ -196,7 +199,7 @@ export function Layout() {
                 )}
               >
                 <MoreHorizontal className="h-5 w-5" />
-                <span className="text-[10px] leading-none">Ещё</span>
+                <span className="text-[10px] leading-none">More</span>
               </button>
               {moreOpen && (
                 <div className="absolute inset-x-2 bottom-full mb-2 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">

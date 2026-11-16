@@ -44,14 +44,14 @@ export function LostReasonModal({
   const reasons = useLostReasons();
   const [reasonId, setReasonId] = useState("");
   return (
-    <ModalShell title="Причина отказа" onClose={onClose}>
+    <ModalShell title="Lost reason" onClose={onClose}>
       <select
-        aria-label="Причина отказа"
+        aria-label="Lost reason"
         value={reasonId}
         onChange={(event) => setReasonId(event.target.value)}
         className="h-11 md:h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-base md:text-sm dark:border-slate-700 dark:bg-slate-900"
       >
-        <option value="">Выберите причину…</option>
+        <option value="">Choose a reason…</option>
         {reasons.data?.items.map((reason) => (
           <option key={reason.id} value={reason.id}>
             {reason.name}
@@ -60,10 +60,10 @@ export function LostReasonModal({
       </select>
       <div className="mt-4 flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>
-          Отмена
+          Cancel
         </Button>
         <Button variant="danger" disabled={!reasonId} onClick={() => onConfirm(reasonId)}>
-          Закрыть как отказ
+          Close as lost
         </Button>
       </div>
     </ModalShell>
@@ -78,15 +78,15 @@ export function WonConfirmModal({
   onClose: () => void;
 }) {
   return (
-    <ModalShell title="Подтверждение продажи" onClose={onClose}>
+    <ModalShell title="Confirm sale" onClose={onClose}>
       <p className="text-sm text-slate-600 dark:text-slate-300">
-        Перенести сделку в «Клиент»? Сделка будет закрыта как выигранная.
+        Move the deal to “Leased”? The deal will be closed as won.
       </p>
       <div className="mt-4 flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>
-          Отмена
+          Cancel
         </Button>
-        <Button onClick={onConfirm}>Подтвердить</Button>
+        <Button onClick={onConfirm}>Confirm</Button>
       </div>
     </ModalShell>
   );
@@ -103,15 +103,15 @@ export function NoteModal({ deal, onClose }: { deal: Deal; onClose: () => void }
     try {
       await createNote.mutateAsync({ deal_id: deal.id, body: body.trim() });
       onClose();
-      push({ title: "Заметка сохранена", variant: "default" });
+      push({ title: "Note saved", variant: "default" });
     } catch (error) {
       toastError(push, error);
     }
   };
   return (
-    <ModalShell title="Новая заметка" onClose={onClose}>
+    <ModalShell title="New note" onClose={onClose}>
       <textarea
-        aria-label="Текст заметки"
+        aria-label="Note text"
         value={body}
         onChange={(event) => setBody(event.target.value)}
         rows={4}
@@ -119,10 +119,10 @@ export function NoteModal({ deal, onClose }: { deal: Deal; onClose: () => void }
       />
       <div className="mt-4 flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>
-          Отмена
+          Cancel
         </Button>
         <Button onClick={() => void save()} disabled={createNote.isPending || !body.trim()}>
-          Сохранить
+          Save
         </Button>
       </div>
     </ModalShell>
@@ -159,16 +159,16 @@ export function CreateDealModal({
         amount: amount ? Number(amount) : null,
       });
       onClose();
-      push({ title: "Сделка создана", variant: "default" });
+      push({ title: "Deal created", variant: "default" });
     } catch (error) {
       toastError(push, error);
     }
   };
 
   return (
-    <ModalShell title="Быстрая сделка" onClose={onClose}>
+    <ModalShell title="Quick deal" onClose={onClose}>
       <label className="block text-sm font-medium">
-        Контакт (поиск от 2 букв)
+        Contact (search from 2 letters)
         <Input
           className="mt-1"
           value={term}
@@ -176,7 +176,7 @@ export function CreateDealModal({
             setTerm(event.target.value);
             setContactId("");
           }}
-          placeholder="Имя, телефон, whatsapp"
+          placeholder="Name, phone, chat"
         />
       </label>
       {search.data && search.data.items.length > 0 && !contactId && (
@@ -198,11 +198,11 @@ export function CreateDealModal({
         </ul>
       )}
       <label className="mt-3 block text-sm font-medium">
-        Название
+        Title
         <Input className="mt-1" value={title} onChange={(event) => setTitle(event.target.value)} />
       </label>
       <label className="mt-3 block text-sm font-medium">
-        Сумма, ₸
+        Amount, USD
         <Input
           className="mt-1"
           type="number"
@@ -213,13 +213,13 @@ export function CreateDealModal({
       </label>
       <div className="mt-4 flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>
-          Отмена
+          Cancel
         </Button>
         <Button
           onClick={() => void save()}
           disabled={createDeal.isPending || !contactId || !title.trim()}
         >
-          Создать
+          Create
         </Button>
       </div>
     </ModalShell>

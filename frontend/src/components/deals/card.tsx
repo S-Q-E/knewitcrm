@@ -48,10 +48,10 @@ export function DealCard({
     >
       <div className="flex items-start justify-between gap-2">
         <p className="min-w-0 flex-1 truncate text-sm font-medium" title={contactName ?? undefined}>
-          {contactName ?? contactPhone ?? "Без имени"}
+          {contactName ?? contactPhone ?? "No name"}
         </p>
         {deal.stage_locked && (
-          <span title="Управление у менеджера">
+          <span title="Manager control">
             <Lock className="h-3.5 w-3.5 shrink-0 text-amber-500" />
           </span>
         )}
@@ -77,24 +77,24 @@ export function DealCard({
 
       <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
         <span
-          title={deal.owner_id ? "Ответственный" : "Без ответственного"}
+          title={deal.owner_id ? "Owner" : "No owner"}
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold dark:bg-slate-700"
         >
           {initials(ownerName)}
         </span>
         <span
-          title={deal.owner_id ? "Ответственный" : "Без ответственного"}
+          title={deal.owner_id ? "Owner" : "No owner"}
           className={cn(
             "max-w-[110px] truncate",
             !ownerName && "text-slate-400 dark:text-slate-500",
           )}
         >
-          {ownerName ?? "Не назначен"}
+          {ownerName ?? "Unassigned"}
         </span>
-        <span title="Последняя активность">{formatRelative(deal.updated_at)}</span>
+        <span title="Last activity">{formatRelative(deal.updated_at)}</span>
         {deal.trial_at && (
           <span
-            title={`Пробный: ${formatDate(deal.trial_at)}`}
+            title={`Viewing: ${formatDate(deal.trial_at)}`}
             className="flex items-center gap-0.5"
           >
             <CalendarClock className="h-3.5 w-3.5" />
@@ -106,7 +106,7 @@ export function DealCard({
       <div className="mt-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <button
           type="button"
-          title="Заметка"
+          title="Note"
           onClick={(event) => {
             event.stopPropagation();
             onNote(deal);
@@ -117,7 +117,7 @@ export function DealCard({
         </button>
         <button
           type="button"
-          title="Написать"
+          title="Message"
           onClick={(event) => {
             event.stopPropagation();
             onWrite(deal);
@@ -128,7 +128,7 @@ export function DealCard({
         </button>
         <button
           type="button"
-          title="Перетащить (или Tab + Пробел)"
+          title="Drag (or Tab + Space)"
           {...attributes}
           {...listeners}
           className="ml-auto cursor-grab rounded p-1 text-slate-400 hover:bg-slate-100 active:cursor-grabbing dark:hover:bg-slate-800"
