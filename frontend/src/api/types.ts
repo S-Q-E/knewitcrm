@@ -1722,6 +1722,10 @@ export interface components {
             messages_in: number;
             /** Messages Out */
             messages_out: number;
+            /** After Hours Leads */
+            after_hours_leads: number;
+            /** After Hours Share */
+            after_hours_share: number | null;
             /** Avg Response Time Ms */
             avg_response_time_ms: number | null;
             /** Tokens Total */

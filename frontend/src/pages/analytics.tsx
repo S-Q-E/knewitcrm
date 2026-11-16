@@ -817,6 +817,11 @@ export function AnalyticsPage() {
               />
               <Kpi label="Tokens total" value={number.format(data.bot.tokens_total)} />
               <Kpi
+                label="After-hours inquiries captured"
+                value={`${number.format(data.bot.after_hours_leads)} · ${formatPercent(data.bot.after_hours_share)}`}
+                hint="Outside Mon–Fri 09:00–17:00"
+              />
+              <Kpi
                 label="Manager handovers"
                 value={`${number.format(data.bot.handover_count)} · ${formatPercent(data.bot.handover_share)}`}
               />

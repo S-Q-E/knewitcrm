@@ -53,6 +53,8 @@ export interface ManagerRow {
 export interface BotStats {
   messages_in: number;
   messages_out: number;
+  after_hours_leads: number;
+  after_hours_share: number | null;
   avg_response_time_ms: number | null;
   tokens_total: number;
   tokens_by_day: { bucket: string; tokens: number }[];
