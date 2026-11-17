@@ -225,3 +225,20 @@ Cron → выборка due-followups → Loop по чатам →
 - CRM никогда не хранит ключи WhatsApp-провайдера — только этот URL+секрет.
 - Журнал доставки: CRM → Настройки → Интеграции (счётчики outbox,
   последняя ошибка — только класс + короткое сообщение, без PII).
+
+---
+
+## TCS demo (Phase 4)
+
+The demo uses regenerated workflows; do not hand-edit the JSON:
+
+| File | Role |
+| --- | --- |
+| `docs/n8n/tcs-send-message-telegram.workflow.json` | W-A: CRM outbox → Telegram (same contract, secret and dedupe as above; Telegram has no `success` field, so the error output answers 502 and `Mark Sent` runs only on success) |
+| `workflows/tcs_bot.json` | W-B: Telegram bot (agent + four tools + tcs_* logging) |
+| `workflows/tcs_reminders.json` | W-C: viewing reminders every 15 minutes |
+
+Generate with `scripts/build_tcs_workflows.py`, check with
+`scripts/validate_workflow.py`. Tool SQL/JS: `docs/tcs/tools-spec.md`.
+System prompt: `docs/tcs/bot-prompt.md`. Manual setup steps and the
+version-dependent nodes are listed in `HUMAN_TODO.md`.
