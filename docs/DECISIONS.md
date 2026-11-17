@@ -910,3 +910,44 @@ Why: protects against accidental data loss, keeps audit trail.
   database migrations must run AFTER the bot schema exists. For the demo DB we
   apply `tests/fixtures/tcs_schema.sql` first, then `alembic upgrade head`,
   then the seed. To revisit before the Railway demo deploy.
+
+## D42. n8n workflows are generated, not hand-edited (Phase 4)
+
+- `scripts/build_tcs_workflows.py` generates all three workflows:
+  `docs/n8n/tcs-send-message-telegram.workflow.json` (W-A),
+  `workflows/tcs_bot.json` (W-B), `workflows/tcs_reminders.json` (W-C).
+  Node parameters are cloned from the original Knewit files
+  (`crm-send-message.workflow.json`, `knewit-whatsapp-v2.json`); SQL/JS for the
+  tools comes from `docs/tcs/tools-spec.md`; the system prompt comes from
+  `docs/tcs/bot-prompt.md`. Editing generated JSON by hand is forbidden —
+  change the builder/spec and regenerate.
+- `scripts/validate_workflow.py` checks JSON validity, unique node ids/names
+  and that every connection target exists; `backend/tests/test_tcs_workflows.py`
+  runs it plus a few contract checks (Telegram instead of WhatsApp, tcs_* only,
+  prompt verbatim, 15-minute reminders).
+- W-A keeps the secret check, dedupe table and `{outbox_id, whatsapp_id, text}`
+  contract. Telegram has no `success` field, so the success output goes
+  straight to Mark Sent → Respond OK, and the error output goes to
+  Respond Error (502); dedupe is written only after a successful send.
+- W-B is a new flow, not a 1:1 port: Telegram Trigger → normalize
+  (`whatsapp_id = "tg:" + chat.id`) → non-text reply → pause check
+  (`crm_conversation_state.bot_paused`) → upsert lead → log incoming →
+  load booked slots → agent (four tools) → validate output → send reply →
+  update lead state → events → log outgoing. The reply node is the first node
+  after the agent and sits above every logging node in position.y, per the
+  brief; logging nodes use `onError = continueRegularOutput`, the send uses
+  retry 3 × 3000 ms with `continueErrorOutput`. The agent error output sends
+  the apology text and performs the handoff (МЕНЕДЖЕР + transferred_to_manager).
+- Google Sheets sync is dropped (the original branch is not recreated); the
+  Qdrant/Sheets/embeddings sub-nodes are not copied. Stage keys are the TCS
+  ones (NEW_INQUIRY … FOLLOW_UP); lead statuses keep the internal codes
+  (ЗАПИСАН/МЕНЕДЖЕР/ОТКАЗ/КЛИЕНТ/ДУМАЕТ). `book_viewing` owns the transaction
+  and writes `trial_booked` itself, so the state-machine validator does not
+  duplicate that event.
+- The prompt from the brief is embedded verbatim and followed by a
+  “Current lead state” block built from `Upsert & Load Lead State`; without it
+  the agent would re-ask known facts.
+- Version-dependent pieces (Telegram Trigger output shape, `postgresTool`
+  nodes, `toolCode` scope/`$('Load Booked Slots')`, memory table creation) are
+  marked MANUAL in `HUMAN_TODO.md` with `docs/tcs/tools-spec.md` as the
+  authoritative build guide.
