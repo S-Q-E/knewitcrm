@@ -53,8 +53,10 @@ def test_bot_workflow_targets_tcs_tables_only():
     data = _workflow(BOT)
     types = {n["type"] for n in data["nodes"]}
     assert "n8n-nodes-base.telegramTrigger" in types
-    # No Google Sheets sync and no schema setup nodes in the demo bot.
-    assert not any("googleSheets" in t for t in types)
+    # Google Sheets sync is kept in the canvas but disabled ("remove, do not delete").
+    sheets = [n for n in data["nodes"] if "googleSheets" in n["type"]]
+    assert sheets and all(n.get("disabled") is True for n in sheets)
+    assert not any("googleSheetsTool" in t for t in types)  # no Sheets tool for the agent
     # Tool nodes are attached to the agent.
     connections = data["connections"]["AI Agent"]
     tools = {t["node"] for t in connections["ai_tool"][0]}

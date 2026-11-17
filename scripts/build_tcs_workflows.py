@@ -511,6 +511,8 @@ whatsapp_id: {{ $('Upsert & Load Lead State').item.json.whatsapp_id }}
     agent_params = {
         "promptType": "define",
         "text": "=" + prompt + state_block,
+        "hasOutputParser": True,
+        "options": {},
     }
     nodes.append(
         node(
@@ -842,6 +844,16 @@ whatsapp_id: {{ $('Upsert & Load Lead State').item.json.whatsapp_id }}
             credentials=POSTGRES_CREDS,
         )
     )
+    # Google Sheets sync stays in the canvas but disabled, per the brief
+    # ("убрать, не удалять"). It keeps the original params for reference.
+    sheets = json.loads(
+        json.dumps(known["Синхронизация лида с Google Sheets"], ensure_ascii=False)
+    )
+    sheets["id"] = nid("Google Sheets sync (disabled)")
+    sheets["position"] = [3440, 940]
+    sheets["disabled"] = True
+    sheets["credentials"] = {"googleSheetsOAuth2Api": {"name": "Google Sheets account"}}
+    nodes.append(sheets)
     nodes.append(
         sticky(
             "Sticky - setup",
