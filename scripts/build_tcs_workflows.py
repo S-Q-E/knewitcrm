@@ -846,9 +846,7 @@ whatsapp_id: {{ $('Upsert & Load Lead State').item.json.whatsapp_id }}
     )
     # Google Sheets sync stays in the canvas but disabled, per the brief
     # ("убрать, не удалять"). It keeps the original params for reference.
-    sheets = json.loads(
-        json.dumps(known["Синхронизация лида с Google Sheets"], ensure_ascii=False)
-    )
+    sheets = json.loads(json.dumps(known["Синхронизация лида с Google Sheets"], ensure_ascii=False))
     sheets["id"] = nid("Google Sheets sync (disabled)")
     sheets["position"] = [3440, 940]
     sheets["disabled"] = True

@@ -21,7 +21,7 @@ merged or pushed to `main`; the original workspace was not modified.
   `services/funnel_seed.py` untouched by design.
 - `backend/app/services/normalize.py`: `tg:<chat_id>` no longer treated as a
   phone number; `frontend/src/lib/format.ts` does not render it as a phone.
-  Tests updated (`backend/tests/test_normalize.py`, `lib/format.test.ts`).
+  Tests updated (`backend/tests/test_contacts_data.py`, `lib/format.test.ts`).
 - `backend/tests/test_frontend.py` now expects the new SPA title.
 
 ## Pre-Phase-2 commits already in the branch
