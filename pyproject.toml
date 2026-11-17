@@ -17,3 +17,7 @@ ignore = ["B008"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["backend"]
+
+[tool.ruff.lint.per-file-ignores]
+# The workflow builder embeds JS/SQL templates verbatim; long lines are intentional.
+"scripts/build_tcs_workflows.py" = ["E501"]

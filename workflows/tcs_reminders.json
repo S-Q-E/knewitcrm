@@ -1,0 +1,173 @@
+{
+  "name": "TCS Viewing Reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "fb09f2ea-c419-5da1-a856-eafebc2f7b23",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.whatsapp_id,\n       l.trial_datetime,\n       to_char(l.trial_datetime AT TIME ZONE 'America/New_York',\n               'Dy Mon DD, HH12:MI AM') AS local_time,\n       COALESCE(u.building, 'our office') AS building,\n       COALESCE(u.unit_number, 'TBD') AS unit_number,\n       'Reminder: your viewing is '\n         || to_char(l.trial_datetime AT TIME ZONE 'America/New_York',\n                    'Dy Mon DD, HH12:MI AM')\n         || ' at ' || COALESCE(u.building, 'our office')\n         || ', Unit ' || COALESCE(u.unit_number, 'TBD')\n         || '. Message here if you need to reschedule.' AS reminder_text\nFROM tcs_leads l\nLEFT JOIN tcs_units u\n  ON (u.building || ' ' || u.unit_number) = (l.lead_data->>'unit')\nWHERE l.trial_datetime > now()\n  AND l.trial_datetime <= now() + interval '24 hours'\n  AND COALESCE(l.reminder_sent, false) = false\n  AND l.whatsapp_id LIKE 'tg:%'\n  AND NOT EXISTS (\n    SELECT 1 FROM crm_conversation_state s\n    WHERE s.whatsapp_id = l.whatsapp_id AND s.bot_paused = true\n  )\nORDER BY l.trial_datetime;",
+        "options": {}
+      },
+      "id": "b16544e1-e131-569e-b505-06dfce2d2d92",
+      "name": "Find Upcoming Viewings",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "chatId": "={{ String($json.whatsapp_id).replace(/^tg:/, '') }}",
+        "text": "={{ $json.reminder_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "764bb628-b5a4-525c-99b9-a5ace693ca03",
+      "name": "Send Reminder",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        480,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH upd AS ( UPDATE tcs_leads SET reminder_sent = true, updated_at = now() WHERE whatsapp_id = $1 AND COALESCE(reminder_sent, false) = false RETURNING whatsapp_id, current_stage) INSERT INTO tcs_messages (whatsapp_id, direction, message_type, content, stage_at_moment) SELECT whatsapp_id, 'out', 'chat', $2, current_stage FROM upd;",
+        "options": {
+          "queryReplacement": "={{ [ $('Find Upcoming Viewings').item.json.whatsapp_id, $('Find Upcoming Viewings').item.json.reminder_text ] }}"
+        }
+      },
+      "id": "8899fac0-4bbd-58a1-927c-0d460901e847",
+      "name": "Mark Reminder Sent & Log",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        720,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "id": "0c8a571d-e72d-5076-a56d-6a391d76466d",
+      "name": "Reminder Failed - skip",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        720,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## TCS Viewing Reminders\nEvery 15 minutes: leads with a viewing in the next 24 hours, `reminder_sent = false`, bot not paused.\nSends the Telegram reminder, then marks `reminder_sent = true` and logs the outgoing message in tcs_messages (one transaction).\nAttach `Postgres account` and `Telegram account` after import.",
+        "height": 320,
+        "width": 460,
+        "color": 4
+      },
+      "id": "bb7824b6-3b2c-57a5-bb6c-32b79325f108",
+      "name": "Sticky - reminders",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -220,
+        60
+      ]
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Find Upcoming Viewings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Upcoming Viewings": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder": {
+      "main": [
+        [
+          {
+            "node": "Mark Reminder Sent & Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reminder Failed - skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
