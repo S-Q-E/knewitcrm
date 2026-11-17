@@ -1,0 +1,1427 @@
+{
+  "name": "TCS Property Management — WhatsApp AI Automation & State Machine",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-property-webhook",
+        "options": {}
+      },
+      "id": "77312972-5dec-4091-928f-0be668faec8f",
+      "name": "WhatsApp Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        368,
+        48
+      ],
+      "webhookId": "tcs-pm-wa-webhook-01"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst eventType = body.event_type || body.event || (body.fromMe ? 'outgoing_message_phone' : 'incoming_message');\nconst whatsappId = body.chatId || body.remoteJid || body.from || body.key?.remoteJid || '';\nconst isGroup = whatsappId.endsWith('@g.us') || Boolean(body.isGroup);\n\nlet contentType = (body.type || body.messageType || 'text').toLowerCase();\nif (contentType === 'voice') contentType = 'ptt';\n\nconst textContent = body.text || body.body || body.caption || body.message?.conversation || '';\nconst mediaUrl = body.mediaUrl || body.media?.url || body.imageUrl || body.audioUrl || body.videoUrl || '';\n\nreturn [{\n  json: {\n    received_at_ms: Date.now(),\n    event_type: eventType,\n    whatsapp_id: whatsappId,\n    phone_number: whatsappId.replace(/@.*$/, ''),\n    display_name: body.senderName || body.pushName || 'Клиент',\n    is_group: isGroup,\n    content_type: contentType,\n    text_content: textContent,\n    media_url: mediaUrl,\n    external_message_id: body.id || body.key?.id || `msg_${Date.now()}`,\n    raw_payload: body\n  }\n}];"
+      },
+      "id": "e675a189-25bb-4515-bd55-f35a45590e02",
+      "name": "Normalize Webhook Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-private-chat",
+              "leftValue": "={{ $json.whatsapp_id }}",
+              "rightValue": "@c.us",
+              "operator": {
+                "type": "string",
+                "operation": "endsWith"
+              }
+            },
+            {
+              "id": "cond-not-group",
+              "leftValue": "={{ $json.is_group }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "685b9756-86c6-43c3-829a-75df42e685e9",
+      "name": "Filter Private Chats (@c.us)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        816,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-human-takeover",
+              "leftValue": "={{ $json.event_type }}",
+              "rightValue": "outgoing_message_phone",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "90515f6e-5f01-4630-8c0a-6c751d2937eb",
+      "name": "Is Manager Outgoing Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH upsert_contact AS (\n  INSERT INTO pm_contacts (whatsapp_id, phone_number, display_name, status, last_interaction_at)\n  VALUES ($1, $2, $3, 'paused', NOW())\n  ON CONFLICT (whatsapp_id) DO UPDATE\n    SET status = 'paused',\n        last_interaction_at = NOW()\n  RETURNING whatsapp_id, current_stage\n),\npause_bot AS (\n  INSERT INTO pm_conversation_state (whatsapp_id, bot_paused, pause_reason, assigned_to, paused_at)\n  VALUES ($1, TRUE, 'manual_manager_reply', 'phone_manager', NOW())\n  ON CONFLICT (whatsapp_id) DO UPDATE\n    SET bot_paused = TRUE,\n        pause_reason = 'manual_manager_reply',\n        assigned_to = 'phone_manager',\n        paused_at = NOW()\n),\nlog_event AS (\n  INSERT INTO pm_events (whatsapp_id, event_type, from_stage, to_stage, action_taken, metadata)\n  SELECT whatsapp_id, 'human_takeover', current_stage, current_stage, 'pause_bot_on_manager_message', '{\"source\":\"outgoing_message_phone\"}'::jsonb\n  FROM upsert_contact\n)\nINSERT INTO pm_messages (whatsapp_id, external_message_id, direction, content_type, body, media_url, stage_at_message, raw_payload)\nSELECT whatsapp_id, $4, 'outgoing_manager', $5, $6, $7, current_stage, $8::jsonb\nFROM upsert_contact\nRETURNING id, whatsapp_id;",
+        "options": {
+          "queryReplacement": "={{ [$json.whatsapp_id, $json.phone_number, $json.display_name, $json.external_message_id, $json.content_type, $json.text_content, $json.media_url, JSON.stringify($json.raw_payload)] }}"
+        }
+      },
+      "id": "1dee6559-ffa9-481a-b2bc-70951b9f39d3",
+      "name": "Human Takeover: Log & Pause Bot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1280,
+        -176
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "zCkt16eDshACnYEn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "rule-text",
+                    "leftValue": "={{ $json.content_type }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "text"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "rule-image",
+                    "leftValue": "={{ $json.content_type }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "rule-video",
+                    "leftValue": "={{ $json.content_type }}",
+                    "rightValue": "video",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "video"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "rule-audio",
+                    "leftValue": "={{ $json.content_type }}",
+                    "rightValue": "^(audio|ptt)$",
+                    "operator": {
+                      "type": "string",
+                      "operation": "regex"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "audio_ptt"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "cbb1b6b4-8055-4fbf-b600-ce244a7a3d93",
+      "name": "Route by Media Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1280,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o\",\n  \"temperature\": 0.2,\n  \"max_tokens\": 350,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Ты — инженер технической инспекции управляющей компании. Кратко и точно опиши на русском языке, что изображено на фото от жильца (протечка, трещина, сломанный прибор, показания счётчика, заблокированная дверь и т.д.) и оцени визуальную срочность.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": {{ JSON.stringify($json.text_content || 'Жилец прислал фотографию без подписи. Опиши проблему на фото.') }}\n        },\n        {\n          \"type\": \"image_url\",\n          \"image_url\": {\n            \"url\": {{ JSON.stringify($json.media_url) }}\n          }\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "e566b41e-ecc1-4ea5-ad06-6fdc2859e329",
+      "name": "Vision LLM: Analyze Issue Photo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1584,
+        -32
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YxefrKW36Qphwk0l",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.media_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "a9b09b10-872f-42ce-9449-2f2f74f7ac3f",
+      "name": "Download Voice Note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1536,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {
+          "language": "ru"
+        }
+      },
+      "id": "766aa6c9-fdca-4b30-af2b-2d2680ecee84",
+      "name": "OpenAI Whisper (Speech-to-Text)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [
+        1760,
+        320
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YxefrKW36Qphwk0l",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Is Manager Outgoing Message?').first().json;\nconst item = $input.first().json;\n\nlet unifiedText = base.text_content || '';\nlet mediaAttached = Boolean(base.media_url);\n\nif (base.content_type === 'image') {\n  const visionDescription = item.choices?.[0]?.message?.content || 'Фото получено (описание недоступно)';\n  unifiedText = `[ФОТО ОТ КЛИЕНТА: ${base.media_url}] Подпись клиента: \"${base.text_content || 'без подписи'}\". Визуальный анализ ИИ: ${visionDescription}`;\n  mediaAttached = true;\n} else if (base.content_type === 'video') {\n  unifiedText = `[ВИДЕО ОТ КЛИЕНТА: ${base.media_url}] Подпись клиента: \"${base.text_content || 'клиент прислал видео проблемы'}\"` ;\n  mediaAttached = true;\n} else if (base.content_type === 'audio' || base.content_type === 'ptt') {\n  const transcript = item.text || '';\n  unifiedText = `[ГОЛОСОВОЕ СООБЩЕНИЕ (расшифровка Whisper)]: ${transcript}`;\n}\n\nreturn [{\n  json: {\n    ...base,\n    normalized_user_input: unifiedText.trim() || '[Пустое сообщение]',\n    media_attached_now: mediaAttached\n  }\n}];"
+      },
+      "id": "3de5ce7a-505b-4952-ae88-75e51729db77",
+      "name": "Unify Multimodal Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH upserted_contact AS (\n  INSERT INTO pm_contacts (whatsapp_id, phone_number, display_name, last_interaction_at)\n  VALUES ($1, $2, $3, NOW())\n  ON CONFLICT (whatsapp_id) DO UPDATE\n    SET display_name = COALESCE(NULLIF($3, ''), pm_contacts.display_name),\n        last_interaction_at = NOW()\n  RETURNING *\n),\nupserted_state AS (\n  INSERT INTO pm_conversation_state (whatsapp_id, bot_paused)\n  VALUES ($1, FALSE)\n  ON CONFLICT (whatsapp_id) DO NOTHING\n)\nSELECT\n  c.whatsapp_id,\n  c.phone_number,\n  c.display_name,\n  c.role,\n  c.current_stage,\n  c.previous_stage,\n  c.status,\n  c.active_ticket_id,\n  c.collected_data,\n  COALESCE(s.bot_paused, FALSE) AS bot_paused,\n  s.pause_reason\nFROM upserted_contact c\nLEFT JOIN pm_conversation_state s ON s.whatsapp_id = c.whatsapp_id;",
+        "options": {
+          "queryReplacement": "={{ [$json.whatsapp_id, $json.phone_number, $json.display_name] }}"
+        }
+      },
+      "id": "742f8f40-5bae-4f96-90d6-6a051caa3f2e",
+      "name": "Upsert & Load Contact State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2224,
+        160
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "zCkt16eDshACnYEn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO pm_messages (\n  whatsapp_id,\n  external_message_id,\n  direction,\n  content_type,\n  body,\n  media_url,\n  stage_at_message,\n  raw_payload\n)\nVALUES ($1, $2, 'incoming', $3, $4, $5, $6, $7::jsonb)\nRETURNING id AS incoming_db_msg_id;",
+        "options": {
+          "queryReplacement": "={{ [$('Unify Multimodal Input').first().json.whatsapp_id, $('Unify Multimodal Input').first().json.external_message_id, $('Unify Multimodal Input').first().json.content_type, $('Unify Multimodal Input').first().json.normalized_user_input, $('Unify Multimodal Input').first().json.media_url, $json.current_stage, JSON.stringify($('Unify Multimodal Input').first().json.raw_payload)] }}"
+        }
+      },
+      "id": "69184258-aa03-4aff-831c-c6a35a5da118",
+      "name": "Log Incoming Message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2448,
+        160
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "zCkt16eDshACnYEn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-bot-not-paused",
+              "leftValue": "={{ $('Upsert & Load Contact State').first().json.bot_paused }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a4f4626e-a1bf-41f8-943c-af303bba2def",
+      "name": "Check Bot Pause (Continue if False)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2656,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=ВХОДЯЩЕЕ СООБЩЕНИЕ WHATSAPP ОТ КЛИЕНТА:\n{{ $('Unify Multimodal Input').first().json.normalized_user_input }}\n\nТЕКУЩИЙ КОНТЕКСТ КОНТАКТА ИЗ POSTGRES:\n- whatsapp_id: {{ $('Upsert & Load Contact State').first().json.whatsapp_id }}\n- Имя: {{ $('Upsert & Load Contact State').first().json.display_name }}\n- Текущая роль (role): {{ $('Upsert & Load Contact State').first().json.role }}\n- Текущий этап (current_stage): {{ $('Upsert & Load Contact State').first().json.current_stage }}\n- Предыдущий этап (previous_stage): {{ $('Upsert & Load Contact State').first().json.previous_stage || 'нет' }}\n- Активный тикет (active_ticket_id): {{ $('Upsert & Load Contact State').first().json.active_ticket_id || 'нет' }}\n- Прикреплено ли медиа в этом сообщении: {{ $('Unify Multimodal Input').first().json.media_attached_now }}\n- Ссылка на медиа: {{ $('Unify Multimodal Input').first().json.media_url || 'нет' }}\n- Ранее собранные данные (collected_data): {{ JSON.stringify($('Upsert & Load Contact State').first().json.collected_data) }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Ты — официальный ИИ-ассистент в WhatsApp управляющей компании недвижимости «TCS Property Management».\nВАЖНОЕ ОГРАНИЧЕНИЕ: Вся коммуникация происходит ИСКЛЮЧИТЕЛЬНО в WhatsApp (текст, фото, видео, голосовые). Никогда не предлагай позвонить по телефону и не упоминай телефонные звонки.\n\nТВОЯ ЗАДАЧА:\nВести клиента строго по этапам конечного автомата (State Machine), опираясь на `current_stage` и `collected_data`. Никогда не начинай диалог заново и не здоровайся повторно, если диалог уже идёт.\n\nПРАВИЛА СТИЛЯ ДЛЯ ПОЛЯ `reply`:\n- Строго БЕЗ Markdown-разметки (не используй **, ##, ``` и списки со звёздочками).\n- Короткие, легко читаемые абзацы для экрана смартфона.\n- Допускается 1–2 уместных эмодзи на сообщение.\n- Не задавай более 1–2 уточняющих вопросов за одно сообщение.\n\nЭТАПЫ STATE MACHINE (поле `new_stage`):\n1. `NEW_CONTACT` — первый контакт. Выясни намерение: клиент хочет арендовать жильё (`prospect`) или это действующий жилец с вопросом/поломкой (`tenant`).\n2. `INTENT_CLASSIFICATION` — распределение по потокам: Аренда (Leasing) или Эксплуатация/Ремонт (Maintenance).\n\nВЕТКА АРЕНДЫ (LEASING FLOW):\n3. `LEASING_QUALIFICATION` — уточни интересующий объект/район, количество спален/бюджет (`budget_or_beds`) и планируемую дату заезда (задавай не более 1 вопроса за раз).\n4. `LEASING_PRESENTATION` — используй инструмент `Qdrant Property Knowledge Base`, чтобы ответить на вопросы по доступным квартирам, ценам и правилам проживания, затем предложи записаться на просмотр.\n5. `VIEWING_HANDOFF` — клиент согласен на просмотр. Собери удобное время (`preferred_viewing_time`) и передай карточку менеджеру (`action = \"book_viewing\"` или `\"transfer_to_manager\"`, `handoff_type = \"leasing_viewing\"`). Никогда не обещай точный слот без подтверждения менеджером.\n\nВЕТКА РЕМОНТА И ЭКСПЛУАТАЦИИ (MAINTENANCE FLOW):\n6. `MAINTENANCE_TRIAGE` — выясни суть проблемы (`issue_description`), категорию (`issue_category`), адрес дома/ЖК (`building_address`) и номер квартиры (`unit_number`). Если фото/видео ещё не прислано (`media_attached == false`) и проблема визуальная — обязательно вежливо попроси прислать фото или короткое видео прямо сюда в WhatsApp.\n7. `URGENCY_CHECK` — оцени критичность:\n   - АВАРИЯ (прорыв трубы, затопление, нет отопления зимой, запах газа, искрит проводка, заблокирована входная дверь) -> немедленно переходи в `EMERGENCY_ESCALATION`, ставь `urgency = \"emergency\"`, `action = \"escalate_urgent\"`, `handoff_type = \"emergency_maintenance\"`.\n   - ШТАТНАЯ ЗАЯВКА (бытовая техника, ручка окна, мелкий сантехнический ремонт, лампочка) -> когда известны адрес, квартира и суть проблемы, переходи в `TICKET_CREATED` с `action = \"create_ticket\"`, `handoff_type = \"routine_maintenance\"`. В тексте `reply` используй плейсхолдер `{{TICKET_NUMBER}}` (система автоматически подставит реальный номер заявки из БД) и сообщи, что все обновления статуса придут сюда в WhatsApp.\n8. `EMERGENCY_ESCALATION` — аварийная бригада уже оповещена, дай краткую инструкцию безопасности (например, перекрыть вводной кран при протечке).\n9. `TICKET_CREATED` — заявка создана и находится в работе.\n10. `STATUS_INQUIRY` — жилец спрашивает о статусе существующей заявки («когда придёт мастер?»). Обязательно вызови инструмент `Ticket Tracker Tool`, проверь статус по `whatsapp_id` или `active_ticket_id` и ответь по факту. Если тикет просрочен — поставь `action = \"transfer_to_manager\"`.\n\nОБЩИЕ ФИНАЛЬНЫЕ ЭТАПЫ:\n11. `HUMAN_HANDOFF` — клиент прямо просит живого сотрудника или вопрос нестандартный (`action = \"transfer_to_manager\"`, `handoff_type = \"general_support\"`).\n12. `FOLLOWUP_WAITING` — клиент взял паузу («пришлю фото вечером», «подумаю над квартирой»).\n13. `RESOLVED_CLOSED` — вопрос полностью решён (`action = \"mark_closed\"`).\n\nВерни ответ СТРОГО в формате JSON согласно схеме парсера."
+        }
+      },
+      "id": "92a557f5-1a4c-47d5-8468-19ddc47e7de5",
+      "name": "AI Property Management Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        2944,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "3b19230b-e835-4047-8508-52c53aec48ff",
+      "name": "OpenAI Chat Model (gpt-4o)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2784,
+        352
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YxefrKW36Qphwk0l",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Upsert & Load Contact State').first().json.whatsapp_id }}",
+        "tableName": "pm_langchain_chat_histories",
+        "contextWindowLength": 14
+      },
+      "id": "02b42731-a756-42ab-ac93-53d0889d62bd",
+      "name": "Postgres Chat Memory (14 msgs)",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        2944,
+        352
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "zCkt16eDshACnYEn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolName": "qdrant_property_knowledge_base",
+        "toolDescription": "База знаний по объектам недвижимости TCS Property Management: доступные квартиры в аренду, цены, планировки, адресный фонд, правила проживания и FAQ.",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "tcs_properties_kb",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "55152f32-cfb2-4512-a399-e8c5b9b7bb85",
+      "name": "Qdrant Property Knowledge Base",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1,
+      "position": [
+        3120,
+        352
+      ],
+      "credentials": {
+        "qdrantApi": {
+          "id": "MI773jZs1jVYqRUq",
+          "name": "Qdrant account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "9560ca4a-fb26-4519-a51a-c1aedead1795",
+      "name": "OpenAI Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.1,
+      "position": [
+        3120,
+        512
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YxefrKW36Qphwk0l",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT ticket_number, building_address, unit_number, issue_category, issue_description, urgency, status, assigned_technician, sla_due_at, created_at\nFROM pm_tickets\nWHERE whatsapp_id = $1\nORDER BY created_at DESC\nLIMIT 5;",
+        "options": {
+          "queryReplacement": "={{ [$('Upsert & Load Contact State').first().json.whatsapp_id] }}"
+        }
+      },
+      "id": "309a8eaf-6fee-48c9-ae93-c0bb0e91cb49",
+      "name": "Ticket Tracker Tool (Postgres)",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.5,
+      "position": [
+        3296,
+        352
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "zCkt16eDshACnYEn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"required\": [\n    \"reply\",\n    \"role\",\n    \"new_stage\",\n    \"action\",\n    \"urgency\",\n    \"collected_data\",\n    \"handoff_type\",\n    \"internal_note\",\n    \"confidence\"\n  ],\n  \"properties\": {\n    \"reply\": {\n      \"type\": \"string\",\n      \"description\": \"Текст ответа клиенту для WhatsApp (без Markdown, короткие абзацы, 1-2 эмодзи)\"\n    },\n    \"role\": {\n      \"type\": \"string\",\n      \"enum\": [\"tenant\", \"prospect\", \"unknown\"]\n    },\n    \"new_stage\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"NEW_CONTACT\",\n        \"INTENT_CLASSIFICATION\",\n        \"LEASING_QUALIFICATION\",\n        \"LEASING_PRESENTATION\",\n        \"VIEWING_HANDOFF\",\n        \"MAINTENANCE_TRIAGE\",\n        \"URGENCY_CHECK\",\n        \"EMERGENCY_ESCALATION\",\n        \"TICKET_CREATED\",\n        \"STATUS_INQUIRY\",\n        \"HUMAN_HANDOFF\",\n        \"FOLLOWUP_WAITING\",\n        \"RESOLVED_CLOSED\"\n      ]\n    },\n    \"action\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"none\",\n        \"update_data\",\n        \"create_ticket\",\n        \"escalate_urgent\",\n        \"transfer_to_manager\",\n        \"book_viewing\",\n        \"mark_closed\"\n      ]\n    },\n    \"urgency\": {\n      \"type\": \"string\",\n      \"enum\": [\"low\", \"medium\", \"high\", \"emergency\"]\n    },\n    \"collected_data\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"required\": [\n        \"building_address\",\n        \"unit_number\",\n        \"issue_category\",\n        \"issue_description\",\n        \"media_attached\",\n        \"preferred_viewing_time\",\n        \"budget_or_beds\"\n      ],\n      \"properties\": {\n        \"building_address\": { \"type\": \"string\" },\n        \"unit_number\": { \"type\": \"string\" },\n        \"issue_category\": {\n          \"type\": \"string\",\n          \"enum\": [\"plumbing\", \"heating\", \"electrical\", \"appliance\", \"general\", \"leasing\"]\n        },\n        \"issue_description\": { \"type\": \"string\" },\n        \"media_attached\": { \"type\": \"boolean\" },\n        \"preferred_viewing_time\": { \"type\": \"string\" },\n        \"budget_or_beds\": { \"type\": \"string\" }\n      }\n    },\n    \"handoff_type\": {\n      \"type\": \"string\",\n      \"enum\": [\"emergency_maintenance\", \"routine_maintenance\", \"leasing_viewing\", \"general_support\"]\n    },\n    \"internal_note\": {\n      \"type\": \"string\"\n    },\n    \"confidence\": {\n      \"type\": \"number\",\n      \"minimum\": 0,\n      \"maximum\": 1\n    }\n  }\n}"
+      },
+      "id": "1f871a66-5b52-47c1-a9f7-cbf211dd8933",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        3488,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawAgent = $input.first().json.output || $input.first().json;\nconst contact = $('Upsert & Load Contact State').first().json;\nconst incoming = $('Unify Multimodal Input').first().json;\n\nconst ALLOWED_STAGES = new Set([\n  'NEW_CONTACT', 'INTENT_CLASSIFICATION', 'LEASING_QUALIFICATION',\n  'LEASING_PRESENTATION', 'VIEWING_HANDOFF', 'MAINTENANCE_TRIAGE',\n  'URGENCY_CHECK', 'EMERGENCY_ESCALATION', 'TICKET_CREATED',\n  'STATUS_INQUIRY', 'HUMAN_HANDOFF', 'FOLLOWUP_WAITING', 'RESOLVED_CLOSED'\n]);\n\nconst ALLOWED_ACTIONS = new Set([\n  'none', 'update_data', 'create_ticket', 'escalate_urgent',\n  'transfer_to_manager', 'book_viewing', 'mark_closed'\n]);\n\nconst ALLOWED_URGENCY = new Set(['low', 'medium', 'high', 'emergency']);\nconst ALLOWED_ROLES = new Set(['tenant', 'prospect', 'unknown']);\nconst ALLOWED_CATEGORIES = new Set(['plumbing', 'heating', 'electrical', 'appliance', 'general', 'leasing']);\n\nconst previousStage = contact.current_stage || 'NEW_CONTACT';\nconst validatedStage = ALLOWED_STAGES.has(rawAgent.new_stage) ? rawAgent.new_stage : previousStage;\nlet validatedAction = ALLOWED_ACTIONS.has(rawAgent.action) ? rawAgent.action : 'none';\nconst validatedUrgency = ALLOWED_URGENCY.has(rawAgent.urgency) ? rawAgent.urgency : 'low';\nconst validatedRole = ALLOWED_ROLES.has(rawAgent.role) ? rawAgent.role : (contact.role || 'unknown');\n\nif (validatedUrgency === 'emergency' && validatedAction !== 'escalate_urgent') {\n  validatedAction = 'escalate_urgent';\n}\n\nconst prevData = contact.collected_data || {};\nconst newData = rawAgent.collected_data || {};\n\nconst mergedCollectedData = {\n  building_address: (newData.building_address || prevData.building_address || '').trim(),\n  unit_number: (newData.unit_number || prevData.unit_number || '').trim(),\n  issue_category: ALLOWED_CATEGORIES.has(newData.issue_category)\n    ? newData.issue_category\n    : (prevData.issue_category || 'general'),\n  issue_description: (newData.issue_description || prevData.issue_description || '').trim(),\n  media_attached: Boolean(newData.media_attached || prevData.media_attached || incoming.media_attached_now),\n  preferred_viewing_time: (newData.preferred_viewing_time || prevData.preferred_viewing_time || '').trim(),\n  budget_or_beds: (newData.budget_or_beds || prevData.budget_or_beds || '').trim()\n};\n\nconst cleanReply = String(rawAgent.reply || 'Спасибо за обращение! Мы уже обрабатываем ваш запрос.')\n  .replace(/[*_`#]+/g, '')\n  .trim();\n\nconst responseTimeMs = Math.max(0, Date.now() - (incoming.received_at_ms || Date.now()));\n\n// Генерация бизнес-событий для аналитики\nconst events = [];\nif (validatedStage !== previousStage) {\n  events.push({\n    event_type: 'stage_entered',\n    from_stage: previousStage,\n    to_stage: validatedStage,\n    action_taken: validatedAction,\n    urgency: validatedUrgency\n  });\n}\nif (validatedAction === 'create_ticket') {\n  events.push({\n    event_type: 'ticket_created',\n    from_stage: previousStage,\n    to_stage: validatedStage,\n    action_taken: validatedAction,\n    urgency: validatedUrgency\n  });\n}\nif (validatedAction === 'escalate_urgent' || validatedUrgency === 'emergency') {\n  events.push({\n    event_type: 'emergency_escalated',\n    from_stage: previousStage,\n    to_stage: validatedStage,\n    action_taken: 'escalate_urgent',\n    urgency: 'emergency'\n  });\n}\nif (validatedAction === 'book_viewing') {\n  events.push({\n    event_type: 'viewing_requested',\n    from_stage: previousStage,\n    to_stage: validatedStage,\n    action_taken: validatedAction,\n    urgency: validatedUrgency\n  });\n}\nif (validatedAction === 'transfer_to_manager') {\n  events.push({\n    event_type: 'transferred_to_manager',\n    from_stage: previousStage,\n    to_stage: validatedStage,\n    action_taken: validatedAction,\n    urgency: validatedUrgency\n  });\n}\n\n// Маршрутный ключ для Switch\nlet routeBranch = 'STANDARD_REPLY';\nif (validatedUrgency === 'emergency' || validatedAction === 'escalate_urgent') {\n  routeBranch = 'EMERGENCY';\n} else if (validatedAction === 'create_ticket') {\n  routeBranch = 'CREATE_TICKET';\n} else if (validatedAction === 'book_viewing' || validatedAction === 'transfer_to_manager') {\n  routeBranch = 'BOOK_VIEWING_OR_HANDOFF';\n}\n\nconst headerEmoji = routeBranch === 'EMERGENCY'\n  ? '🚨 АВАРИЙНЫЙ ВЫЗОВ (EMERGENCY)'\n  : (validatedAction === 'book_viewing' ? '🏠 ЗАПИСЬ НА ПРОСМОТР (LEASING)' : '📋 ПЕРЕДАЧА ДИАЛОГА МЕНЕДЖЕРУ');\n\nconst managerCard = [\n  headerEmoji,\n  `Клиент: ${contact.display_name} (${contact.phone_number})`,\n  `Роль: ${validatedRole} | Этап: ${validatedStage}`,\n  `Срочность: ${validatedUrgency.toUpperCase()}`,\n  mergedCollectedData.building_address ? `Объект/Адрес: ${mergedCollectedData.building_address}` : null,\n  mergedCollectedData.unit_number ? `Квартира: ${mergedCollectedData.unit_number}` : null,\n  mergedCollectedData.issue_category ? `Категория: ${mergedCollectedData.issue_category}` : null,\n  mergedCollectedData.issue_description ? `Описание: ${mergedCollectedData.issue_description}` : null,\n  mergedCollectedData.budget_or_beds ? `Параметры поиска: ${mergedCollectedData.budget_or_beds}` : null,\n  mergedCollectedData.preferred_viewing_time ? `Желаемое время просмотра: ${mergedCollectedData.preferred_viewing_time}` : null,\n  incoming.media_url ? `Медиафайл: ${incoming.media_url}` : null,\n  `Заметка ИИ: ${rawAgent.internal_note || 'нет'}`,\n  `Confidence: ${rawAgent.confidence ?? 0.9}`\n].filter(Boolean).join('\\n');\n\nreturn [{\n  json: {\n    whatsapp_id: contact.whatsapp_id,\n    phone_number: contact.phone_number,\n    display_name: contact.display_name,\n    reply: cleanReply,\n    role: validatedRole,\n    previous_stage: previousStage,\n    new_stage: validatedStage,\n    action: validatedAction,\n    urgency: validatedUrgency,\n    collected_data: mergedCollectedData,\n    handoff_type: rawAgent.handoff_type || 'general_support',\n    internal_note: rawAgent.internal_note || '',\n    confidence: Number(rawAgent.confidence ?? 0.9),\n    response_time_ms: responseTimeMs,\n    media_url: incoming.media_url || '',\n    events,\n    route_branch: routeBranch,\n    manager_card: managerCard\n  }\n}];"
+      },
+      "id": "d17e1214-c167-4c25-af46-361240bd056c",
+      "name": "Validate & Normalize Output (Code)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3296,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH updated_contact AS (\n  UPDATE pm_contacts\n  SET role = $2,\n      previous_stage = current_stage,\n      current_stage = $3,\n      status = CASE WHEN $4 = 'mark_closed' THEN 'closed' ELSE status END,\n      collected_data = $5::jsonb,\n      last_interaction_at = NOW()\n  WHERE whatsapp_id = $1\n  RETURNING whatsapp_id\n),\nupdate_confidence AS (\n  UPDATE pm_conversation_state\n  SET last_confidence = $6\n  WHERE whatsapp_id = $1\n),\ninserted_events AS (\n  INSERT INTO pm_events (whatsapp_id, event_type, from_stage, to_stage, action_taken, urgency, response_time_ms, metadata)\n  SELECT\n    $1,\n    ev->>'event_type',\n    ev->>'from_stage',\n    ev->>'to_stage',\n    ev->>'action_taken',\n    ev->>'urgency',\n    $7,\n    jsonb_build_object('internal_note', $8, 'handoff_type', $9)\n  FROM jsonb_array_elements($10::jsonb) AS ev\n  RETURNING id\n)\nSELECT COUNT(*) AS events_logged FROM inserted_events;",
+        "options": {
+          "queryReplacement": "={{ [$json.whatsapp_id, $json.role, $json.new_stage, $json.action, JSON.stringify($json.collected_data), $json.confidence, $json.response_time_ms, $json.internal_note, $json.handoff_type, JSON.stringify($json.events)] }}"
+        }
+      },
+      "id": "3565ebb0-0cd6-41cd-8581-d02baa8c7abd",
+      "name": "Save Contact State & Events",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3536,
+        48
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "zCkt16eDshACnYEn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "branch-emergency",
+                    "leftValue": "={{ $('Validate & Normalize Output (Code)').first().json.route_branch }}",
+                    "rightValue": "EMERGENCY",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "EMERGENCY"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "branch-ticket",
+                    "leftValue": "={{ $('Validate & Normalize Output (Code)').first().json.route_branch }}",
+                    "rightValue": "CREATE_TICKET",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CREATE_TICKET"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "branch-viewing",
+                    "leftValue": "={{ $('Validate & Normalize Output (Code)').first().json.route_branch }}",
+                    "rightValue": "BOOK_VIEWING_OR_HANDOFF",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "BOOK_VIEWING"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "branch-standard",
+                    "leftValue": "={{ $('Validate & Normalize Output (Code)').first().json.route_branch }}",
+                    "rightValue": "STANDARD_REPLY",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "STANDARD_REPLY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ffd6c0f0-fb50-4b4c-8af9-bdb99b069074",
+      "name": "Route by Action & Urgency",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        3776,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH new_urgent_ticket AS (\n  INSERT INTO pm_tickets (\n    whatsapp_id,\n    building_address,\n    unit_number,\n    issue_category,\n    issue_description,\n    urgency,\n    status,\n    media_urls,\n    internal_note,\n    assigned_technician,\n    sla_due_at\n  )\n  VALUES (\n    $1,\n    COALESCE(NULLIF($2, ''), 'Не указан'),\n    COALESCE(NULLIF($3, ''), 'Не указана'),\n    $4,\n    COALESCE(NULLIF($5, ''), 'Аварийное обращение'),\n    'emergency',\n    'URGENT',\n    CASE WHEN $6 <> '' THEN jsonb_build_array($6) ELSE '[]'::jsonb END,\n    $7,\n    'Emergency On-Call Crew',\n    NOW() + INTERVAL '30 minutes'\n  )\n  RETURNING ticket_number\n),\nupdate_contact_ticket AS (\n  UPDATE pm_contacts\n  SET active_ticket_id = (SELECT ticket_number FROM new_urgent_ticket),\n      status = 'paused'\n  WHERE whatsapp_id = $1\n),\npause_conv AS (\n  UPDATE pm_conversation_state\n  SET bot_paused = TRUE,\n      pause_reason = 'emergency_escalation',\n      assigned_to = 'emergency_on_call_crew',\n      paused_at = NOW()\n  WHERE whatsapp_id = $1\n)\nSELECT ticket_number FROM new_urgent_ticket;",
+        "options": {
+          "queryReplacement": "={{ [$('Validate & Normalize Output (Code)').first().json.whatsapp_id, $('Validate & Normalize Output (Code)').first().json.collected_data.building_address, $('Validate & Normalize Output (Code)').first().json.collected_data.unit_number, $('Validate & Normalize Output (Code)').first().json.collected_data.issue_category, $('Validate & Normalize Output (Code)').first().json.collected_data.issue_description, $('Validate & Normalize Output (Code)').first().json.media_url, $('Validate & Normalize Output (Code)').first().json.internal_note] }}"
+        }
+      },
+      "id": "32115de4-89da-41c8-a8f9-4575e64c19fd",
+      "name": "Branch 1: Create URGENT Ticket & Pause Bot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        4080,
+        -240
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "zCkt16eDshACnYEn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WHATSAPP_API_BASE_URL }}/message/sendText/{{ $env.WHATSAPP_INSTANCE_NAME }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.WHATSAPP_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $env.EMERGENCY_TECHNICIAN_WHATSAPP_ID }}\",\n  \"text\": {{ JSON.stringify($('Validate & Normalize Output (Code)').first().json.manager_card + '\\nНомер аварийного тикета: ' + $json.ticket_number) }}\n}",
+        "options": {}
+      },
+      "id": "80a41cad-9eff-49cc-9c7f-2bcec70cb2f4",
+      "name": "Send Emergency Alert to On-Call Tech",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4320,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH created_ticket AS (\n  INSERT INTO pm_tickets (\n    whatsapp_id,\n    building_address,\n    unit_number,\n    issue_category,\n    issue_description,\n    urgency,\n    status,\n    media_urls,\n    internal_note,\n    sla_due_at\n  )\n  VALUES (\n    $1,\n    COALESCE(NULLIF($2, ''), 'Не указан'),\n    COALESCE(NULLIF($3, ''), 'Не указана'),\n    $4,\n    COALESCE(NULLIF($5, ''), 'Заявка на ремонт'),\n    $6,\n    'OPEN',\n    CASE WHEN $7 <> '' THEN jsonb_build_array($7) ELSE '[]'::jsonb END,\n    $8,\n    NOW() + INTERVAL '24 hours'\n  )\n  RETURNING ticket_number, created_at\n),\nlink_contact AS (\n  UPDATE pm_contacts\n  SET active_ticket_id = (SELECT ticket_number FROM created_ticket)\n  WHERE whatsapp_id = $1\n)\nSELECT ticket_number, created_at FROM created_ticket;",
+        "options": {
+          "queryReplacement": "={{ [$('Validate & Normalize Output (Code)').first().json.whatsapp_id, $('Validate & Normalize Output (Code)').first().json.collected_data.building_address, $('Validate & Normalize Output (Code)').first().json.collected_data.unit_number, $('Validate & Normalize Output (Code)').first().json.collected_data.issue_category, $('Validate & Normalize Output (Code)').first().json.collected_data.issue_description, $('Validate & Normalize Output (Code)').first().json.urgency, $('Validate & Normalize Output (Code)').first().json.media_url, $('Validate & Normalize Output (Code)').first().json.internal_note] }}"
+        }
+      },
+      "id": "8554f97c-965f-47b5-9a13-99cc955f5156",
+      "name": "Branch 2: Create Routine Ticket in DB",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        4080,
+        -32
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "zCkt16eDshACnYEn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_SHEETS_TICKETS_DOC_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Tickets",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ticket_number": "={{ $json.ticket_number }}",
+            "created_at": "={{ $json.created_at }}",
+            "whatsapp_id": "={{ $('Validate & Normalize Output (Code)').first().json.whatsapp_id }}",
+            "tenant_name": "={{ $('Validate & Normalize Output (Code)').first().json.display_name }}",
+            "building_address": "={{ $('Validate & Normalize Output (Code)').first().json.collected_data.building_address }}",
+            "unit_number": "={{ $('Validate & Normalize Output (Code)').first().json.collected_data.unit_number }}",
+            "category": "={{ $('Validate & Normalize Output (Code)').first().json.collected_data.issue_category }}",
+            "description": "={{ $('Validate & Normalize Output (Code)').first().json.collected_data.issue_description }}",
+            "urgency": "={{ $('Validate & Normalize Output (Code)').first().json.urgency }}",
+            "status": "OPEN",
+            "media_url": "={{ $('Validate & Normalize Output (Code)').first().json.media_url }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "82b6a444-0b90-47e5-9901-7673ce4f5030",
+      "name": "Append Ticket to Google Sheets Tracker",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4320,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE pm_conversation_state\nSET bot_paused = TRUE,\n    pause_reason = $2,\n    assigned_to = 'leasing_or_support_manager',\n    paused_at = NOW()\nWHERE whatsapp_id = $1\nRETURNING whatsapp_id;",
+        "options": {
+          "queryReplacement": "={{ [$('Validate & Normalize Output (Code)').first().json.whatsapp_id, $('Validate & Normalize Output (Code)').first().json.handoff_type] }}"
+        }
+      },
+      "id": "ff3634c4-ed7c-48cc-9968-a8d12bec43bf",
+      "name": "Branch 3: Pause Bot for Leasing/Manager",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        4080,
+        176
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "zCkt16eDshACnYEn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WHATSAPP_API_BASE_URL }}/message/sendText/{{ $env.WHATSAPP_INSTANCE_NAME }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.WHATSAPP_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $env.LEASING_MANAGER_WHATSAPP_ID }}\",\n  \"text\": {{ JSON.stringify($('Validate & Normalize Output (Code)').first().json.manager_card) }}\n}",
+        "options": {}
+      },
+      "id": "ba2fea85-ae64-4d3f-8ee1-6a413bfeebd8",
+      "name": "Send Lead Card to Leasing Manager",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4320,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const validated = $('Validate & Normalize Output (Code)').first().json;\nlet finalReply = validated.reply;\nlet createdTicketNumber = null;\n\nif (validated.route_branch === 'EMERGENCY') {\n  createdTicketNumber = $('Branch 1: Create URGENT Ticket & Pause Bot').first()?.json?.ticket_number || null;\n} else if (validated.route_branch === 'CREATE_TICKET') {\n  createdTicketNumber = $('Branch 2: Create Routine Ticket in DB').first()?.json?.ticket_number || null;\n}\n\nif (createdTicketNumber) {\n  if (finalReply.includes('{{TICKET_NUMBER}}')) {\n    finalReply = finalReply.replace(/\\{\\{TICKET_NUMBER\\}\\}/g, createdTicketNumber);\n  } else {\n    finalReply = `${finalReply}\\n\\nНомер вашей заявки: ${createdTicketNumber}`;\n  }\n}\n\nreturn [{\n  json: {\n    ...validated,\n    ticket_number: createdTicketNumber,\n    final_reply_text: finalReply\n  }\n}];"
+      },
+      "id": "6ebaf711-3a7c-4e6a-b115-3b1c69668814",
+      "name": "Prepare Final Client Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4624,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WHATSAPP_API_BASE_URL }}/message/sendText/{{ $env.WHATSAPP_INSTANCE_NAME }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.WHATSAPP_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.whatsapp_id }}\",\n  \"text\": {{ JSON.stringify($json.final_reply_text) }}\n}",
+        "options": {}
+      },
+      "id": "e68886c1-4205-470a-9212-78b6ecfe1ad7",
+      "name": "Send WhatsApp Message to Client",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4864,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO pm_messages (\n  whatsapp_id,\n  direction,\n  content_type,\n  body,\n  stage_at_message,\n  response_time_ms\n)\nVALUES ($1, 'outgoing_bot', 'text', $2, $3, $4)\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [$('Prepare Final Client Reply').first().json.whatsapp_id, $('Prepare Final Client Reply').first().json.final_reply_text, $('Prepare Final Client Reply').first().json.new_stage, $('Prepare Final Client Reply').first().json.response_time_ms] }}"
+        }
+      },
+      "id": "af0a648d-7d7e-4df3-8521-c5565326f47d",
+      "name": "Log Outgoing Bot Message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        5104,
+        48
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "zCkt16eDshACnYEn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_SHEETS_TICKETS_DOC_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Dialogs_Status",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "whatsapp_id": "={{ $('Prepare Final Client Reply').first().json.whatsapp_id }}",
+            "display_name": "={{ $('Prepare Final Client Reply').first().json.display_name }}",
+            "role": "={{ $('Prepare Final Client Reply').first().json.role }}",
+            "current_stage": "={{ $('Prepare Final Client Reply').first().json.new_stage }}",
+            "last_action": "={{ $('Prepare Final Client Reply').first().json.action }}",
+            "urgency": "={{ $('Prepare Final Client Reply').first().json.urgency }}",
+            "active_ticket": "={{ $('Prepare Final Client Reply').first().json.ticket_number || '' }}",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "whatsapp_id"
+          ]
+        },
+        "options": {}
+      },
+      "id": "eb1ac121-32d7-4a81-ab3c-90d2f85c5848",
+      "name": "Sync Contact Status to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        5344,
+        48
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d45e383c-3353-485c-9075-8dede2e3203e",
+      "name": "Workflow Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        2944,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WHATSAPP_API_BASE_URL }}/message/sendText/{{ $env.WHATSAPP_INSTANCE_NAME }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.WHATSAPP_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $env.ADMIN_ALERT_WHATSAPP_ID }}\",\n  \"text\": {{ JSON.stringify('⚠️ ОШИБКА ВОРКФЛОУ TCS Property Management\\nНода: ' + ($json.execution?.lastNodeExecuted || 'Unknown') + '\\nОшибка: ' + ($json.execution?.error?.message || 'Unknown error') + '\\nExecution ID: ' + ($json.execution?.id || 'N/A')) }}\n}",
+        "options": {}
+      },
+      "id": "1c807f2e-18dc-4898-b410-826eecd8ed57",
+      "name": "Send Admin WhatsApp Alert on Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3200,
+        720
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WhatsApp Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Webhook Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Webhook Payload": {
+      "main": [
+        [
+          {
+            "node": "Filter Private Chats (@c.us)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Private Chats (@c.us)": {
+      "main": [
+        [
+          {
+            "node": "Is Manager Outgoing Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Manager Outgoing Message?": {
+      "main": [
+        [
+          {
+            "node": "Human Takeover: Log & Pause Bot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route by Media Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Media Type": {
+      "main": [
+        [
+          {
+            "node": "Unify Multimodal Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Vision LLM: Analyze Issue Photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unify Multimodal Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Download Voice Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vision LLM: Analyze Issue Photo": {
+      "main": [
+        [
+          {
+            "node": "Unify Multimodal Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Voice Note": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Whisper (Speech-to-Text)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Whisper (Speech-to-Text)": {
+      "main": [
+        [
+          {
+            "node": "Unify Multimodal Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unify Multimodal Input": {
+      "main": [
+        [
+          {
+            "node": "Upsert & Load Contact State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert & Load Contact State": {
+      "main": [
+        [
+          {
+            "node": "Log Incoming Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Incoming Message": {
+      "main": [
+        [
+          {
+            "node": "Check Bot Pause (Continue if False)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Bot Pause (Continue if False)": {
+      "main": [
+        [
+          {
+            "node": "AI Property Management Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model (gpt-4o)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Property Management Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory (14 msgs)": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Property Management Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant Property Knowledge Base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Property Knowledge Base": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Property Management Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ticket Tracker Tool (Postgres)": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Property Management Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Property Management Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Property Management Agent": {
+      "main": [
+        [
+          {
+            "node": "Validate & Normalize Output (Code)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Normalize Output (Code)": {
+      "main": [
+        [
+          {
+            "node": "Save Contact State & Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Contact State & Events": {
+      "main": [
+        [
+          {
+            "node": "Route by Action & Urgency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Action & Urgency": {
+      "main": [
+        [
+          {
+            "node": "Branch 1: Create URGENT Ticket & Pause Bot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Branch 2: Create Routine Ticket in DB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Branch 3: Pause Bot for Leasing/Manager",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Final Client Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Branch 1: Create URGENT Ticket & Pause Bot": {
+      "main": [
+        [
+          {
+            "node": "Send Emergency Alert to On-Call Tech",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Emergency Alert to On-Call Tech": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Client Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Branch 2: Create Routine Ticket in DB": {
+      "main": [
+        [
+          {
+            "node": "Append Ticket to Google Sheets Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Ticket to Google Sheets Tracker": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Client Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Branch 3: Pause Bot for Leasing/Manager": {
+      "main": [
+        [
+          {
+            "node": "Send Lead Card to Leasing Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Lead Card to Leasing Manager": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Client Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Final Client Reply": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Message to Client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Message to Client": {
+      "main": [
+        [
+          {
+            "node": "Log Outgoing Bot Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Outgoing Bot Message": {
+      "main": [
+        [
+          {
+            "node": "Sync Contact Status to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Send Admin WhatsApp Alert on Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "35fda9c6-081e-4b4d-80f2-c988ef02a2ac",
+  "meta": {
+    "instanceId": "2679d5680b6be7d2a2d102110308d9be0d01ffce696a3183afe896aaabcb1e04"
+  },
+  "nodeGroups": [],
+  "id": "EwpUoNCmrGYt9J7n",
+  "tags": []
+}
