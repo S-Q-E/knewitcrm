@@ -122,6 +122,12 @@ WITH cap AS (
       status = 'ЗАПИСАН',
       direction = COALESCE(NULLIF($3,''), direction),
       goal = COALESCE(NULLIF($4,''), goal),
+      lead_data = CASE
+                    WHEN NULLIF($5,'') IS NOT NULL AND NULLIF($6,'') IS NOT NULL
+                    THEN COALESCE(lead_data, '{}'::jsonb)
+                         || jsonb_build_object('unit', $5 || ' ' || $6)
+                    ELSE lead_data
+                  END,
       reminder_sent = false,
       last_message_at = now(),
       updated_at = now()
@@ -165,6 +171,8 @@ the bot does not call the CRM API.
 ## Notes
 
 - `slot_taken` must be handled by the model: apologize and offer other slots.
-- The reminder workflow (W-C) uses `reminder_sent`; booking resets it to false.
+- The reminder workflow (W-C) uses `reminder_sent` and joins `tcs_units` on
+  `lead_data->>'unit'`; booking stores `building unit_number` there and resets
+  `reminder_sent` to false.
 - Credentials in n8n: `Postgres account` (demo DB), `Telegram account`
   (demo bot), `OpenRouter account` (model). Never commit tokens.
