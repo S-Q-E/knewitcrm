@@ -1,5 +1,10 @@
 # Деплой на Railway (Шаг 15)
 
+> **TCS demo:** this document is the original Knewit operator guide. For the
+> demo deployment use `docs/tcs/RAILWAY_DEPLOY.md` (separate project, schema-
+> first database preparation, seed, Telegram/n8n wiring).
+
+
 Один Docker-контейнер: Python sirve API + собранный SPA, воркеры крутятся
 внутри процесса (asyncio-задачи, advisory-lock). Два окружения: **staging**
 и **production** — отдельные Railway-сервисы и отдельные БД.

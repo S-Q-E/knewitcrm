@@ -1,13 +1,20 @@
-# DB schema (tcs_*)
+# DB schema (tcs_*) — TCS Leasing CRM demo
 
-> Source: production structure from `schema_dump.sql` (pg_dump, PostgreSQL 16.14, structure only).
-> The test replica is `tests/fixtures/tcs_schema.sql`; it mirrors these tables without
-> views and without the n8n/bot helper tables.
-> CRM never migrates these tables (owned by n8n, written only via `bot_bridge.py`).
+> Source: the bot schema in `tests/fixtures/tcs_schema.sql` (the demo seed
+> creates `tcs_units` on top of it). The CRM never migrates these tables:
+> they are owned by n8n and by `scripts/seed_tcs_demo.py`, and the CRM writes
+> to them only through `bot_bridge.py`.
 
-Tables used by the CRM: tcs_leads, tcs_messages, tcs_events, tcs_followups.
-Other production tables (not used by the CRM): tcs_ai_metrics, tcs_chat_history,
-bot_*, chat_status, reminders, Reminderai, n8n_chat_histories and views tcs_*.
+Tables used by the CRM: `tcs_leads`, `tcs_messages`, `tcs_events`,
+`tcs_followups`, `tcs_units` (read-only catalog for the bot).
+CRM tables live in the same database under the `crm_` prefix and are created
+only by Alembic (see `backend/alembic/versions`, version table
+`crm_alembic_version`).
+n8n-owned helper tables: `n8n_chat_histories` (agent memory) and
+`n8n_processed_outbox` (dedupe for CRM → Telegram sends).
+Other legacy bot tables (not used by the demo CRM): `tcs_ai_metrics`,
+`tcs_chat_history`, `bot_*`, `chat_status`, `reminders`, `Reminderai`, views
+`tcs_*`.
 
 **Production has no foreign keys between tcs_* tables.** Rows are matched by
 `whatsapp_id` (VARCHAR(50)). Deleting a lead does not delete its messages or events, so
@@ -44,8 +51,8 @@ Trigger `update_tcs_leads_updated_at` sets `updated_at = now()` on every UPDATE.
 | last_interaction_at | timestamptz | YES | CURRENT_TIMESTAMP |
 | client_name, phone, target_course, course_format, class_type, skill_level, student_category | varchar | YES |  |
 
-The last group (`client_name` … `student_category`) is not written by the workflow or the CRM
-(see architecture §11.4); its origin is unknown.
+The last group (`client_name` … `student_category`) comes from the legacy bot. The
+TCS demo seed fills `client_name`; the bot workflow and the CRM use `name`.
 
 ## tcs_messages
 
@@ -96,9 +103,47 @@ is known (architecture §11.1).
 | created_at | timestamptz | YES | CURRENT_TIMESTAMP |
 | sent_at | timestamptz | YES |  |
 
+## tcs_units (demo catalog, created by the seed)
+
+Owned by the demo seed (`scripts/seed_tcs_demo.py`), read-only for the CRM
+and used by the bot tool `search_units`.
+
+| column | type | nullable | default |
+|---|---|---|---|
+| id | serial | NO | sequence |
+| building | text | YES |  |
+| unit_number | text | YES |  |
+| beds | int | YES |  |
+| baths | numeric | YES |  |
+| rent_usd | int | YES |  |
+| deposit_usd | int | YES |  |
+| available_from | date | YES |  |
+| status | text | YES | 'available' |
+| pets_policy | text | YES |  |
+| description | text | YES |  |
+
+UNIQUE `(building, unit_number)`. Demo rows: 14 units in
+`Demo Residences A/B/C`, 2 of them `leased`.
+
 ## Distinct values
 
-### tcs_leads.current_stage (from `frontend/app.js` STAGE_LABELS)
+### tcs_leads.current_stage — TCS demo pipeline (bot keys)
+
+The seed creates the `TCS Leasing` pipeline (single default) with these
+`bot_stage_key` values:
+
+- NEW_INQUIRY
+- QUALIFYING
+- UNIT_MATCHED
+- VIEWING_SCHEDULED
+- VIEWING_CONFIRMED
+- VIEWING_DONE
+- APPLICATION_SENT
+- FOLLOW_UP
+- (terminal stages map by `bot_status_key`: `Leased` → `КЛИЕНТ`,
+  `Lost` → `ОТКАЗ`)
+
+### tcs_leads.current_stage — legacy «Продажи Knewit» (kept, not used in the demo)
 - НОВЫЙ_ЛИД
 - ВЫЯВЛЕНИЕ_ПОТРЕБНОСТИ
 - КВАЛИФИКАЦИЯ

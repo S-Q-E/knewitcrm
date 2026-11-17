@@ -431,3 +431,28 @@
 - Live `DATABASE_URL` dump: `docs/db_schema.md` is reconstructed from code; overwrite via `scripts/dump_schema.py` against real n8n DB when available.
 - Staging Railway HTTPS login check: needs Railway project access (unavailable locally); Dockerfile + migrate-on-boot CMD are ready for it.
 - Frontend task-delete 404 storm (seen 2026-10-02 in Railway logs, staging): after one `DELETE /api/tasks/{id} → 200`, the same id is re-DELETEd dozens of times (→ 404) over ~1 min, interleaved with tasks-list polling. Backend behaves correctly (idempotent 404), but the client should not hammer a dead id — suspected missing debounce/stale-row retry in the tasks UI. Reproduce locally and fix (debounce + drop row on first 200).
+
+## TCS demo (copy in `tcs_demo/`, branch `demo`) [done]
+
+- Phase 0: `RECON.md` — contact/phone derivation from `whatsapp_id`, visible
+  bot fields, `crm_settings`, user creation, Russian backend strings, types.ts
+  generation, tests with Cyrillic, baseline checks.
+- Phase 1: USD/America/New_York defaults, English UI + «TCS Leasing CRM» title
+  and DEMO banner, backend strings translated, `tg:` no longer a phone number;
+  `grep` over `frontend/src` is clean.
+- Phase 2: `scripts/seed_tcs_demo.py` (guarded, idempotent, `--reset`),
+  `tcs_units` catalog, TCS Leasing pipeline as the only default, 30 demo
+  leads/121 messages/12 viewings/1 unanswered dialog, deal-detail labels,
+  flaky `_wa()` fixed; verified on a separate `tcs_demo` database
+  (30 deals, default funnel, 1 Unanswered).
+- Phase 3: pure `estimateSavings()` + «Estimated savings» card with editable
+  assumptions and localStorage, `after_hours_leads/share` (backend + schema +
+  regenerated types + KPI), tests.
+- Phase 4: generated n8n workflows (Telegram send, bot with four tools,
+  15-minute reminders), `tools-spec.md`, `bot-prompt.md`, structural validator,
+  static tests, `HUMAN_TODO.md`, D41–D42.
+- Phase 5: README rewritten, `DEMO_SCRIPT.md` (7 minutes + checklist),
+  `CHANGES.md`, `docs/tcs/RAILWAY_DEPLOY.md`, `docs/db_schema.md` updated,
+  improvement plan for post-demo work.
+- Checks: `ruff` clean; `pytest` 270 passed; `validate_workflow.py` OK;
+  frontend typecheck/lint/56 tests/build green.
